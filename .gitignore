@@ -1,1 +1,7 @@
 *~
+*.swp
+MANIFEST
+dist/*
+testing/*
+build/*
+*.pyc
