@@ -1,3 +1,4 @@
+# −*− coding: UTF−8 −*−
 #!/usr/bin/env python2
 
 from socket import inet_pton, inet_ntop, \

@@ -1,3 +1,4 @@
+# −*− coding: UTF−8 −*−
 #!/usr/bin/env python
 
 # implements the Pseudo-Random Function defined by NIST in PRF-186-2
