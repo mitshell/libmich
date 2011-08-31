@@ -9,4 +9,3 @@ setup(name="libmich",
       version="0.2.1",
       license="GPLv2",
       packages=["libmich", "libmich.core", "libmich.formats", "libmich.utils"])
-
