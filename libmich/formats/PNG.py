@@ -44,6 +44,7 @@ class PNG(Block):
             print '[WNG] Bad file signature: probably not a PNG'
         self[0].map( s )
         s = s[ len(self[0]) : ]
+
         # Then iteratively, map each png chunk
         while len(s) > 0:
             self.append( PNG_chunk() )
@@ -56,6 +57,12 @@ class PNG(Block):
                 print '[WNG] Bad CRC checksum for layer:\n%s\n' % self[-1]
             self[-1].crc.Val = crc
             s = s[ len(self[-1]) : ]
+            # if chunk type is IHDR (png header), map the correct structure
+            if self[-1].type() == 'IHDR':
+              hdr = ihdr()
+              hdr.map( self[-1].data() )
+              self[-1].data < None
+              self[-1].data > hdr
     
 
 class PNG_sig(Layer):
@@ -87,3 +94,13 @@ class PNG_chunk(Layer):
         self.crc.PtFunc = lambda data: crc32(str(self.type)+str(data))
     
 
+class ihdr(Layer):
+  constructorList = [
+      Int(CallName='width', ReprName='Width', Type='uint32'),
+      Int(CallName='height', ReprName='Height', Type='uint32'),
+      Int(CallName='depth', ReprName='Bit Depth', Type='uint8'),
+      Int(CallName='color', ReprName='Color Type', Type='uint8'),
+      Int(CallName='comp', ReprName='Compression Method', Type='uint8'),
+      Int(CallName='filter', ReprName='Filter Method', Type='uint8'),
+      Int(CallName='interlace', ReprName='Interlace Method', Type='uint8'),
+      ]
