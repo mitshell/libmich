@@ -18,7 +18,8 @@ Then, you only need to place the 'libmich' directory with its files in your
 PYTHONPATH. You can for example place it in the python's 'sitepackage' directoy,
 or anywhere else your python engine is configured to look and load external modules.
 
-Note: Archlinux users can download the libmich-git PKGBUILD from the AUR (https://aur.archlinux.org/packages.php?ID=52015).
+Note: Archlinux users can download the libmich-git PKGBUILD from the AUR
+(https://aur.archlinux.org/packages.php?ID=52015).
 
 2) Why python?
 because...
