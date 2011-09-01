@@ -1,8 +1,11 @@
 ----[ INTRO
 
-Here is a micro-tutorial showing how to use the libmich to solve a simple challenge from http://0x41414141.com/. It won't show any of the advanced functionality of the libmich, but it can be a starting point for newbies.
+Here is a micro-tutorial showing how to use the libmich to solve a simple
+challenge from http://0x41414141.com/. It won't show any of the advanced
+functionality of the libmich, but it can be a starting point for newbies.
 
-Moreover, since there is no documentation for this lib, the reader is strongly encouraged to have a look at the source code.
+Moreover, since there is no documentation for this lib, the reader is strongly
+encouraged to have a look at the source code.
 
 ----[ LOADING THE FILE
 
@@ -11,9 +14,14 @@ The provided file is a PNG file:
 $ file gzip.png 
 gzip.png: PNG image data, 299 x 198, 8-bit colormap, interlaced
 
-Let's start the libmich, and examine the file. We use the function show(), that can be called on layers to display them nicely. You can also import it from libmich.core.element, and use it as show(layer).
+Let's start the libmich, and examine the file. We use the function show(), that
+can be called on layers to display them nicely. You can also import it from
+libmich.core.element, and use it as show(layer).
 
-Note : there's no proper documentation for the libmich, so you'll have to look at the source. Fortunately, it's not _that_ ugly. For example, we see in formats/PNG.py that the PNG object has a single method, parse(). Let's give it the content of the file:
+Note : there's no proper documentation for the libmich, so you'll have to look
+at the source. Fortunately, it's not _that_ ugly. For example, we see in
+formats/PNG.py that the PNG object has a single method, parse(). Let's give it
+the content of the file:
 
 $ ipython
 Python 2.7.2 (default, Jun 29 2011, 11:17:09) 
@@ -40,15 +48,20 @@ In [6]: print p.show()
   <Chunk Type [type] : 'PLTE'>
 [...]
 
-Note: don't forget that the show() method doesn't print anything by itself, and simply returns a string.
+Note: don't forget that the show() method doesn't print anything by itself, and
+simply returns a string.
 
 ----[ EXAMINING THE CHUNKS
 
-We notice that when we loaded the file, the parser complained that the CRC of a chunk is incorrect. Let's have a closer look.
+We notice that when we loaded the file, the parser complained that the CRC of a
+chunk is incorrect. Let's have a closer look.
 
-We can enumerate the components of this PNG file: in libmich terminology, these components are called "Layers" (from its networking heritage). In our case, the PNG layers are called "chunks". Let's list them.
+We can enumerate the components of this PNG file: in libmich terminology, these
+components are called "Layers" (from its networking heritage). In our case, the
+PNG layers are called "chunks". Let's list them.
 
-Note: still from the source, we learn that we can call a few methods on chunks: len, type, data, crc. We can also call the showattr() method on them:
+Note: still from the source, we learn that we can call a few methods on chunks:
+len, type, data, crc. We can also call the showattr() method on them:
 
 In [5]: p[0].showattr()
 sig : '\x89PNG\r\n\x1a\n'
@@ -82,7 +95,9 @@ IDAT
 IDAT
 IEND
 
-So the first layer is a signature (the "magic"), and the other are the actual chunks. From the warning we got when we loaded the file, the wrong CRC is on the zTXT chunk.
+So the first layer is a signature (the "magic"), and the other are the actual
+chunks. From the warning we got when we loaded the file, the wrong CRC is on the
+zTXT chunk.
 
 In [61]: weird=None
 
@@ -94,10 +109,14 @@ In [62]: for c in p[1:]:
   ### PNG chunk [chk] ###
   <Length [len] : 43>
   <Chunk Type [type] : 'zTXT'>
-  <Chunk Data [data] : 'email\x00\x00x\x9c+\xc8K\x0f\xcaO\xce.vH\xceH\xcc\xc9I\xcdKO\xd53\xa801\x84@\xbd\xe4\xfc\\\x00\xcb\xae\x0b\x02'>
+  <Chunk Data [data] : 'email\x00\x00x\x9c+\xc8K\x0f\xcaO\xce.vH\xceH\xcc\xc9I
+\xcdKO\xd53\xa801\x84@\xbd\xe4\xfc\\\x00\xcb\xae\x0b\x02'>
   <CRC32 Checksum [crc] : 0x912112ec>
 
-Note: here is the method to check the CRC of all layers, if we don't remember which layer had an incorrect checksum, here is how to check. Note that this example introduce the important "<" operator, which allow you to send data to a layer, or reset it.
+Note: here is the method to check the CRC of all layers, if we don't remember
+which layer had an incorrect checksum, here is how to check. Note that this
+example introduce the important "<" operator, which allow you to send data to a
+layer, or reset it.
 
 In [9]: for c in p[1:]:
    ...:     # save previous value
@@ -113,7 +132,9 @@ zTXT has wrong crc
 
 There is this strange "email" substring in the chunk data. Let's extract it.
 
-Note: "weird.data" is of type "libmich.core.element.Str". If you want to get the _real_ data, call the corresponding function (data() in our case, type() if you want the type, ...).
+Note: "weird.data" is of type "libmich.core.element.Str". If you want to get the
+_real_ data, call the corresponding function (data() in our case, type() if you
+want the type, ...).
 
 In [65]: data=weird.data()
 
@@ -124,11 +145,15 @@ In [68]: print data
 emailx�+�K�O�.vH�H��I�KO�3�01�@���\ˮ
                                     
 In [69]: print data.encode("hex")
-656d61696c0000789c2bc84b0fca4fce2e7648ce48ccc949cd4b4fd533a830318440bde4fc5c00cbae0b02
+656d61696c0000789c2bc84b0fca4fce2e7648ce48ccc949cd4b4fd533a830318440bde4fc5c
+00cbae0b02
 
-So we have the ascii "email", then a few 0's, and then hex "78 9c". This should ring a bell for hexadecimal people, as it is a magic for zlib. Let's see if we can uncompress it:
+So we have the ascii "email", then a few 0's, and then hex "78 9c". This should
+ring a bell for hexadecimal people, as it is a magic for zlib. Let's see if we
+can uncompress it:
 
-In [70]: z="789c2bc84b0fca4fce2e7648ce48ccc949cd4b4fd533a830318440bde4fc5c00cbae0b02".decode("hex")
+In [70]: z="789c2bc84b0fca4fce2e7648ce48ccc949cd4b4fd533a830318440bde4f" + \
+"c5c00cbae0b02".decode("hex")
 
 In [71]: print z
 x�+�K�O�.vH�H��I�KO�3�01�@���\ˮ
@@ -142,7 +167,9 @@ Hey, it looks like a valid mail address !
 
 ----[ BONUS: PATCHING THE PNG
 
-If, for any reason, we want to patch the PNG, here is how to do it with the libmich:
+If, for any reason, we want to patch the PNG, here is how to do it with the
+libmich:
+
 In [10]: for c in p[1:]:
    ....:     print c.type()
    ....:     
@@ -160,10 +187,12 @@ In [13]: p[5].crc < None # reset crc (will be calculated automatically)
 
 In [14]: p[5].len < None # reset len (will be calculated automatically)
 
-In [15]: p[5].data < str(p[5].data) + "hey ! look ! a patch !!" # we use "<" to modify the data member of the chunk
+In [15]: p[5].data < str(p[5].data) + "hey ! look ! a patch !!" # we use "<" to
+modify the data member of the chunk
 
 In [18]: str(p[5])[-40:]
-Out[18]: 'T\xf1\x1e\x14\x8ba\x07U\xd7\xa9j\x05Ihey ! look ! a patch !!\xd2\x00\xbe\xd2'
+Out[18]: 'T\xf1\x1e\x14\x8ba\x07U\xd7\xa9j\x05Ihey ! look ! a patch
+!!\xd2\x00\xbe\xd2'
 
 In [19]: from libmich.core.element import show
 
@@ -171,10 +200,12 @@ In [20]: show(p[5])
   ### PNG chunk [chk] ###
   <Length [len] : 8215>
   <Chunk Type [type] : 'IDAT'>
-  <Chunk Data [data] : 'x\xda\\x02\tD k\xf6\xad\xaf\xb0\xc0b\xb8:\xfa\xdds\xce=\xed\x9e\x11\x84\r\x0fE\x81\xa7\xebD\xb1(\x08F6o\xe4LX\xa4\xef\x1a\x8 [...]
+  <Chunk Data [data] : 'x\xda\\x02\tD k\xf6\xad\xaf\xb0\xc0b
+\xb8:\xfa\xdds\xce=\xed\x9e\x11\x84\r\x0fE\x81\xa7\xebD\xb1( [...]
   <CRC32 Checksum [crc] : 0xd200bed2>
 
-See how CRC and length fields have been filled. You can save the results and open it with a PNG viewer (ouch, my eyes burn !).
+See how CRC and length fields have been filled. You can save the results and
+open it with a PNG viewer (ouch, my eyes burn !).
 
 In [21]: out=open("/tmp/png.png", "w")
 
@@ -184,7 +215,10 @@ In [23]: out.close()
 
 ----[ CONCLUSION
 
-As there's no documentation, let's remind the reader that the only way to learn to use the libmich is to dive in the source code. Starting by looking at formats/PNG.py is a good idea, as it is small and it shows the basic way to add new formats to the libmich.
+As there's no documentation, let's remind the reader that the only way to learn
+to use the libmich is to dive in the source code. Starting by looking at
+formats/PNG.py is a good idea, as it is small and it shows the basic way to add
+new formats to the libmich.
 
 ----[ REFERENCES
 
