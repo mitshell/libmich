@@ -338,71 +338,71 @@ PD_dict = IANA_dict({
 #
 
 
-'''
+
 #######################################
 # and still to be handled ... somewhere
 # ... actually should be elsewhere
 #######################################
 
 # Packet Service Mobility Management procedures dict
-PS_MM = {
-    1:"GPRS - Attach request",
-    2:"GPRS - Attach accept",
-    3:"GPRS - Attach complete",
-    4:"GPRS - Attach reject",
-    5:"GPRS - Detach request",
-    6:"GPRS - Detach accept",
-    8:"GPRS - Routing area update request",
-    9:"GPRS - Routing area update accept",
-    10:"GPRS - Routing area update complete",
-    11:"GPRS - Routing area update reject",
-    12:"GPRS - Service Request",
-    13:"GPRS - Service Accept",
-    14:"GPRS - Service Reject",
-    16:"GPRS - P-TMSI reallocation command",
-    17:"GPRS - P-TMSI reallocation complete",
-    18:"GPRS - Authentication and ciphering request",
-    19:"GPRS - Authentication and ciphering response",
-    20:"GPRS - Authentication and ciphering reject",
-    28:"GPRS - Authentication and ciphering failure",
-    21:"GPRS - Identity request",
-    22:"GPRS - Identity response",
-    32:"GPRS - GMM status",
-    33:"GPRS - GMM information",
-    }
+#PS_MM = {
+#    1:"GPRS - Attach request",
+#    2:"GPRS - Attach accept",
+#    3:"GPRS - Attach complete",
+#    4:"GPRS - Attach reject",
+#    5:"GPRS - Detach request",
+#    6:"GPRS - Detach accept",
+#    8:"GPRS - Routing area update request",
+#    9:"GPRS - Routing area update accept",
+#    10:"GPRS - Routing area update complete",
+#    11:"GPRS - Routing area update reject",
+#    12:"GPRS - Service Request",
+#    13:"GPRS - Service Accept",
+#    14:"GPRS - Service Reject",
+#    16:"GPRS - P-TMSI reallocation command",
+#    17:"GPRS - P-TMSI reallocation complete",
+#    18:"GPRS - Authentication and ciphering request",
+#    19:"GPRS - Authentication and ciphering response",
+#    20:"GPRS - Authentication and ciphering reject",
+#    28:"GPRS - Authentication and ciphering failure",
+#    21:"GPRS - Identity request",
+#    22:"GPRS - Identity response",
+#    32:"GPRS - GMM status",
+#    33:"GPRS - GMM information",
+#    }
 
 # Packet Service Session Management procedures dict
-PS_SM = {
-    65:"GPRS - Activate PDP context request",
-    66:"GPRS - Activate PDP context accept",
-    67:"GPRS - Activate PDP context reject",
-    68:"GPRS - Request PDP context activation",
-    69:"GPRS - Request PDP context activation rejection",
-    70:"GPRS - Deactivate PDP context request",
-    71:"GPRS - Deactivate PDP context accept",
-    72:"GPRS - Modify PDP context request(Network to MS direction)",
-    73:"GPRS - Modify PDP context accept (MS to network direction)",
-    74:"GPRS - Modify PDP context request(MS to network direction)",
-    75:"GPRS - Modify PDP context accept (Network to MS direction)",
-    76:"GPRS - Modify PDP context reject",
-    77:"GPRS - Activate secondary PDP context request",
-    78:"GPRS - Activate secondary PDP context accept",
-    79:"GPRS - Activate secondary PDP context reject",
-    80:"GPRS - Reserved",
-    81:"GPRS - Reserved",
-    82:"GPRS - Reserved",
-    83:"GPRS - Reserved",
-    84:"GPRS - Reserved",
-    85:"GPRS - SM Status",
-    86:"GPRS - Activate MBMS Context Request",
-    87:"GPRS - Activate MBMS Context Accept",
-    88:"GPRS - Activate MBMS Context Reject",
-    89:"GPRS - Request MBMS Context Activation",
-    90:"GPRS - Request MBMS Context Activation Reject",
-    91:"GPRS - Request Secondary PDP Context Activation",
-    92:"GPRS - Request Secondary PDP Context Activation Reject",
-    93:"GPRS - Notification",
-    }
-'''
+#PS_SM = {
+#    65:"GPRS - Activate PDP context request",
+#    66:"GPRS - Activate PDP context accept",
+#    67:"GPRS - Activate PDP context reject",
+#    68:"GPRS - Request PDP context activation",
+#    69:"GPRS - Request PDP context activation rejection",
+#    70:"GPRS - Deactivate PDP context request",
+#    71:"GPRS - Deactivate PDP context accept",
+#    72:"GPRS - Modify PDP context request(Network to MS direction)",
+#    73:"GPRS - Modify PDP context accept (MS to network direction)",
+#    74:"GPRS - Modify PDP context request(MS to network direction)",
+#    75:"GPRS - Modify PDP context accept (Network to MS direction)",
+#    76:"GPRS - Modify PDP context reject",
+#    77:"GPRS - Activate secondary PDP context request",
+#    78:"GPRS - Activate secondary PDP context accept",
+#    79:"GPRS - Activate secondary PDP context reject",
+#    80:"GPRS - Reserved",
+#    81:"GPRS - Reserved",
+#    82:"GPRS - Reserved",
+#    83:"GPRS - Reserved",
+#    84:"GPRS - Reserved",
+#    85:"GPRS - SM Status",
+#    86:"GPRS - Activate MBMS Context Request",
+#    87:"GPRS - Activate MBMS Context Accept",
+#    88:"GPRS - Activate MBMS Context Reject",
+#    89:"GPRS - Request MBMS Context Activation",
+#    90:"GPRS - Request MBMS Context Activation Reject",
+#    91:"GPRS - Request Secondary PDP Context Activation",
+#    92:"GPRS - Request Secondary PDP Context Activation Reject",
+#    93:"GPRS - Notification",
+#    }
+#'''
 
 
