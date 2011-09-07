@@ -1167,7 +1167,8 @@ class Layer(object):
                     if len(string) < BitStack_len//8:
                         debug(1, self.dbg, 'String buffer not long enough ' \
                               'for %s' % e.CallName)
-                        return
+                        #if self.safe:
+                        #    return
                     s_stack = string[:BitStack_len//8]
                     s_bin = ''
                     while s_stack:
@@ -1191,7 +1192,8 @@ class Layer(object):
                     if len(string) < e.map_len():
                         debug(1, self.dbg, 'String buffer not long enough ' \
                               'for %s' % e.CallName)
-                        return
+                        #if self.safe:
+                        #    return
                     e.map(string)
                     string = string[e.map_len():]
     
@@ -1250,7 +1252,10 @@ class Layer(object):
             index = self.get_index()
             for l in self.Block[ index+1 : ]:
                 if l.hierarchy > self.hierarchy:
-                    pay.append( l.clone() )
+                    #pay.append( l.clone() )
+                    # not needed to append a clone
+                    # better keep reference to original layer
+                    pay.append( l )
                 else:
                     break
             if pay.num() == 0:
@@ -1325,8 +1330,12 @@ class Block(object):
         # this lib starts really to amaze me!
         if isinstance(obj, (Layer, Block)):
             obj.inBlock = True
-            obj.Block = self
-            obj.hierarchy = self.hierarchy
+            # do not re-assign Layer.Block when building a payload
+            # referring to Layer.get_payload()
+            if self.CallName != 'pay':
+                obj.Block = self
+            # better keep original Layer / Block hierarchy
+            #obj.hierarchy = self.hierarchy
             self.layerList.append(obj)
     
     def extend(self, block):
