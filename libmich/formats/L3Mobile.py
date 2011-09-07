@@ -152,50 +152,6 @@ def parse_L3(buf):
 
     
 #
-# test messages:
-# Mobility Management
-test_MM = {
-'loc_upd_req' : '\x05\x08pC\xf0\x10\xff\xfeW\x08)\x80\x10D\x02\x00B\x133\x03WX\xa2',
-'loc_upd_acc' : '\x05\x02\x02\xf8\x10\x1fO',
-'aut_req' : '\x05\x12\x064H\xf6\xa8a"\x90\xf2<\xdb\x11\x0f.5?\xeb \x10\x90\x91\x80vM\x83\x00\x00n\xcb*\xe7\xb2\xfe\r\xbe',
-'aut_res' : '\x05T\xaa\xe8\xfa\x1a!\x04\x01\x95\x84\xdd',
-'tmsi_rea_cmd' : '\x05\x1a\x02\xf8\x10\x1fO\x05\xf4 AE\x01',
-'tmsi_rea_comp' : '\x05\x9b',
-'id_req' : '\x05\x18\x03',
-'id_res_imei' : '\x05\xd9\t\x03@\x04\x12\x14)6\x08\xf0',
-'cm_serv_req' : '\x05$d\x03WX\xa2\x05\xf4 AE\x01',
-}
-
-# Call Control
-test_CC_NETini = {
-'setup': '\x03\x05\x04\x01\xa0',
-'call_proc' : '\x83\x02',
-'alert' : '\x83\x01\x1e\x02\xe2\xa0',
-'con' : '\x83\x07\x1e\x02\xe2\xa0',
-'con_ack' : '\x03\x0f',
-'discon' : '\x03%\x02\xe0\x90',
-'rel' : '\x83-\x08\x02\xe0\x90',
-'rel_comp' : '\x03*\x08\x02\xe0\x90',
-}
-test_CC_MEini = {
-'alert' : '\x83\xc1',
-'call_conf' : '\x83\x88\x04\x06`\x04\x02\x00\x05\x81\x15\x02\x01\x00@\x08\x04\x02`\x00\x00\x02\x1f\x00',
-'con' : '\x83\x07',
-'con_ack' : '\x03\x0f',
-'discon' : '\x03e\x02\xe0\x90',
-'rel' : '\x83m',
-'rel_comp' : '\x83\xaa',
-'setup' : '\x03\x85\x04\x06`\x04\x02\x00\x05\x81^\x08\x81\x003\x96\x99 4\xf0\x15\x02\x01\x00@\x08\x04\x02`\x04\x00\x02\x1f\x00',
-}
-
-# Short Message Service
-test_SMS = {
-'cp_rp_1' : '\t\x01\xa5\x00\x01\x00\x07\x913\x86\t@\x00\xf0\x99A\x02\x0b\x91dg\x03\x17\x81\xf5\x00\x00\xa0\x05\x00\x03\xbc\x02\x01\x82A\x1d\x08\x06\xa3\xd1`\xb2\x18-\x96\x93\xd9f8\x98"X\xd4\x81\xaeO)\x93\xd8\x8a\xb5p\x91\x99\x0b\xe6\n\xba`\xae\x99\xcc\xa6\x08\x1au\xa0\x98\x8cvk\xc9d\xb0YDJ\x1b*\x82S\x1dH\x06\xc3\xc1b4\x9a\x0c\x06\x83\xc9h\xb3\x98"\x88\xd5\x81f4\x98"\x98\xd5\x81`1\x85\xd0\xa8\x03\xd1`6\x85\x10\xa9\x03\xd1j0\x850\xa9\x03\xdd\x14B\xa5\x0e\x04S\x08\xb1:\x10L!\xcc\xea@7\xc5\x90\xaa\x03\xcdb6\xd8,7\xc3\xc9\x14',
-'cp_rp_2' : '\t\x01J\x00\x02\x00\x07\x913\x86\t@\x00\xf0>A\x03\x0b\x91dg\x03\x17\x81\xf5\x00\x008\x05\x00\x03\xbc\x02\x02\x82C\x1dh\xe6\x82\xb9\x82.\x98k&\xb3\x81b2\x9a\xacE\xa3\xd9l\x91c\xd1Y\x94&\x87\x91\xea\xb4(%\x16\x85\xd5c\xa4I\x8d\xd5\x14',
-'cp_ack' : '\x89\x04',
-'rp_err': '\x89\x01\x04\x05\x01\x01&',
-}
-
 # OpenBTS typical sequence:
 bts = \
 ['\x05$\x11\x033Y\x90\x05\xf4T\x01\x98\xcb',
@@ -248,43 +204,4 @@ bts = \
  '\x06!\x10\x08)\x80\x10D\x02\x00B\x13',
  "\x06'\x07\x033Y\xa6\x08)\x80\x10D\x02\x00B\x13"]
 
-'''
-recv: 0524110333599005f4540198cb : MM CM Service Request serviceType=MOC mobileIdentity=(TMSI=0x540198cb) classmark=(revision=1 ES-IND=1 A5/1=0 A5/2=0 A5/3=0 powerCap=3 PS=1 SSScrenInd=1 SM=1 VBS=0 VGCS=0 FC=1 CM3=1 LCSVA=0 SoLSA=0 CMSF=0)
-send: 051801 : MM Identity Request type=IMSI
-recv: 0559082980101310773652 : MM Identity Response mobile id=IMSI=208013101776325
-send: 0521 : MM CM Service Accept
-recv: 030504066004020005815e088100126379363516 : CC Setup TI=(0,0) CalledPartyBCDNumber=(type=unknown plan=E.164/ISDN digits=00213697635361)
-send: 8302 : CC Call Proceeding TI=(1,0)
-send: 062e0a4033006301 : RR Assignment Command channelDescription=(typeAndOffset=TCH/F TN=2 TSC=2 ARFCN=51) powerCommand=0 mode1=speech1
-recv: 062900 : RR Assignment Complete cause=0x0
-send: 832502e1ff : CC Disconnect TI=(1,0) cause=(location=1 cause=0x7f)
-send: 832a : CC Release Complete TI=(1,0)
-send: 060d00 : RR Channel Release cause=0x0
-recv: 036d0802e090 : CC Release TI=(0,0) cause=(location=0 cause=0x10)
-recv: 0524110333599005f4540198cb : MM CM Service Request serviceType=MOC mobileIdentity=(TMSI=0x540198cb) classmark=(revision=1 ES-IND=1 A5/1=0 A5/2=0 A5/3=0 powerCap=3 PS=1 SSScrenInd=1 SM=1 VBS=0 VGCS=0 FC=1 CM3=1 LCSVA=0 SoLSA=0 CMSF=0)
-send: 051801 : MM Identity Request type=IMSI
-recv: 0559082980101310773652 : MM Identity Response mobile id=IMSI=208013101776325
-send: 0521 : MM CM Service Accept
-recv: 030504066004020005815e03811230 : CC Setup TI=(0,0) CalledPartyBCDNumber=(type=unknown plan=E.164/ISDN digits=2103)
-send: 8302 : CC Call Proceeding TI=(1,0)
-send: 062e0a4033006301 : RR Assignment Command channelDescription=(typeAndOffset=TCH/F TN=2 TSC=2 ARFCN=51) powerCommand=0 mode1=speech1
-recv: 062900 : RR Assignment Complete cause=0x0
-send: 830302e180 : CC 0x3 TI=(1,0) prog_ind=(location=1 progress=0x0)
-send: 8301 : CC Alerting TI=(1,0)
-send: 8307 : CC Connect TI=(1,0)
-recv: 034f : CC Connect Acknowledge TI=(0,0)
-recv: 032502e090 : CC Disconnect TI=(0,0) cause=(location=0 cause=0x10)
-send: 832d : CC Release TI=(1,0)
-recv: 036a0802e090 : CC Release Complete TI=(0,0) cause=(location=0 cause=0x10)
-send: 060d00 : RR Channel Release cause=0x0
-send: 832502e190 : CC Disconnect TI=(1,0) cause=(location=1 cause=0x10)
-send: 832a : CC Release Complete TI=(1,0)
-send: 060d00 : RR Channel Release cause=0x0
-send: 060d01 : RR Channel Release cause=0x1
-recv: 05081100f22003e83305f4540198cb : MM Location Updating Request LAI=(MCC=002 MNC=02 LAC=0x3e8) MobileIdentity=(TMSI=0x540198cb) classmark=(revision=1 ES-IND=1 A5/1=0 powerCap=3)
-send: 051801 : MM Identity Request type=IMSI
-recv: 0559082980101310773652 : MM Identity Response mobile id=IMSI=208013101776325
-send: 053245068d4174bb4c0647118090414591e1 : MM MM Information short name=(Ahmed) time=(Tue Aug  9 10:54:19 2011)
-send: 050200f22003e81705f44df7ba38 : MM Location Updating Accept LAI=(MCC=002 MNC=02 LAC=0x3e8)ID=(TMSI=0x4df7ba38)
-send: 060d00 : RR Channel Release cause=0x0
-'''
+
