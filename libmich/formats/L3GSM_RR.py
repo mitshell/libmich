@@ -420,54 +420,5 @@ class PAGING_REQUEST_1(Layer3):
         self.IArest.Len = self.len
         self.IArest.LenFunc = lambda l: 22-l()-len(l)
 
-# 44018, section 9.1.25
-class PAGING_RESPONSE(Layer3):
-    pass
-    
-# 44018, section 9.1.23
-class PAGING_REQUEST_2(Layer3):
-    pass
-
-# 44018, section 9.1.24
-class PAGING_REQUEST_3(Layer3):
-    pass
-
-# 44018, section 9.1.31
-class SYSTEM_INFO_1(Layer3):
-    pass
-
-# 44018, section 9.1.32
-class SYSTEM_INFO_2(Layer3):
-    pass
-
-# 44018, section 9.1.33
-class SYSTEM_INFO_2BIS(Layer3):
-    pass
-
-# 44018, section 9.1.34
-class SYSTEM_INFO_2TER(Layer3):
-    pass
-
-# 44018, section 9.1.34a
-class SYSTEM_INFO_2QUATER(Layer3):
-    pass
-
-# 44018, section 9.1.34b
-class SYSTEM_INFO_2N(Layer3):
-    pass
-
-# 44018, section 9.1.35
-class SYSTEM_INFO_3(Layer3):
-    pass
-
-# 44018, section 9.1.36
-class SYSTEM_INFO_4(Layer3):
-    pass
-
-# 44018, section 9.1.43a
-class SYSTEM_INFO_13(Layer3):
-    pass
-
-
 
 
