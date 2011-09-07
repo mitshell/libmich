@@ -1,0 +1,934 @@
+#########################
+#       libmich         #
+# IKEv2 format tutorial #
+#########################
+
+IKEv2 is a complex protocol with a message structure that introduce a hierarchy 
+between header, payloads, parameter, parameter of parameter... The library provided 
+automate a lot of things to build IKEv2 message, but you still need to know the 
+protocol to introduce the real important parameters that cannot be guessed.
+
+So, the first thing is to dive into the RFC 5996. Then, we can start to build some 
+messages.
+
+###################
+# Build a message #
+###################
+
+Let's go for an initial IKEv2 SA_INIT message:
+
+>>> from libmich.formats.IKEv2 import *
+>>> i = IKEv2()
+>>> show(i)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x0000000000000000>
+<SPI responder [SPIr] : 0x0000000000000000>
+<Next Payload [np] : None>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_SA_INIT'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 0>
+<Length [len] : 28>
+
+
+We have the initial IKEv2 header that is starting our IKEv2 block (at the end, we 
+will send the str() of this block to our UDP socket). First thing is to choose an 
+SPI initiator: let's take a dummy one, but still valid (not null).
+
+
+>>> i.hdr.SPIi > 'babababa'
+>>> i.hdr
+<IKEv2 header[hdr]: SPIi(SPI initiator):0x6261626162616261, SPIr(SPI responder):0x0000000000000000, 
+np(Next Payload):None, ver(Version):0x20, type(Exchange Type):'IKE_SA_INIT', flag(Flags):0x08, 
+msgID(Message Identifier):0, len(Length):28>
+>>> str(i)
+'babababa\x00\x00\x00\x00\x00\x00\x00\x00\x00 "\x08\x00\x00\x00\x00\x00\x00\x00\x1c'
+
+
+Now, we will have to build the Security Association proposal. Let's append some 
+SA payload, with proposals, transforms and parameters.
+
+
+>>> i < pay_SA()
+>>> i << Prop()
+>>> i << Trans(TransformType['ENCR'], TransformID[TransformType['ENCR']]['aes-cbc'])
+>>> i << TransTV(V='\0\x10') # for AES-CBC, we need to precise the key length: 0x10
+>>> i >> Trans(TransformType['INTEG'], TransformID[TransformType['INTEG']]['hmac-sha1-96'])
+>>> i | Trans(TransformType['PRF'], TransformID[TransformType['PRF']]['hmac-sha1'])
+>>> i | Trans(TransformType['DH'], TransformID[TransformType['DH']]['modp-1024'])
+>>> show(i)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x6261626162616261>
+<SPI responder [SPIr] : 0x0000000000000000>
+<Next Payload [np] : 'Security Association'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_SA_INIT'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 0>
+<Length [len] : 76>
+	### Security Association [SA] ###
+	<Payload Type [Ptype - transparent] : 'Security Association'>
+	<Next Payload [np] : 'None'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 48>
+		### Proposal [Prop] ###
+		<[last] : 'last'>
+		<Reserved [res] : 0x00>
+		<Length [len] : 44>
+		<Proposal number [Pnum] : 1>
+		<Protocol ID [pID] : 'Internet Key Exchange'>
+		<SPI size [SPIs] : 0>
+		<number of Transforms [Tnum] : 4>
+		<[SPI] : 0x>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 12>
+			<Transform type [type] : 'Encryption Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'ENCR_AES_CBC'>
+				### Transform Attribute TV [TransTV] ###
+				<Type [T] : 'Key Length'>
+				<Value [V] : 0x0010>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Integrity Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'AUTH_HMAC_SHA1_96'>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Pseudo-random Function'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'PRF_HMAC_SHA1'>
+			### Transform [Trans] ###
+			<[last] : 'last'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Diffie-Hellman Group'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : '1024-bit MODP Group'>
+>>> i[3]
+<Transform[Trans]: last():'more', res(Reserved):0x00, len(Length):12, 
+type(Transform type):'Encryption Algorithm', res2(Reserved2):0x00, 
+tID(Transform ID):'ENCR_AES_CBC'>
+>>> i[3].hierarchy
+3
+>>> i[4]
+<Transform Attribute TV[TransTV]: T(Type):'Key Length', V(Value):0x0010>
+>>> i[4].hierarchy
+4
+
+
+Here, we can appreciate all the automation that is done when building the message:
+- header 'len' is updated
+- SA payload 'len' is updated
+- Proposal 'last', 'len', 'Pnum' and 'Tnum' are updated
+- Transform 'last' is updated
+This is done while using <<, >> and | through .append() method when appending layers 
+in the block: those signs allow to manage the hierarchy between the different layers 
+and to update correctly the automated parameters.
+The sign < append the layer at hierarchy 1 (under the IKEv2 header). We can always 
+redefine the hierarchy of a layer manually.
+Now, we will append a 2nd SA proposal and some more required payloads:
+
+
+>>> i < Prop()
+>>> i[-1].hierarchy = 2
+>>> i << Trans(TransformType['ENCR'], TransformID[TransformType['ENCR']]['3des'])
+>>> i | Trans(TransformType['INTEG'], TransformID[TransformType['INTEG']]['hmac-md5-96'])
+>>> i | Trans(TransformType['PRF'], TransformID[TransformType['PRF']]['hmac-md5'])
+>>> i | Trans(TransformType['DH'], TransformID[TransformType['DH']]['768-bit MODP Group'])
+>>> i < pay_KE(ked='myDHpubkey'*24) # this actually requires a true DH public value!
+>>> i < pay_N(n='myNonce'*4)
+>>> show(i)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x6261626162616261>
+<SPI responder [SPIr] : 0x0000000000000000>
+<Next Payload [np] : 'Security Association'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_SA_INIT'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 0>
+<Length [len] : 396>
+	### Security Association [SA] ###
+	<Payload Type [Ptype - transparent] : 'Security Association'>
+	<Next Payload [np] : 'Key Exchange'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 88>
+		### Proposal [Prop] ###
+		<[last] : 'more'>
+		<Reserved [res] : 0x00>
+		<Length [len] : 44>
+		<Proposal number [Pnum] : 1>
+		<Protocol ID [pID] : 'Internet Key Exchange'>
+		<SPI size [SPIs] : 0>
+		<number of Transforms [Tnum] : 4>
+		<[SPI] : 0x>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 12>
+			<Transform type [type] : 'Encryption Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'ENCR_AES_CBC'>
+				### Transform Attribute TV [TransTV] ###
+				<Type [T] : 'Key Length'>
+				<Value [V] : 0x0010>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Integrity Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'AUTH_HMAC_SHA1_96'>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Pseudo-random Function'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'PRF_HMAC_SHA1'>
+			### Transform [Trans] ###
+			<[last] : 'last'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Diffie-Hellman Group'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : '1024-bit MODP Group'>
+		### Proposal [Prop] ###
+		<[last] : 'last'>
+		<Reserved [res] : 0x00>
+		<Length [len] : 40>
+		<Proposal number [Pnum] : 2>
+		<Protocol ID [pID] : 'Internet Key Exchange'>
+		<SPI size [SPIs] : 0>
+		<number of Transforms [Tnum] : 4>
+		<[SPI] : 0x>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Encryption Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'ENCR_3DES'>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Integrity Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'AUTH_HMAC_MD5_96'>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Pseudo-random Function'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'PRF_HMAC_MD5'>
+			### Transform [Trans] ###
+			<[last] : 'last'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Diffie-Hellman Group'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : '768-bit MODP Group'>
+	### Key Exchange [KE] ###
+	<Payload Type [Ptype - transparent] : 'Key Exchange'>
+	<Next Payload [np] : 'Nonce'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 248>
+	<DH Group [dhg] : '1024-bit MODP Group'>
+	<Reserved2 [res2] : 0x0000>
+	<Key Exchange Data [ked] : 0x6d7944487075626b65796d7944487075626b65796d79444
+    87075626b65796d7944487075626b65796d7944487075626b65796d7944487075626b65796d7
+    944487075626b65796d7944487075626b65796d7944487075626b65796d7944487075626b657
+    96d7944487075626b65796d7944487075626b65796d7944487075626b65796d7944487075626
+    b65796d7944487075626b65796d7944487075626b65796d7944487075626b65796d794448707
+    5626b65796d7944487075626b65796d7944487075626b65796d7944487075626b65796d79444
+    87075626b65796d7944487075626b65796d7944487075626b6579>
+	### Nonce [N] ###
+	<Payload Type [Ptype - transparent] : 'Nonce'>
+	<Next Payload [np] : 'None'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 32>
+	<Nonce [n] : 0x6d794e6f6e63656d794e6f6e63656d794e6f6e63656d794e6f6e6365>
+>>> str(i)
+'babababa\x00\x00\x00\x00\x00\x00\x00\x00! "\x08\x00\x00\x00\x00\x00\x00\x01\x8c
+"\x00\x00X\x02\x00\x00,\x01\x01\x00\x04\x03\x00\x00\x0c\x01\x00\x00\x0c\x80\x0e\x00
+\x10\x03\x00\x00\x08\x03\x00\x00\x02\x03\x00\x00\x08\x02\x00\x00\x02\x00\x00\x00\x08
+\x04\x00\x00\x02\x00\x00\x00(\x02\x01\x00\x04\x03\x00\x00\x08\x01\x00\x00\x03\x03
+\x00\x00\x08\x03\x00\x00\x01\x03\x00\x00\x08\x02\x00\x00\x01\x00\x00\x00\x08\x04\x00
+\x00\x01(\x00\x00\xf8\x00\x02\x00\x00myDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyD
+HpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyD
+HpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyDHpubkeymyD
+HpubkeymyDHpubkeymyDHpubkeymyDHpubkey\x00\x00\x00 myNoncemyNoncemyNoncemyNonce'
+
+
+We have just built an IKE_SA_INIT message with 2 different cryptographic IKE_SA 
+proposals, a Diffie-Hellman public value and a Nonce. Some more payloads and 
+options could be added to IKE_SA_INIT messages (e.g. notifications for NATT). 
+After the diffie-hellman exchange has happened, the keystream and specific IKE keys 
+can be computed according to http://tools.ietf.org/html/rfc5996#section-2.17
+
+From here, IKE_AUTH exchanges can start, with protected messages:
+
+
+>>> a = IKEv2( SPIi='babababa', SPIr='bibibibi', type=ExchangeType["IKE_AUTH"], msgID=1 )
+>>> a < pay_Enc(iv=16*'T')
+>>> a < pay_Not(nott=NotifyType['ESP_TFC_PADDING_NOT_SUPPORTED'])
+>>> a < pay_IDi(idt=IdentityType['FQDN'], idd='MyFQDNIsThisOne_Mate')
+>>> a < pay_TSi()
+>>> from socket import inet_aton
+>>> a << TS(sp=0, ep=65535, sa=inet_aton('0.0.0.0'), ea=inet_aton('255.255.255.255'))
+>>> a < pay_TSr()
+>>> a << TS(sp=0, ep=65535, sa=inet_aton('0.0.0.0'), ea=inet_aton('255.255.255.255'))
+>>> a < pay_SA()
+>>> a << Prop(pID=ProtocolID['ESP'], SPI='bubu')
+>>> a << Trans(type=1, tID=TransformID[1]["aes-cbc"])
+>>> a << TransTV(V='\x00\x80') # with 128 bits key
+>>> a >> Trans(type=3, tID=TransformID[3]["hmac-sha1-96"])
+>>> a | Trans(type=5, tID=TransformID[5]["No ESN"])
+>>> a < pay_CP(cft=CfgType["CFG_REQUEST"])
+>>> a << Cfg(T=CfgAttType["IPv6"])
+>>> a | Cfg(T=CfgAttType["VERS"])
+>>> show(a)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x6261626162616261>
+<SPI responder [SPIr] : 0x6269626962696269>
+<Next Payload [np] : 'Encrypted'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_AUTH'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 1>
+<Length [len] : 192>
+	### Encrypted [Enc] ###
+	<Payload Type [Ptype - transparent] : 'Encrypted'>
+	<Next Payload [np] : 'Notify'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 164>
+	<Initialization Vector [iv] : 0x54545454545454545454545454545454>
+	### Notify [Not] ###
+	<Payload Type [Ptype - transparent] : 'Notify'>
+	<Next Payload [np] : 'Identification - Initiator'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 8>
+	<Protocol ID [pID] : 'Internet Key Exchange'>
+	<SPI size [SPIs] : 0>
+	<Notify Type [nott] : 'ESP_TFC_PADDING_NOT_SUPPORTED'>
+	<[SPI] : 0x>
+	<Notify Message [notm] : None>
+	### Initiator Identification [IDi] ###
+	<Payload Type [Ptype - transparent] : 'Identification - Initiator'>
+	<Next Payload [np] : 'Traffic Selector - Initiator'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 28>
+	<ID Type [idt] : 'ID_FQDN'>
+	<Reserved2 [res2] : 0x000000>
+	<Identification Data [idd] : 'MyFQDNIsThisOne_Mate'>
+	### Initiator Traffic Selectors [TSi] ###
+	<Payload Type [Ptype - transparent] : 'Traffic Selector - Initiator'>
+	<Next Payload [np] : 'Traffic Selector - Responder'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 24>
+	<number of TS [TSnum] : 1>
+	<Reserved2 [res2] : 0x000000>
+		### Traffic Selector [TS] ###
+		<TS Type [TSt] : 'TS_IPV4_ADDR_RANGE'>
+		<IP protocol ID [IPpID] : 'HOPOPT'>
+		<Selector Length [Slen] : 16>
+		<Start Port [sp] : 0>
+		<End Port [ep] : 65535>
+		<Start Address [sa] : '\x00\x00\x00\x00'>
+		<End Address [ea] : '\xff\xff\xff\xff'>
+	### Responder Traffic Selectors [TSr] ###
+	<Payload Type [Ptype - transparent] : 'Traffic Selector - Responder'>
+	<Next Payload [np] : 'Security Association'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 24>
+	<number of TS [TSnum] : 1>
+	<Reserved2 [res2] : 0x000000>
+		### Traffic Selector [TS] ###
+		<TS Type [TSt] : 'TS_IPV4_ADDR_RANGE'>
+		<IP protocol ID [IPpID] : 'HOPOPT'>
+		<Selector Length [Slen] : 16>
+		<Start Port [sp] : 0>
+		<End Port [ep] : 65535>
+		<Start Address [sa] : '\x00\x00\x00\x00'>
+		<End Address [ea] : '\xff\xff\xff\xff'>
+	### Security Association [SA] ###
+	<Payload Type [Ptype - transparent] : 'Security Association'>
+	<Next Payload [np] : 'Configuration'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 44>
+		### Proposal [Prop] ###
+		<[last] : 'last'>
+		<Reserved [res] : 0x00>
+		<Length [len] : 40>
+		<Proposal number [Pnum] : 1>
+		<Protocol ID [pID] : 'Encapsulating Security Payload'>
+		<SPI size [SPIs] : 4>
+		<number of Transforms [Tnum] : 3>
+		<[SPI] : 0x62756275>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 12>
+			<Transform type [type] : 'Encryption Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'ENCR_AES_CBC'>
+				### Transform Attribute TV [TransTV] ###
+				<Type [T] : 'Key Length'>
+				<Value [V] : 0x0080>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Integrity Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'AUTH_HMAC_SHA1_96'>
+			### Transform [Trans] ###
+			<[last] : 'last'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Extended Sequence Numbers'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'No ESN'>
+	### Configuration [CP] ###
+	<Payload Type [Ptype - transparent] : 'Configuration'>
+	<Next Payload [np] : 'None'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 16>
+	<Configuration Type [cft] : 'CFG_REQUEST'>
+	<Reserved2 [res2] : 0x000000>
+		### Configuration Attribute [Cfg] ###
+		<Type [T] : 'INTERNAL_IP6_ADDRESS'>
+		<Length [L] : 0>
+		<Value [V] : None>
+		### Configuration Attribute [Cfg] ###
+		<Type [T] : 'APPLICATION_VERSION'>
+		<Length [L] : 0>
+		<Value [V] : None>
+>>> a.protect(enc_key=16*'a', mac_key=20*'b', enc_alg=TransformID[TransformType['ENCR']]['aes-cbc'], 
+mac_alg=TransformID[TransformType['INTEG']]['hmac-sha1-96'])
+>>> show(a)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x6261626162616261>
+<SPI responder [SPIr] : 0x6269626962696269>
+<Next Payload [np] : 'Encrypted'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_AUTH'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 1>
+<Length [len] : 220>
+	### Encrypted [Enc] ###
+	<Payload Type [Ptype - transparent] : 'Encrypted'>
+	<Next Payload [np] : 'Notify'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 192>
+	<Initialization Vector [iv] : 0x54545454545454545454545454545454>
+	### [Enc] ###
+	<[Enc] : '69\xb6\xe6\x0fF\x91\x88\xd2\x97\x87\xc9\xc2f0}\xdf\x8a\x83\x15!;\x8c
+    \xf1e\xd9\x8f\xc1\xaaR\x00\r\xcf2i\x9d~ \x9a\xf4\xbf\xc9V\x12\xcc\x7f\xb2o\xae
+    o0\xc8\x91/=\xb9\xc8<\x1ek\x00\xcf\x12\x16{\x99\xeb\xa0\xb9HBI\xc4\x14\x7faB
+    \x1c\xd6D\x13S\xc4Z\x1b\xfb\x05w\xac\x08\x02\xdfC@PV\xe3\x86\xc8tw\x02Y\xa4?
+    \x8e\x1b\xbd\xc8\x005r\xcbc\x0e\xa9\x17\n\xd0\xe1OE2\x89!<\x93\x93\x1bF\xb6\x9a
+    \x16\xfehz\xdb\xe4\x87u\xa9CPI\xd15\xf2!\xf0\x8bm\xc6\x08^ch>\x1c\xb5\x85'>
+	### [MAC] ###
+	<[MAC] : 0xdb2a9cddc8ce98b71efeb524>
+>>> a.unprotect(16*'a', 20*'b', 12, 2)
+>>> show(a)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x6261626162616261>
+<SPI responder [SPIr] : 0x6269626962696269>
+<Next Payload [np] : 'Encrypted'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_AUTH'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 1>
+<Length [len] : 192>
+	### Encrypted [Enc] ###
+	<Payload Type [Ptype - transparent] : 'Encrypted'>
+	<Next Payload [np] : 'Notify'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 164>
+	<Initialization Vector [iv] : 0x54545454545454545454545454545454>
+	### Notify [Not] ###
+	<Payload Type [Ptype - transparent] : 'Notify'>
+	<Next Payload [np] : 'Identification - Initiator'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 8>
+	<Protocol ID [pID] : 'Internet Key Exchange'>
+	<SPI size [SPIs] : 0>
+	<Notify Type [nott] : 'ESP_TFC_PADDING_NOT_SUPPORTED'>
+	<[SPI] : 0x>
+	<Notify Message [notm] : ''>
+	### Initiator Identification [IDi] ###
+	<Payload Type [Ptype - transparent] : 'Identification - Initiator'>
+	<Next Payload [np] : 'Traffic Selector - Initiator'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 28>
+	<ID Type [idt] : 'ID_FQDN'>
+	<Reserved2 [res2] : 0x000000>
+	<Identification Data [idd] : 'MyFQDNIsThisOne_Mate'>
+	### Initiator Traffic Selectors [TSi] ###
+	<Payload Type [Ptype - transparent] : 'Traffic Selector - Initiator'>
+	<Next Payload [np] : 'Traffic Selector - Responder'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 24>
+	<number of TS [TSnum] : 1>
+	<Reserved2 [res2] : 0x000000>
+		### Traffic Selector [TS] ###
+		<TS Type [TSt] : 'TS_IPV4_ADDR_RANGE'>
+		<IP protocol ID [IPpID] : 'HOPOPT'>
+		<Selector Length [Slen] : 16>
+		<Start Port [sp] : 0>
+		<End Port [ep] : 65535>
+		<Start Address [sa] : '\x00\x00\x00\x00'>
+		<End Address [ea] : '\xff\xff\xff\xff'>
+	### Responder Traffic Selectors [TSr] ###
+	<Payload Type [Ptype - transparent] : 'Traffic Selector - Responder'>
+	<Next Payload [np] : 'Security Association'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 24>
+	<number of TS [TSnum] : 1>
+	<Reserved2 [res2] : 0x000000>
+		### Traffic Selector [TS] ###
+		<TS Type [TSt] : 'TS_IPV4_ADDR_RANGE'>
+		<IP protocol ID [IPpID] : 'HOPOPT'>
+		<Selector Length [Slen] : 16>
+		<Start Port [sp] : 0>
+		<End Port [ep] : 65535>
+		<Start Address [sa] : '\x00\x00\x00\x00'>
+		<End Address [ea] : '\xff\xff\xff\xff'>
+	### Security Association [SA] ###
+	<Payload Type [Ptype - transparent] : 'Security Association'>
+	<Next Payload [np] : 'Configuration'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 44>
+		### Proposal [Prop] ###
+		<[last] : 'last'>
+		<Reserved [res] : 0x00>
+		<Length [len] : 40>
+		<Proposal number [Pnum] : 1>
+		<Protocol ID [pID] : 'Encapsulating Security Payload'>
+		<SPI size [SPIs] : 4>
+		<number of Transforms [Tnum] : 3>
+		<[SPI] : 0x62756275>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 12>
+			<Transform type [type] : 'Encryption Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'ENCR_AES_CBC'>
+				### Transform Attribute TV [TransTV] ###
+				<Type [T] : 'Key Length'>
+				<Value [V] : 0x0080>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Integrity Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'AUTH_HMAC_SHA1_96'>
+			### Transform [Trans] ###
+			<[last] : 'last'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Extended Sequence Numbers'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'No ESN'>
+	### Configuration [CP] ###
+	<Payload Type [Ptype - transparent] : 'Configuration'>
+	<Next Payload [np] : 'None'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 16>
+	<Configuration Type [cft] : 'CFG_REQUEST'>
+	<Reserved2 [res2] : 0x000000>
+		### Configuration Attribute [Cfg] ###
+		<Type [T] : 'INTERNAL_IP6_ADDRESS'>
+		<Length [L] : 0>
+		<Value [V] : ''>
+		### Configuration Attribute [Cfg] ###
+		<Type [T] : 'APPLICATION_VERSION'>
+		<Length [L] : 0>
+		<Value [V] : ''>
+
+
+OK, this is rather all for building IKEv2 messages. Every kind of IKEv2 payloads 
+from the RFC 5996 are defined in the formats/IKEv2.py file. Mobike estension are not 
+defined but it would be very simple to integrate them.
+
+###################
+# Parse a message #
+###################
+Now, we will see the best part: the parser.
+
+
+>>> buf = ',\xeb\x0c\xf8I\x10\x11v\x00\x00\x00\x00\x00\x00\x00\x00! "\x08\x00\x00
+\x00\x00\x00\x00\x00\xec"\x00\x000\x00\x00\x00,\x01\x01\x00\x04\x03\x00\x00\x0c\x01
+\x00\x00\x0c\x80\x0e\x00\x80\x03\x00\x00\x08\x02\x00\x00\x02\x03\x00\x00\x08\x03\x00
+\x00\x02\x00\x00\x00\x08\x04\x00\x00\x02(\x00\x00\x88\x00\x02\x00\x00V\x7f\x1b6q\xba
+v\xbb\x0f\x7fX\xf4\x84\xd6\x00XW3P\xc4\x8f\xf9\x0f.\xd1\xe5\xb5>\x80;\x99\xa8\x8f\x04
+<\x029\xb0w\x99\xd6\x7f\x16\xa2<\x99\xdd\xd6\xb5\xc2\xd5\xf8\x12.e@U\x90!\xba\xa3\\\xce
+[\x02Y\xa5\xfd\x83K\x17\x82\xcd`eu\x02\x9aw-Pj\t"\xbe\xf6\x0fA\xceQ\x16\xc2\xf8\x11\xe8
+\xdb\xde}\xfd\x16\x8c\x12\xa1[\x80\xe9u\xa5\xbf\xa3^\x17\xef\xf4F\xbf\x1f\xe2\xf3\xd3\xec
+}\\b\x14\\\xe5g\x00\x00\x00\x18\x9b\xf6\xd5=\x96(\xdf\xfb\xfc,\xca9\'\x10\x11,9\xd9\x97R'
+>>> i = IKEv2()
+>>> i.parse(buf)
+>>> show(i)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x2ceb0cf849101176>
+<SPI responder [SPIr] : 0x0000000000000000>
+<Next Payload [np] : 'Security Association'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_SA_INIT'>
+<Flags [flag] : 0x08>
+<Message Identifier [msgID] : 0>
+<Length [len] : 236>
+	### Security Association [SA] ###
+	<Payload Type [Ptype - transparent] : 'Security Association'>
+	<Next Payload [np] : 'Key Exchange'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 48>
+		### Proposal [Prop] ###
+		<[last] : 'last'>
+		<Reserved [res] : 0x00>
+		<Length [len] : 44>
+		<Proposal number [Pnum] : 1>
+		<Protocol ID [pID] : 'Internet Key Exchange'>
+		<SPI size [SPIs] : 0>
+		<number of Transforms [Tnum] : 4>
+		<[SPI] : 0x>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 12>
+			<Transform type [type] : 'Encryption Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'ENCR_AES_CBC'>
+				### Transform Attribute TV [TransTV] ###
+				<Type [T] : 'Key Length'>
+				<Value [V] : 0x0080>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Pseudo-random Function'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'PRF_HMAC_SHA1'>
+			### Transform [Trans] ###
+			<[last] : 'more'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Integrity Algorithm'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : 'AUTH_HMAC_SHA1_96'>
+			### Transform [Trans] ###
+			<[last] : 'last'>
+			<Reserved [res] : 0x00>
+			<Length [len] : 8>
+			<Transform type [type] : 'Diffie-Hellman Group'>
+			<Reserved2 [res2] : 0x00>
+			<Transform ID [tID] : '1024-bit MODP Group'>
+	### Key Exchange [KE] ###
+	<Payload Type [Ptype - transparent] : 'Key Exchange'>
+	<Next Payload [np] : 'Nonce'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 136>
+	<DH Group [dhg] : '1024-bit MODP Group'>
+	<Reserved2 [res2] : 0x0000>
+	<Key Exchange Data [ked] : 0x567f1b3671ba76bb0f7f58f484d60058573350c48ff90f2
+    ed1e5b53e803b99a88f043c0239b07799d67f16a23c99ddd6b5c2d5f8122e6540559021baa35
+    cce5b0259a5fd834b1782cd606575029a772d506a0922bef60f41ce5116c2f811e8dbde7dfd1
+    68c12a15b80e975a5bfa35e17eff446bf1fe2f3d3ec7d5c62145ce567>
+	### Nonce [N] ###
+	<Payload Type [Ptype - transparent] : 'Nonce'>
+	<Next Payload [np] : 'None'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 24>
+	<Nonce [n] : 0x9bf6d53d9628dffbfc2cca392710112c39d99752>
+>>> i.KE.ked() # this is how to get the DH public value
+'V\x7f\x1b6q\xbav\xbb\x0f\x7fX\xf4\x84\xd6\x00XW3P\xc4\x8f\xf9\x0f.\xd1\xe5\xb5>
+\x80;\x99\xa8\x8f\x04<\x029\xb0w\x99\xd6\x7f\x16\xa2<\x99\xdd\xd6\xb5\xc2\xd5\xf8
+\x12.e@U\x90!\xba\xa3\\\xce[\x02Y\xa5\xfd\x83K\x17\x82\xcd`eu\x02\x9aw-Pj\t"\xbe
+\xf6\x0fA\xceQ\x16\xc2\xf8\x11\xe8\xdb\xde}\xfd\x16\x8c\x12\xa1[\x80\xe9u\xa5\xbf
+\xa3^\x17\xef\xf4F\xbf\x1f\xe2\xf3\xd3\xec}\\b\x14\\\xe5g'
+>>> i[3]
+<Transform[Trans]: last():'more', res(Reserved):0x00, len(Length):12, 
+type(Transform type):'Encryption Algorithm', res2(Reserved2):0x00, 
+tID(Transform ID):'ENCR_AES_CBC'>
+>>> i[3].get_payload()
+[[pay] <Transform Attribute TV[TransTV]: T(Type):'Key Length', V(Value):0x0080> [pay]]
+>>> i[3].get_payload().TransTV.V()
+'\x00\x80'
+>>> i[5]
+<Transform[Trans]: last():'more', res(Reserved):0x00, len(Length):8, 
+type(Transform type):'Pseudo-random Function', res2(Reserved2):0x00, 
+tID(Transform ID):'PRF_HMAC_SHA1'>
+>>> i[5].tID()
+2
+>>> i.hdr.SPIi()
+',\xeb\x0c\xf8I\x10\x11v'
+
+
+Now that we have seen how to parse an unprotected message, and how to access easily 
+its different parts. Let's see how simple it is to parse a protected message. 
+We will also make use of the EAP and EAPAKA formats to get the full representation 
+of what is inside our buffer.
+
+
+>>> buf = ',\xeb\x0c\xf8I\x10\x11v@D\x86\x16\x06\x00\x00\xd4. # \x00\x00\x00\x01
+\x00\x00\x04L$\x00\x0403I\x1b\x18:\x92b\xfd;\x7f~W\x12\xab9\x96\x11&h\xa2][\xec
+\x06\x7fA\n@\xe8"D\x9c\xc2\xb2\x9dd\xc33\xc8l\xc6\xa9\x02\x98cL\xf0wVdyC\xf0*\t\xb8
+\xce\x9chhYq\xb3\xf6AF\x91\x18\xb2\xc6\xea\xfey}\xcaEor\xb3\xa0\x83I=\x91\x13\x1c
+\xe0\x81\xa2#\x1a\x16t\xf4S\xe0\xe4]\xc7\xdc\xff;\xbf\xd4\xb1\x06\xee]\xa1G\xfc\xe9
+\xdfP15\xf0\xd3\xca\x95\xfe]=\x05N\x92\x03\x8d4nq\xf6&\x1ca1\xe2q\x05\xf3\xe1\xcbf
+\x81\xee4RX\x84\xa0\xa5$\xf3\xfd\x16\x02C\x8ep)\x1f\xe3\x96\xa2\xef\xa9\xf6"%A\xf2\xbc
+\xfe\x84\n\tq@\xe1\x92\x1a\xb4\x07d\xc9\xee\xfb\xd6{\xaf\xcfcpw\'q\x01\x87A\xdb\x1e\x8c
+I\x8a`"\x1f%\xb8JH\x13\xdf\x08/\xbfX_\xe6U\x1a\xd2_\x01&\x9f\x0c^\x06\xc5\xb1\xf8\x18
+\xd4\xa5\x9a\x94\xba\x9c^\xc4\xcc\xf9\n\xfd\xfa\xe5;\xe4\xdc\xfeqj\x90\x9f\xe8\x13\xe7
+F3|\xd7\\;F\xe5\xa4\xe0i\x80\x0b\xa6\x06\x1d\xe15J\xd3,\x9cS\xbc\x9fXH\xe8\xa9U6\xc49
+\xa6\xf1\xf6!\xe4\x8cy\xf2\x12#\n2\x89\x04k\xe2\x89\xb15\x7f{f\x0b\x07\x00\xb1\xadJ\x86
+4y>\xac\xf4\xc3\x9aVO\x9do\x87\xc0x\xee\xa3\xed\xf1\xb1\rY\xd8\x1d\x1c\xe6\xfcfP8\xf1
+\xd0\xef\x12\x06\x0e\x87*\x11\x03\x0b.\xc1\xcdrF\xc3\x16\xa8\x9e\xc5\x1bb$\x18\xb5P\x06
+\xcf\xf5\x84\x8aq\x9a\xcePp%\x85\xdb]w\xf9,f\xc4\x7f\x84\xaf*}\x9b\xa7\xd4\xc0dy\x81L
+\xd1\x05\xff\xd5\xbd\x1ePL\xfb\xb2\xf4\x01\xe3\x82\'\x03\xfe\x00\xeb\xb3\x94\x0f\xe2
+\x04R\xd1w\x950\xfb=\x9f\x00\xee\xb4\x93\xffH\xcc\xc6\xd3\xe6\xcfZ\xe0\xc9\x84Y\xf79H
+\xfco\xf9\xb4\xfa\xd4\xcb\x05\xc2\x00(\xc4\x1e\x91\xecx0\xa1?\xa7\xfb\xdcb\xe3\xee\xff
+\xabhI\xd2k\xbd\xf9\xb4[\x07\xafJ\xec\x13\x13v\t5\x87\xefm\xa6\n[\x04\x9c\x9e\x8b\x82
+p<\xbc\xa9\xa0\xeb\x82\xb1\xce\x86\x8a\xd4\x89\xb0+CW&R?{\xc6\xd1\xaaw\x1b\x0b$\xa5\x1a
+\xa8\x8ap\x16t\xf4.\xf7#\xcdQ\x15?\xeeQ\xd4\x84\x9a^4&\xc2\xc0Y\xb62\xb9\x90\xd4\xb5
+\xaa\xb8:\xf6\xde1\xdcb\xa4\xe8\xf1\x93d\x07\r9\x94@&Y\xf4\xcd\x05\xca\x9d\xfd\xed
+\xf5\x9bBb\x84\x97\xe2\xb0\xb2\xd8\xf9\xbe\xf5\xae\xdf&\xb8\x82K\xa7\x17\x19\xe2\xbb
+WE\x9e\xa0W\xaew\x95H \x07\xf5\xe4 \xc3\x82\xae\xa2\xfc~\n\x1e\xaa\xc7\xe7\xae}\x0c
+A\\\xf8\xb1\x1a%\xce(q2}\xff\xda\xb5\x8b0\xf3b\x96\x97I6\xaa\xfbxt\x9c\xdf\x94-\xf5
+\xab\x97\xf7>z\x80\xf8\x03\x82\xf4\xb4O\xf9\x17\xd6\xaag\xdf0:\x83-\xf4\xb8\xb3u7\x13
+1e\x97z\xc3#a\x8f9B\x12\xdcpI\xaa4\\j<\xcdg\x01"\x01\xff8\x9f\x07\xdc\xde\xd4\x9f
+\xb4f\x86\xaf\xf1\x7fE\x06P\xcaRe\xc8\x12)\x10u\x16\xb0\x82\xe8\xc4\x0c;\\\x0b\x01
+\xe1\xc2\xder\x81\nI\x01\x12\x1c\x03O2\xe3\xbe\xf6;:o\xe7\x1c\x9d\xab\xf6\x9c\xec8z?
+\xec\x98\xa7\xc2\x9f\x99\x86p\xb6a\xd0\xf5\xd6\xa0A\xb7\xf8D\xa2H\'\xfb\x02qx\xcf\xb5c
+\x0b\xe0\xff\x0c\n\xafd\xe6o\\\x9c\x90\x9f\xfd\x1e\xb4\x8c\xe3\x85\xdc\xca\xd0\xd5\xd0
+\xf2 \x02y\xa0t\xa1\xae\x11\xfa\tA\x0e3UiM\xba\xfb\x0e\xa6\x16#\xc0\x10G\x04\xa8\x1d
+\x1c\xc2\x085@n\x05\x95\x93^.\x7f\xbf\x04\xbd\x9c\x9d\xfc\xb1J\xf3\xa0 S\xac\x90\x95
+@\xdfS\xbbh\x97\xb2\x99\xf1\xa2\xab/\x17\nE\x9f@)\x1bj\xffO\xb5\xba\x98\xaa{\x87\xa8X
+\x05\xf6k\x84\x8a\x1f\xe4t?\xee\x11.o\x14/\xb8F\x9a\xb4\xcd\xd5RN\x98\xdc\xae\x97K
+\x0e\x13\xdfB\xe4\xfb\x15jyp\x12R%\xb7\x95:\x15\xb6\xf8w\xa3\xee\xa5\xdf\x9d\xf2\xb1
+\x11\n\x80\xc7\xde\x9a\xc3~a<\xaf\\w)\x1dM\xe1\x05\x90!4\xa8\xc1\x1a\xc7\x95\xe3\xd1
+\x00\x92Q\x98\xcb\xfa\xb8J\xcf\xcet\xa6\xcd\xec\xe4\xb9\x8a\xc7\x19\xe6\xb6\xdcI^eg
+\xc5Z\xf1\xe6<y\xde_@?;\xd2y\x87%l\x97\xfe:\xba\x0b'
+>>> i = IKEv2()
+>>> i.parse(buf)
+>>> show(i)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x2ceb0cf849101176>
+<SPI responder [SPIr] : 0x40448616060000d4>
+<Next Payload [np] : 'Encrypted'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_AUTH'>
+<Flags [flag] : 0x20>
+<Message Identifier [msgID] : 1>
+<Length [len] : 1100>
+	### Encrypted [Enc] ###
+	<Payload Type [Ptype - transparent] : 'Encrypted'>
+	<Next Payload [np] : 'Identification - Responder'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 1072>
+	<Initialization Vector [iv] : 0x33491b183a9262fd3b7f7e5712ab3996>
+	### [Enc] ###
+	<[Enc] : '\x11&h\xa2][\xec\x06\x7fA\n@\xe8"D\x9c\xc2\xb2\x9dd\xc33\xc8l\xc6
+    \xa9\x02\x98cL\xf0wVdyC\xf0*\t\xb8\xce\x9chhYq\xb3\xf6AF\x91\x18\xb2\xc6\xea
+    \xfey}\xcaEor\xb3\xa0\x83I=\x91\x13\x1c\xe0\x81\xa2#\x1a\x16t\xf4S\xe0\xe4]
+    \xc7\xdc\xff;\xbf\xd4\xb1\x06\xee]\xa1G\xfc\xe9\xdfP15\xf0\xd3\xca\x95\xfe]=
+    \x05N\x92\x03\x8d4nq\xf6&\x1ca1\xe2q\x05\xf3\xe1\xcbf\x81\xee4RX\x84\xa0\xa5$
+    \xf3\xfd\x16\x02C\x8ep)\x1f\xe3\x96\xa2\xef\xa9\xf6"%A\xf2\xbc\xfe\x84\n\tq@
+    \xe1\x92\x1a\xb4\x07d\xc9\xee\xfb\xd6{\xaf\xcfcpw\'q\x01\x87A\xdb\x1e\x8cI\x8a
+    `"\x1f%\xb8JH\x13\xdf\x08/\xbfX_\xe6U\x1a\xd2_\x01&\x9f\x0c^\x06\xc5\xb1\xf8
+    \x18\xd4\xa5\x9a\x94\xba\x9c^\xc4\xcc\xf9\n\xfd\xfa\xe5;\xe4\xdc\xfeqj\x90\x9f
+    \xe8\x13\xe7F3|\xd7\\;F\xe5\xa4\xe0i\x80\x0b\xa6\x06\x1d\xe15J\xd3,\x9cS\xbc
+    \x9fXH\xe8\xa9U6\xc49\xa6\xf1\xf6!\xe4\x8cy\xf2\x12#\n2\x89\x04k\xe2\x89\xb15
+    \x7f{f\x0b\x07\x00\xb1\xadJ\x864y>\xac\xf4\xc3\x9aVO\x9do\x87\xc0x\xee\xa3\xed
+    \xf1\xb1\rY\xd8\x1d\x1c\xe6\xfcfP8\xf1\xd0\xef\x12\x06\x0e\x87*\x11\x03\x0b.
+    \xc1\xcdrF\xc3\x16\xa8\x9e\xc5\x1bb$...>
+	### [MAC] ###
+	<[MAC] : 0x3f3bd27987256c97fe3aba0b>
+>>> i.unprotect('\xea\x00\x9b\x9f|\x14_\xa0Y19\xc5\x18)\x98\x01', '9\xea,\x84\x95
+\x1e\x08\x85ba\x9cw\xb0!\xcd\x84\xccY\xec\xcf', enc_alg=TransformID[TransformType['ENCR']]['aes-cbc'], 
+mac_alg=TransformID[TransformType['INTEG']]['hmac-sha1-96'])
+>>> show(i)
+[[[ IKEv2 ]]]
+### IKEv2 header [hdr] ###
+<SPI initiator [SPIi] : 0x2ceb0cf849101176>
+<SPI responder [SPIr] : 0x40448616060000d4>
+<Next Payload [np] : 'Encrypted'>
+<Version [ver] : 0x20>
+<Exchange Type [type] : 'IKE_AUTH'>
+<Flags [flag] : 0x20>
+<Message Identifier [msgID] : 1>
+<Length [len] : 1100>
+	### Encrypted [Enc] ###
+	<Payload Type [Ptype - transparent] : 'Encrypted'>
+	<Next Payload [np] : 'Identification - Responder'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 1072>
+	<Initialization Vector [iv] : 0x33491b183a9262fd3b7f7e5712ab3996>
+	### Responder Identification [IDr] ###
+	<Payload Type [Ptype - transparent] : 'Identification - Responder'>
+	<Next Payload [np] : 'Certificate'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 53>
+	<ID Type [idt] : 'ID_FQDN'>
+	<Reserved2 [res2] : 0x000000>
+	<Identification Data [idd] : 'hsdpa.w-apn.mnc001.mcc208.pub.3gppnetwork.org'>
+	### Certificate [CERT] ###
+	<Payload Type [Ptype - transparent] : 'Certificate'>
+	<Next Payload [np] : 'Authentication'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 828>
+	<Certificate Encoding [ce] : 'X.509 Certificate - Signature'>
+	<Certificate Data [cd] : '0\x82\x0330\x82\x02\x9c\xa0\x03\x02\x01\x02\x02\x03
+    \x10\x00\x020\r\x06\t*\x86H\x86\xf7\r\x01\x01\x04\x05\x000|1\x0b0\t\x06\x03U
+    \x04\x06\x13\x02FR1\x0e0\x0c\x06\x03U\x04\x08\x13\x05PARIS1\x0e0\x0c\x06\x03U
+    \x04\x07\x13\x05PARIS1\x0f0\r\x06\x03U\x04\n\x13\x06ORANGE1\x0b0\t\x06\x03U\x04
+    \x0b\x13\x02RD1\x0e0\x0c\x06\x03U\x04\x03\x13\x05MERGE1\x1f0\x1d\x06\t*\x86H
+    \x86\xf7\r\x01\t\x01\x16\x10merge@orange.com0\x1e\x17\r091029152828Z\x17\r10
+    1029152828Z0j1\x0b0\t\x06\x03U\x04\x06\x13\x02FR1\x0e0\x0c\x06\x03U\x04\x08
+    \x13\x05PARIS1\x0f0\r\x06\x03U\x04\n\x13\x06MERGE11\r0\x0b\x06\x03U\x04\x03\x13
+    \x04TEST1+0)\x06\t*\x86H\x86\xf7\r\x01\t\x01\x16\x1cdsolanki@starentnetworks.com0
+    \x81\x9f0\r\x06\t*\x86H\x86\xf7\r\x01\x01\x01\x05\x00\x03\x81\x8d\x000\x81\x89
+    \x02\x81\x81\x00\xbc\xf8\xff]z\x13\xbf\xcf\xc0\x84\xec\xf5m\xcar\xf5e\x16\xf4\t
+    \xacI\xc8\x10\xe5\xb2^\xd8[I=\xdb\xab\x03&\xde\x1a?\xac\xdcM\xddn+\x97\xbfB\xdf
+    \xfb\x1a\x80\x167\xae<V~\xa5h|jP*\x1es\n\xca\'~\xe6\xf3\xaaI4\xad\x18wy\x12\xcb
+    \xec\xe5\x15VZc\xefd\xf3\xf0I1W\xe1...>
+	### Authentication [Auth] ###
+	<Payload Type [Ptype - transparent] : 'Authentication'>
+	<Next Payload [np] : 'Extensible Authentication'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 136>
+	<Authentication Method [am] : 'RSA digital signature'>
+	<Reserved2 [res2] : 0x000000>
+	<Authentication Data [ad] : '\xa6\xb7`"\xb7pP\xa3\xc1C\xac$z\xdb|\x8f\x84\x13
+    \x18\xf5\xc3\x99]\xb6N\x978\x94\x92\xdb\x9a\x11\xbd\x96 \xc4\x1e\xa6\xa0\xbc
+    \x07u"\x9f\x80\x9aB9\xc7(\x7f$\x89\xc8 4i\x1b\xad\x15\xdeEP\xa6\xce\xf9\x95
+    \xfdf\xe0Q{\xf6\xc8\xec\xb2\x10\x10I\xfd\xd7\xfa\xbc\xb5\x03\x8c\xf5\xaeGW\x08
+    \xeem\xd5H>y:\xfe\x10\xb3\x93\x8c`E\xe6C\x0f:~q\x90\xe1\xa8\xb2\x85o\xd9\xac
+    \xe6\xad\xf0\xc1\x8d"|\x8b\x0c'>
+	### Extensible Authentication Protocol [EAP] ###
+	<Payload Type [Ptype - transparent] : 'Extensible Authentication'>
+	<Next Payload [np] : 'None'>
+	<Reserved [res] : 0x00>
+	<Length [len] : 16>
+	<EAP Data [eapd] : '\x01\x02\x00\x0c\x17\x05\x00\x00\r\x01\x00\x00'>
+>>> from libmich.formats.EAP import EAP
+>>> e = EAP()
+>>> e.parse(i.EAP.eapd())
+>>> show(e)
+[[[ EAP ]]]
+### EAP header [hdr] ###
+<Code [C] : 'Request'>
+<Identifier [I] : 2>
+<Length [L] : 12>
+	### EAP type [type] ###
+	<Type [type] : 'EAP-AKA Authentication'>
+	<Data [data] : '\x05\x00\x00\r\x01\x00\x00'>
+>>> from libmich.formats.EAPAKA import EAPAKA
+>>> e = EAPAKA()
+>>> e.parse(i.EAP.eapd())
+>>> show(e)
+[[[ EAP-AKA ]]]
+### EAP header [hdr] ###
+<Code [C] : 'Request'>
+<Identifier [I] : 2>
+<Length [L] : 12>
+	### EAP method [meth] ###
+	<Type [type] : 'EAP-AKA Authentication'>
+	<Subtype [sub] : 'AKA-Identity'>
+	<Reserved [res] : 0x0000>
+		### AT_ANY_ID_REQ [any_ID] ###
+		<Type [T] : 'AT_ANY_ID_REQ'>
+		<Length [L] : 1>
+		<Reserved [res] : 0x0000>
+
+
+###################
+# The DH exchange #
+###################
+
+IKEv2 introduces the systematic use of Diffie-Hellman during the IKE_SA step. The DH 
+secret is derived further to obtain a key stream that will be used for IKEv2 encryption 
+and MAC computation, and further IPsec key derivation.
+
+Several libraries are able to compute DH secrets (e.g. openssl). However, I got a 
+python function from an open-source project working on Open-ID, that is made available 
+within the utils/DH directory.
+The original code is available here:
+https://github.com/openid/python-openid/blob/master/openid/dh.py
+
+The first thing is to define the DH modulus that is specifically designed for IKEv2, 
+and initialize our private and public values. We will use the modulus of mod_group 2:
+
+
+>>> from libmich.utils import DH
+>>> from binascii import unhexlify
+>>> DH.DiffieHellman.DEFAULT_MOD = DH.binaryToLong('\0'+unhexlify(\
+'FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1\
+29024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B3\
+02B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0B\
+FF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381FFF\
+FFFFFFFFFFFFF'))
+>>> dh = DH.DiffieHellman.fromDefaults()
+>>> dh.public
+16869179276747097038514474615485019533257488817205639013967817603190647514038656
+28209287761258629088301470306178648869340734094060410061012382389414294946074439
+18223001276490235523495765616374674764794076179996019106049657849601117056795720
+422837890961290233879394863206920417145528568364762630528433313560305L
+>>> dh.private
+59125824418221506413602388370178158348019544704126258018575082249165264845199156
+25515732024847121054658950845226494568206976432335302582411676093376861432460669
+31891981003798716955285714249661302717504819148383771523460300882958831106821008
+96424073088762017304672611466331625962070277890347590823498642383254L
+
+
+Here, we just need to send our public value to the peer. Then, when we receive 
+the his own public value back, we can compute the shared secret:
+
+
+>>> dh.getSharedSecret(351383792767470970385144746154850195332574888172056390139
+67817603190647514038656282092877612586290883014703061786488693407340940604100610
+12382389414294946074439182230012764902355234957656163746747647940761799960191060
+49657849601117056795720422837890961290233879394863206920417145528568364762630528
+433313560305L)
+51384096466875242020019719631457893972090389729892083466243208888698550366366711
+50127810858758327751544084888989809582152465757473476968562217116123911176370339
+78623826437027394414486927654160182571974095691359179489753161532281417044172163
+39221208077234981368874680276807194740988177214142965046666288311250L
+>>> DH.longToBinary(_)
+'I,b\xc7\xbcv)>(\x0f\x82\xaf\x12\x83\xc99\x9c\xbeM3\x00 \x96Q#\xa5\x86\xf8\xea\x9c
+\xd7m\xfdf\xcd\xf7\xa4p\xfcdZz\xc4\xde[}\xb3\xd7\tv\t\x9a\x1a\x901\x0f*s\xa3\x83A]
+\xfdd\x89\xc5\x0f\x86\x8f(g\x9a\xa0\xcf\xd9\x8fx\xfe\xce\xdeR]\x7fg\x04\x8c\xcd\xa8
+\rh\x02N\x07\x82~\xfe\x84\x87m\xf7\xab$\x7fvnV\xb0m#\x83\xb7\xb5Z\xc6w*\xc1;j>\x01j
+\x03d\x1c\x02+\xd2'
+>>> len(_)
+128
+
+
+From here, we just need to put this shared secret into the SKEYSEED computation 
+function that is defined here: http://tools.ietf.org/html/rfc5996#section-2.14 
+and iterate over the prf+ function to get a full keystream from which we will map 
+SK_d, SK_a, SK_e and SK_p.
+Having those keys, we will be able to .protect() / .unprotect() our IKEv2 messages
+when working in IKE_AUTH mode.
+
+
