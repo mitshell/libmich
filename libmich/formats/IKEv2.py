@@ -395,7 +395,7 @@ class IKEv2(Block):
         Block.__init__(self, Name="IKEv2")
         self.append( IKEv2_hdr(SPIi, SPIr, type, flag, msgID) )
     
-    #manages "next payload" value:
+    # manages "next payload" value:
     def pull_np(self, newLayer):
         #check the last layer in self which has np attribute and take it
         if hasattr(newLayer, "Ptype"):
@@ -405,35 +405,39 @@ class IKEv2(Block):
                 if index == 0: return
             self[index-1].np.Pt = int(newLayer.Ptype)
     
-    #manages last or not for SA Proposals, and Proposal number:
+    # manages last or not for SA Proposals, and Proposal number:
     def pull_PropLast(self, newLayer):
-        if type(newLayer) is Prop:
-            index = newLayer.get_index()
-            while type(self[index-1]) is not Prop: 
-                index -= 1
-                if index == 0: return
-            self[index-1].last.Pt = 2
-            self[newLayer.get_index()].Pnum.Pt = self[index-1].Pnum.Pt + 1
-            #print 'processed: index = %s' % index
+        if isinstance(newLayer, Prop):
+            i = newLayer.get_index()
+            while i > 0: 
+                i -= 1
+                if isinstance(self[i], Prop):
+                    self[i].last > 2 # more proposals to come
+                    newLayer.Pnum.Pt += 1
+                elif isinstance(self[i], pay_SA):
+                    i = 0
     
-    #manages last or not and SA Transforms:
+    # manages last or not and SA Proposal Transforms:
     def pull_TransLast(self, newLayer):
-        if type(newLayer) is Trans:
-            index = newLayer.get_index()
-            while type(self[index-1]) is not Trans: 
-                index -= 1
-                if index == 0: return
-            self[index-1].last.Pt = 3
+        if isinstance(newLayer, Trans):
+            i = newLayer.get_index()
+            while i > 0:
+                i -= 1
+                if isinstance(self[i], Trans):
+                    self[i].last > 3 # more transforms to come
+                elif isinstance(self[i], Prop):
+                    i = 0
     
+    # overrides Block.append() method
     def append(self, layer):
-        if issubclass( type(layer), Layer ):
+        if isinstance( layer, Layer ):
             self.layerList.append(layer)
             layer.inBlock = True
             layer.Block = self
             self.pull_np(layer)
             self.pull_PropLast(layer)
             self.pull_TransLast(layer)
-            
+    
     def __lt__(self, newLayer):
         # to use when appending a payload with hierarchy 1
         self.append(newLayer)
@@ -596,6 +600,7 @@ class IKEv2(Block):
         self.append( MAC(12*'\x00') )
         self[-1].hierarchy = self[index].hierarchy
         #print '[DBG]', len(self), str(self)
+        # warning: MAC length hardcoded
         mac = self[index].computeMAC( str(self)[:-12], mac_key, mac_alg )
         # put the right MAC value in the MAC layer
         self.MAC.MAC.Pt = mac
@@ -610,12 +615,12 @@ class IKEv2(Block):
         # verify MAC (last layer of the block)
         if mac_alg != 0:
             mac = str(self[-1].MAC)
-            # remove last layer ( MAC() )
-            self.remove( self.num()-1 )
+            self[-1].MAC < 12*'\0'
             # warning: MAC length hardcoded
-            if self[index].computeMAC( str(self), mac_key, mac_alg) != mac:
+            if self[index].computeMAC(str(self)[:-12], mac_key, mac_alg) != mac:
                 print '[WNG] MAC is not correct'
                 # return
+            self.remove(self.num()-1)
         # uncipher Enc() (last layer of the block)
         data = str( self[-1] )
         data = self[index].uncipher( data, enc_key, enc_alg )
