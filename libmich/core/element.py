@@ -181,10 +181,13 @@ class Str(Element):
                 if val is not None and not isinstance(val, type_funcs) :
                     raise AttributeError("PtFunc must be a function")
             elif attr == "Val" :
-                if val is not None and not isinstance(val, str) :
-                    raise AttributeError("Val must be a string")
+                if val is not None and not isinstance(val, \
+                (str, Element, Layer, Block, tuple, list)) :
+                    raise AttributeError("Val must be a string or something " \
+                    "that makes a string at the end...")
             elif attr == "Len" :
-                if val is not None and not isinstance(val, (int, tuple, Element)) :
+                if val is not None and not isinstance(val, \
+                (int, tuple, Element, type_funcs)) :
                     raise AttributeError("Len must be an int or element")
             elif attr == "LenFunc" :
                 if val is not None and not isinstance(val, type_funcs) :
@@ -210,6 +213,10 @@ class Str(Element):
         # and the final standard python behaviour
         object.__getattr__(self, attr)
     
+    # the libmich internal instances check
+    def __is_intern_inst(self, obj):
+        return isinstance(obj, (Element, Layer, Block))
+    
     # building basic methods for manipulating easily the Element 
     # from its attributes
     def __call__(self):
@@ -224,7 +231,11 @@ class Str(Element):
             else: return ''
         # returning the right string:
         # if defined, self.Val overrides self.Pt capabilities
-        elif self.Val is not None: 
+        elif self.Val is not None:
+            # allow to pass tuple or list of libmich internal instances
+            if isinstance(self.Val, (list, tuple)) and \
+            False not in map(self.__is_intern_inst, self.Val):
+                    return ''.join(map(str, self.Val))[:l]
             return str(self.Val)[:l]
         # else: use self.Pt capabilities to get the string
         elif self.PtFunc is not None: 
@@ -232,6 +243,11 @@ class Str(Element):
                 assert(hasattr(self.PtFunc(self.Pt), '__str__'))
             return str(self.PtFunc(self.Pt))[:l]
         else:
+            # allow to pass tuple or list of libmich internal instances
+            if isinstance(self.Pt, (list, tuple)) and \
+            False not in map(self.__is_intern_inst, self.Pt):
+                    return ''.join(map(str, self.Pt))[:l]
+            # otherwise, handle simply as is
             if self.safe: 
                 assert(hasattr(self.Pt, '__str__'))
             return str(self.Pt)[:l]
@@ -306,6 +322,7 @@ class Str(Element):
         return self().encode("hex")
     
     def __repr__(self):
+        # check for simple representations
         if self.Pt is None and self.Val is None: 
             return repr(None)
         if self.Repr == "ipv4":
@@ -315,15 +332,23 @@ class Str(Element):
             ret = "0x%s" % hex(self)
         elif self.Repr == "bin": 
             ret = "0b%s" % self.__bin__()
+        # check for the best human-readable representation
         elif self.Repr == "hum":
             # standard return
             ret = repr( self() )
-            # complex return, allows to assign a full Block or Layer to a Str...
-            # can be useful
-            if isinstance( self.Pt, (Element, Layer, Block) ):
+            # complex return:
+            # allow to assign a full Block or Layer to a Str...
+            if self.__is_intern_inst(self.Pt):
                 ret = repr(self.Pt)
-            if isinstance( self.Val, (Element, Layer, Block) ):
+            if self.__is_intern_inst(self.Val):
                 ret = repr(self.Val)
+            # allow to assign a list or tuple of Block or Layer...
+            if isinstance(self.Pt, (list, tuple)) and \
+            False not in map(self.__is_intern_inst, self.Pt):
+                ret = '|'.join(map(repr, self.Pt))
+            if isinstance(self.Val, (list, tuple)) and \
+            False not in map(self.__is_intern_inst, self.Val):
+                ret = '|'.join(map(repr, self.Val))
         # truncate representation if string too long:
         # avoid terminal panic...
         if len(ret) <= self._repr_limit:
@@ -384,6 +409,10 @@ class Str(Element):
             debug(self.dbg, 3, '(Element) %s, %s, %s' \
                   % (repr(string), self.CallName, repr(self)))
     
+    # this is to retrieve element's dynamicity from a mapped element
+    def reautomatize(self):
+        if self.Val is not None and self.PtFunc:
+            self.Val = None
 
 class Int(Element):
     '''
@@ -623,7 +652,11 @@ class Int(Element):
         # does not support little endian
         msb, lsb = unpack('>BH', string)
         return msb*65536+lsb
-
+    
+    # this is to retrieve element's dynamicity from a mapped element
+    def reautomatize(self):
+        if self.Val is not None and self.PtFunc:
+            self.Val = None
 
 class Bit(Element):
     '''
@@ -821,6 +854,10 @@ class Bit(Element):
             assert( 0 <= value <= pow(2, self.bit_len()) )
         self.Val = value
     
+    # this is to retrieve element's dynamicity from a mapped element
+    def reautomatize(self):
+        if self.Val is not None and self.PtFunc:
+            self.Val = None
 
 class Layer(object):
     '''
@@ -1266,6 +1303,12 @@ class Layer(object):
     
     def num(self):
         return 1
+    
+    # this is to retrieve full Layer's dynamicity from a mapped layer
+    def reautomatize(self):
+        for e in self:
+            if hasattr(e, 'reautomatize'):
+                e.reautomatize()
 
 class RawLayer(Layer):
     constructorList = [
@@ -1440,7 +1483,12 @@ class Block(object):
                 else:
                     l.map(s)
                 s = s[l.map_len():]
-
+    
+    # this is to retrieve full Block's dynamicity from a parsed or mapped one
+    def reautomatize(self):
+        for l in self:
+            if hasattr(l, 'reautomatize'):
+                l.reautomatize()
 
 ##################
 # test functions #
