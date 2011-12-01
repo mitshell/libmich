@@ -35,9 +35,9 @@ from libmich.core.element import Str, Int, Bit, \
      Layer, Block, RawLayer, show, debug
 
 # local BGP identifier
-# corresponds to the IPv4 address in use
+# corresponds to IPv4 address in use
 # here is: 127.0.0.1 (0x7f000001)
-BGP_id=0x7f000001
+BGP_id=2130706433
 
 MsgType={
     0:'Reserved',
@@ -161,14 +161,14 @@ class BGP4(Block):
         self.map(s[:19])
         s = s[19:]
         # control BGP marker
-        if self[-1].Marker() != 16*'\xFF':
+        if self[-1].marker() != 16*'\xFF':
             debug(self.dbg, 1, 'bad BGP marker in header')
         # iteratively parse successive payloads and headers
         while len(s) > 0:
             # append BGP payload
             if isinstance(self[-1], HEADER):
-                pay_type = self[-1].Type()
-                pay_len = self[-1].Len()-19
+                pay_type = self[-1].type()
+                pay_len = self[-1].len()-19
                 if pay_type in MsgCall.keys():
                     # payload is known
                     self << MsgCall[pay_type]()
@@ -213,7 +213,7 @@ class BGP4(Block):
                 self.append( HEADER() )
                 self[-1].map(s)
                 # control BGP marker
-                if self[-1].Marker() != 16*'\xFF':
+                if self[-1].marker() != 16*'\xFF':
                     debug(self.dbg, 1, 'bad BGP marker in header')
             # truncate string buffer and loop
             s = s[len(self[-1]):]
@@ -222,17 +222,17 @@ class BGP4(Block):
 # BGPv4 HEADER
 class HEADER(Layer):
     constructorList = [
-        Str('Marker', Pt=16*'\xFF', Len=16),
-        Int('Len', Type='uint16'),
-        Int('Type', Type='uint8', Dict=MsgType),
+        Str('marker', Pt=16*'\xFF', Len=16),
+        Int('len', Type='uint16'),
+        Int('type', Type='uint8', Dict=MsgType),
         ]
     
     def __init__(self):
         Layer.__init__(self)
-        self.Type > self.get_payload
-        self.Type.PtFunc = self.__get_msg_type
-        self.Len > self.get_payload
-        self.Len.PtFunc = lambda pay: len(pay())+19
+        self.len > self.get_payload
+        self.len.PtFunc = lambda pay: len(pay())+19
+        self.type > self.get_payload
+        self.type.PtFunc = self.__get_msg_type
     
     def __get_msg_type(self, pay):
         cmd = pay()[0]
@@ -300,7 +300,7 @@ class UPDATE(Layer):
         self.TPA.LenFunc = lambda tpalen: tpalen()
         # finally handle net reachibility info
         self.NLRI.Len = (self.get_header, self.WRLen, self.TPALen)
-        self.NLRI.LenFunc = lambda args: args[0]().Len() - \
+        self.NLRI.LenFunc = lambda args: args[0]().len() - \
                                         (23 + args[1]() + args[2]())
     
 class Pref(Layer):
@@ -372,7 +372,7 @@ class NOTIFICATION(Layer):
         self.Subcode.Dict = self.Code
         self.Subcode.DictFunc = self.__get_suberr
         self.Data.Len = self.get_header
-        self.Data.LenFunc = lambda hdr: hdr.Len()-21
+        self.Data.LenFunc = lambda hdr: hdr.len()-21
         
     def __get_suberr(self, C):
         if C() == 1: return Hdrerr_dict
