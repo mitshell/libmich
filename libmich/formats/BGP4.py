@@ -3,7 +3,7 @@
 # * Software Name : libmich 
 # * Version : 0.2.1 
 # *
-# * Copyright © 2011. Benoit Michau. France Telecom.
+# * Copyright © 2011. Benoit Michau.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -33,6 +33,7 @@
 
 from libmich.core.element import Str, Int, Bit, \
      Layer, Block, RawLayer, show, debug
+from binascii import hexlify, unhexlify
 
 # local BGP identifier
 # corresponds to IPv4 address in use
@@ -163,6 +164,7 @@ class BGP4(Block):
         # control BGP marker
         if self[-1].marker() != 16*'\xFF':
             debug(self.dbg, 1, 'bad BGP marker in header')
+        # then
         # iteratively parse successive payloads and headers
         while len(s) > 0:
             # append BGP payload
@@ -170,42 +172,16 @@ class BGP4(Block):
                 pay_type = self[-1].type()
                 pay_len = self[-1].len()-19
                 if pay_type in MsgCall.keys():
-                    # payload is known
+                    # BGP payload is recognized: youpi!!!!
                     self << MsgCall[pay_type]()
+                    #print('%s' % self[-1].show())
                     self[-1].map(s)
                     # control payload length
                     if len(self[-1]) != pay_len:
                         debug(self.dbg, 1, 'inconsistent length between BGP '\
                         'header and payload')
-                    # Now extra parsing for OPEN
-                    if isinstance(self[-1], OPEN) and self[-1].OptLen() > 0:
-                        s_opt = self[-1].Opt()
-                        v_opt = []
-                        while len(s_opt) > 0:
-                            v_opt.append(Opt())
-                            v_opt[-1].map(s_opt)
-                            s_opt = s_opt[len(v_opt[-1]):]
-                        self[-1].Opt > v_opt
-                    # Now extra parsing for UPDATE
-                    elif isinstance(self[-1], UPDATE):
-                        if self[-1].WRLen() > 0:
-                            s_wr = self[-1].WR()
-                            v_wr = []
-                            while len(s_wr) > 0:
-                                v_wr.append(Pref())
-                                v_wr[-1].map(s_wr)
-                                s_wr = s_wr[len(v_wr[-1]):]
-                            self[-1].WR > v_wr
-                        if self[-1].TPALen() > 0:
-                            s_tpa = self[-1].TPA()
-                            v_tpa = []
-                            while len(s_tpa) > 0:
-                                v_tpa.append(PA())
-                                v_tpa[-1].map(s_tpa)
-                                s_tpa = s_tpa[len(v_tpa[-1]):]
-                            self[-1].TPA > v_tpa
                 else:
-                    # payload is unknown
+                    # unknown payload
                     self << RawLayer()
                     self[-1].map(s[:pay_len])
             # append more BGP headers
@@ -215,7 +191,7 @@ class BGP4(Block):
                 # control BGP marker
                 if self[-1].marker() != 16*'\xFF':
                     debug(self.dbg, 1, 'bad BGP marker in header')
-            # truncate string buffer and loop
+            # truncate string buffer, and iterate
             s = s[len(self[-1]):]
 
 #
@@ -242,24 +218,7 @@ class HEADER(Layer):
             return 4
 #
 # OPEN message
-class OPEN(Layer):
-    constructorList = [
-        Int('Version', Pt=4, Type='uint8'),
-        Int('AutSys', ReprName='Sender Autonomous System', Pt=0, Type='uint16'),
-        Int('HoldT', ReprName='Hold Timer (sec)', Pt=3, Type='uint16'),
-        Int('BGPId', ReprName='BGP Identifier', Pt=BGP_id, Type='uint32'),
-        Int('OptLen', ReprName='Optional Parameters Length', Pt=0, Type='uint8'),
-        Str('Opt', ReprName='Optional Parameters', Pt='')
-        ]
-    
-    def __init__(self):
-        Layer.__init__(self)
-        self.OptLen > self.Opt
-        self.OptLen.PtFunc = lambda opt: len(opt)
-        self.Opt.Len = self.OptLen
-        self.Opt.LenFunc = lambda optlen: optlen()
-
-class Opt(Layer):
+class opt(Layer):
     constructorList = [
         Int('T', Pt=2, Type='uint8', Dict=Opt_dict),
         Int('L', Type='uint8'),
@@ -275,35 +234,36 @@ class Opt(Layer):
         self.V.Len = self.L
         self.V.LenFunc = lambda l: l()
 
-#
-# UPDATE message
-class UPDATE(Layer):
+class OPEN(Layer):
     constructorList = [
-        Int('WRLen', Pt=0, Type='uint16'),
-        Str('WR', ReprName='Withdrawn Routes', Pt=''),
-        Int('TPALen', Pt=0, Type='uint16'),
-        Str('TPA', ReprName='Total Path Attribute', Pt=''),
-        Str('NLRI', ReprName='Network Layer Reachability Info', Pt='')
+        Int('Version', Pt=4, Type='uint8'),
+        Int('AutSys', ReprName='Sender Autonomous System', Pt=0, Type='uint16'),
+        Int('HoldT', ReprName='Hold Timer (sec)', Pt=3, Type='uint16'),
+        Int('BGPId', ReprName='BGP Identifier', Pt=BGP_id, Type='uint32'),
+        Int('OptLen', ReprName='Optional Parameters Length', Pt=0, Type='uint8'),
         ]
     
     def __init__(self):
         Layer.__init__(self)
-        # handle "Withdrawn Routes"
-        self.WRLen > self.WR
-        self.WRLen.PtFunc = lambda wr: len(wr)
-        self.WR.Len = self.WRLen
-        self.WR.LenFunc = lambda wrlen: wrlen()
-        # handle "Path Attributes"
-        self.TPALen > self.TPA
-        self.TPALen.PtFunc = lambda tpa: len(tpa)
-        self.TPA.Len = self.TPALen
-        self.TPA.LenFunc = lambda tpalen: tpalen()
-        # finally handle net reachibility info
-        self.NLRI.Len = (self.get_header, self.WRLen, self.TPALen)
-        self.NLRI.LenFunc = lambda args: args[0]().len() - \
-                                        (23 + args[1]() + args[2]())
+        self.append(Layer('Options'))
+        self.OptLen > self.Options
+        self.OptLen.PtFunc = lambda opt: len(opt)
     
-class Pref(Layer):
+    # overwrite .map() to fill .Options with opt()
+    def map(self, string=''):
+        self.map(string)
+        string = string[len(self):]
+        while len(string) > 0:
+            o = opt()
+            o.map(string)
+            o.inc_hierarchy(self.hierarchy)
+            self.Options.append(o)
+            string = string[len(o):]
+
+#
+# UPDATE message
+# IPv4 address prefix, for Withdrawn Routes:
+class pref(Layer):
     constructorList = [
         Int('L', Type='uint8'),
         Str('Prefix', Pt='', Repr='hex')
@@ -319,7 +279,8 @@ class Pref(Layer):
         self.Prefix.Len = self.L
         self.Prefix.LenFunc = lambda l: l()//8
 
-class PA(Layer):
+# for Path Attributes:
+class path(Layer):
     constructorList = [
         Bit('Optional', BitLen=1),
         Bit('Transitive', Pt=1, BitLen=1),
@@ -357,6 +318,60 @@ class PA(Layer):
         else:
             self.L.Type='uint8'
         Layer.map(self, s)
+
+# UPDATE full layer
+class UPDATE(Layer):
+    constructorList = [
+        Int('WRLen', Pt=0, Type='uint16'),
+        Int('TPALen', Pt=0, Type='uint16'),
+        Str('NLRI', ReprName='Network Layer Reachability Info', Pt='')
+        ]
+    
+    def __init__(self):
+        Layer.__init__(self)
+        self.insert(1, Layer('WR', ReprName='Withdrawn Routes'))
+        self.insert(3, Layer('TPA', ReprName='Total Path Attribute'))
+        # handle "Withdrawn Routes"
+        self.WRLen > self.WR
+        self.WRLen.PtFunc = lambda wr: len(wr)
+        # handle "Path Attributes"
+        self.TPALen > self.TPA
+        self.TPALen.PtFunc = lambda tpa: len(tpa)
+        # finally handle net reachibility info
+        self.NLRI.Len = (self.get_header, self.WRLen, self.TPALen)
+        self.NLRI.LenFunc = lambda args: args[0]().len() - \
+                                        (23 + args[1]() + args[2]())
+    
+    def map(self, string=''):
+        # handle all the withdrawn routes
+        self.WRLen.map(string)
+        wr_len = self.WRLen()
+        wr_s = string[2:2+wr_len]
+        #print('[+] parsing wr_s: %s' % hexlify(wr_s))
+        # fill iteratively withdrawn routes
+        while len(wr_s) > 0:
+            prefix = pref()
+            prefix.map(wr_s)
+            self.WR.append(prefix)
+            wr_s = wr_s[len(prefix):]
+        string = string[2+wr_len:]
+        #
+        # handle all the path attributes
+        self.TPALen.map(string)
+        tpa_len = self.TPALen()
+        tpa_s = string[2:2+tpa_len]
+        #print('[+] parsing tpa_s: %s' % hexlify(tpa_s))
+        # fill iteratively withdrawn routes
+        while len(tpa_s) > 0:
+            pathat = path()
+            pathat.map(tpa_s)
+            self.TPA.append(pathat)
+            tpa_s = tpa_s[len(pathat):]
+        string = string[2+tpa_len:]
+        #
+        # lastly, handle NLRI
+        self.NLRI.map(string)
+        
 
 #
 # NOTIFICATION message
@@ -401,21 +416,16 @@ MsgCall = {
     4:KEEPALIVE,
     #5:ROUTE_REFRESH
     }
-# tuple of payload type to get right type value in header:
+# tuple of payload' type to get right type value in header:
 MsgType = (HEADER, OPEN, UPDATE, NOTIFICATION, KEEPALIVE) #, ROUTE_REFRESH)
-MsgGet={
-    OPEN:1,
-    UPDATE:2,
-    NOTIFICATION:3,
-    KEEPALIVE:4,
-    #ROUTE_REFRESH:5,
-    }
+
 
 # BGP4 test buffer (from wireshark WIKI)
-testbuf = 'ffffffffffffffffffffffffffffffff001304fffffffffffffffffffffffffffff'\
+testbuf = \
+unhexlify('ffffffffffffffffffffffffffffffff001304fffffffffffffffffffffffffffff'\
 'fff006202000000484001010240020a010201f401f40201febb400304c0a8000f400504000000'\
 '64400600c00706febac0a8000ac0080cfebf000103160004015400fa800904c0a8000f800a04c'\
 '0a800fa10ac10ffffffffffffffffffffffffffffffff006302000000484001010040020a0102'\
 '01f401f40201febb400304c0a8000f40050400000064400600c00706febac0a8000ac0080cfeb'\
-'f000103160004015400fa800904c0a8000f800a04c0a800fa16c0a804'
+'f000103160004015400fa800904c0a8000f800a04c0a800fa16c0a804')
 
