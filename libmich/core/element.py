@@ -349,6 +349,9 @@ class Str(Element):
             if isinstance(self.Val, (list, tuple)) and \
             False not in map(self.__is_intern_inst, self.Val):
                 ret = '|'.join(map(repr, self.Val))
+            # finally, self.Val can be a raw value... still
+            if self.Val is not None and hasattr(self.Val, '__repr__'):
+                ret = repr(self.Val)
         # truncate representation if string too long:
         # avoid terminal panic...
         if len(ret) <= self._repr_limit:
@@ -406,8 +409,9 @@ class Str(Element):
                 self.Val = string[:self.map_len()]
         elif not self.Trans:
             self.Val = string[:self.map_len()]
-            debug(self.dbg, 3, '(Element) %s, %s, %s' \
-                  % (repr(string), self.CallName, repr(self)))
+            if self.dbg:
+                debug(self.dbg, 3, '(Element) %s, %s, %s' \
+                      % (repr(string), self.CallName, repr(self)))
     
     # this is to retrieve element's dynamicity from a mapped element
     def reautomatize(self):
@@ -883,9 +887,9 @@ class Layer(object):
     # add some sanity checks
     safe = True
     # reserved attributes:
-    Reserved = ['CallName', 'ReprName', 'elementList', \
+    Reservd = ['CallName', 'ReprName', 'elementList', 'Len', \
                 'hierarchy', 'inBlock', 'Trans', 'ConstructorList', \
-                'dbg', 'Reserved']
+                'dbg', 'Reservd']
     
     # structure description:
     constructorList = []
@@ -913,7 +917,7 @@ class Layer(object):
             # OK, now let's put the balls on the table and
             # make Layer recursive (so will have Layer() into Layer())
             if isinstance(e, (Element, Layer)):
-                if e.CallName in self.Reserved:
+                if e.CallName in self.Reservd:
                     debug(self.dbg, 1,'(Layer) using a reserved attribute' \
                           'as CallName %s' % e.CallName)
                     return
@@ -977,6 +981,11 @@ class Layer(object):
                       % element.CallName)
             self.elementList.append(element)
     
+    def __lshift__(self, element):
+        self.append(element)
+        if isinstance(element, Layer):
+            element.inc_hierarchy(self.hierarchy)
+    
     def insert(self, index, element):
         CallNames = self.getattr()
         #if isinstance(element, Element):
@@ -987,6 +996,11 @@ class Layer(object):
                       'have same CallName %s' \
                       % element.CallName)
             self.elementList.insert(index, element)
+    
+    def __rshift__(self, element):
+        self.insert(0, element)
+        if isinstance(element, Layer):
+            element.inc_hierarchy(self.hierarchy)
     
     def extend(self, newElementList):
         for e in newElementList:
@@ -1083,8 +1097,9 @@ class Layer(object):
                     #while BitStream:
                     #    s += pack('!B', int(BitStream[:8], 2))
                     #    BitStream = BitStream[8:]
-                debug(self.dbg, 3, '(Element) %s: %s, %s\nBitstream: %s' \
-                      % (e.CallName, e(), e.__bin__(), BitStream))
+                if self.dbg:
+                    debug(self.dbg, 3, '(Element) %s: %s, %s\nBitstream: %s' \
+                          % (e.CallName, e(), e.__bin__(), BitStream))
             # when going to standard Str or Int element, 
             # or directly end of __str__ function 
             # verify the full BitStream has been consumed
