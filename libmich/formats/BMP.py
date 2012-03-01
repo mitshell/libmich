@@ -35,8 +35,10 @@ from struct import pack #, unpack
 
 # fastest large image processing:
 Element.safe = False
+Element.dbg = 0
 Str.dbg = 0
 Str._repr_limit = 64
+Layer.safe = False
 Layer.dbg = 0
 
 # all uint fields are little endian
@@ -70,10 +72,18 @@ class BMP(Block):
             self | RawLayer()
             self.map(s[:offset-cur_length])
             s=s[offset-cur_length:]
+        #print len(s)
         # map the pixel array
-        self | PixelArray(self.DIBHeader.Height(), self.DIBHeader.Width(),\
-                          self.DIBHeader.BitsPerPixel())
-        self[-1].map(s[:self.DIBHeader.ImageSize()])
+        height, width, bits_per_pixel, image_size = self.DIBHeader.Height(), \
+            self.DIBHeader.Width(), self.DIBHeader.BitsPerPixel(), \
+            self.DIBHeader.ImageSize()
+        if image_size == 0:
+            image_size = width*bits_per_pixel
+            image_size += (32-image_size%32) if image_size%32 else 0
+            image_size = height*(image_size/8)
+        self | PixelArray(height, width, bits_per_pixel)
+        #print image_size, len(s)
+        self[-1].map(s[:image_size])
         s = s[len(self[-1]):]
         # if still some data stream, could go to color profile
         if len(s) > 0:
@@ -170,7 +180,7 @@ class ColorTable(Layer):
             self.add_color()
         
     def add_color(self):
-        c = Int('Color_%i' % len(self.elementLen)+1, Pt=0, Type='uint32')
+        c = Int('Color_%i' % (len(self.elementList)+1), Pt=0, Type='uint32')
         self.append(c)
     
 
@@ -183,8 +193,9 @@ class PixelArray(Layer):
         
     def add_row(self, width=1, bits_per_pixel=8):
         # TODO: handle padding correctly
-        r = Str('Pixel_row_%i' % len(self.elementList), \
-                Len=((width*bits_per_pixel)/8), Repr='hex')
+        l = width*bits_per_pixel
+        l += (32-l%32) if l%32 else 0
+        r = Str('Pixel_row_%i' % len(self.elementList), Len=l/8, Repr='hex')
         self.append(r)
         
     def _pad_row(self):
