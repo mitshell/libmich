@@ -218,19 +218,28 @@ class Layer3(Layer):
                 self.interpret_IE(e)
     
     def interpret_IE(self, field):
+        # work only when field is named like an existing IE
         f_name = field.CallName
-        if f_name[-1].isdigit():
-            f_name = f_name[:-1]
+        if not hasattr(L3Mobile_IE, f_name):
+            return
+        # check if direct field, or (T)LV-like field
         if hasattr(field, 'V'):
             buf = str(field.V)
-            field.V < None
-            field.V > getattr(L3Mobile_IE, f_name)()
-            field.V.Pt.map(buf)
+            ie = getattr(L3Mobile_IE, f_name)()
+            ie.map(buf)
+            # take care in case we got corrupted data
+            # not corresponding to the structure of the IE...
+            if len(ie) == len(buf):
+                field.V < None
+                field.V > ie
         else:
             buf = str(field)
-            field < None
-            field > getattr(L3Mobile_IE, f_name)()
-            field.Pt.map(buf)
+            ie = getattr(L3Mobile_IE, f_name)()
+            ie.map(buf)
+            # take care in case we got corrupted data...
+            if len(ie) == len(buf):
+                field < None
+                field > ie
     
     def __map_opts(self, s=''):
         # Get list of (tag:field) for optional fields,
