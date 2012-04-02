@@ -133,14 +133,14 @@ def parse_L3(buf):
             print('[ERR] non-standard L3 protocol discriminator: PD=%i' % Prot)
         else:
             print('[WNG] L3 protocol %s not implemented (yet)' % PD_dict[Prot])
-        ret = rawL3()
+        ret = RawL3()
         ret.map(buf)
         return ret
     # get the right type from Type
     if Type not in L3Call[Prot].keys():
         print('[ERR] L3 message type %i non-standard or not implemented for %s' \
               % (Type, PD_dict[Prot]))
-        ret = rawL3()
+        ret = RawL3()
         # for L3GSM_RR, still use the msg type dict
         if Prot == 6:
             ret.Type.Dict = GSM_RR_dict
