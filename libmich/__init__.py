@@ -13,6 +13,11 @@ provides "core" repo with:
 - "IANA_dict" library which provides the "IANA_dict" object for reverse dictionnary
 - "fuzz" library to generate mutations on basic element and Layer() and Block()
 
+provides "utils" repo with:
+- "CRC32C" function to compute CRC32C checksum, taken from google code
+- "DH" class to compute Diffe-Hellman keys, taken from the python OpenID project
+- "PRF186-2" class to compute NIST 186-2 pseudo random generation, derived from SHA1.py
+
 provides "formats" repo with:
 - IP library implementing Ethernet, 8021Q, IPv4, IPv6, TCP, UDP headers
 - EAP library to build and parse simple EAP header messages
