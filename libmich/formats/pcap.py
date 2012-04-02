@@ -20,7 +20,7 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : formats/MPEG2.py
+# * File Name : formats/pcap.py
 # * Created : 2011-10-24 
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
