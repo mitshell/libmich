@@ -55,7 +55,7 @@ from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, \
 
 # Defining a Str class that will handle '2b' padding
 class StrRR(Str):
-    _padding_bye = '\x2b'
+    _padding_byte = '\x2b'
     
     # building basic methods for manipulating easily the Element from its attributes
     def __call__(self):
