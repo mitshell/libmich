@@ -28,12 +28,12 @@
 
 #!/usr/bin/env python
 
-from libmich.core.element import *
+from libmich.core.element import Element, Str, Int, Bit, Layer
 from random import _urandom as urandom
 from random import randint
-#import string
 
-# danger_str = '\x00\x01\x04\x06\t\x13!"&\'2!"#$%&\'()*+,-./0:;<=>?@[\\]^\\_{`{|}~\x7f\xae\xaf'
+# danger_str = '\x00\x01\x04\x06\t\x13!"&\'2!"#$%&\'()*+,-./0:;' \
+#              '<=>?@[\\]^\\_{`{|}~\x7f\xae\xaf'
 # termin_str = '\x00:;@\xff'
 
 
@@ -134,9 +134,11 @@ class Mutor:
     def __init__(self, my_Element):
         if not isinstance(my_Element, Element):
             raise MutationException('not an Element()')
-        self.elmt = my_Element # never rewrites on .elmt attribute after Mutor instantiation
+        # never rewrites on .elmt attribute after Mutor instantiation
+        self.elmt = my_Element
         self.elmt_type = str(self.elmt.__class__)[-5:-2]
-        self._orig_Val = self.elmt.Val  # never rewrites on ._orig_Val after Mutor instantiation
+        # never rewrites on ._orig_Val after Mutor instantiation
+        self._orig_Val = self.elmt.Val
         self._orig_str = str(self.elmt)
         self._orig_len = len(self.elmt)
         self._orig_int = int(self.elmt)
@@ -450,16 +452,14 @@ class Layor:
     def __evil_switch_2(self):
         # add a Str() element at the end of the Layer, and fuzz it
         pass
-    
-    
+
+
 class Blockor:
     
     pass
     
-
-    '''
-    def fuzz_Layer(self, Layer):
-        pass
+    #def fuzz_Layer(self, Layer):
+       #pass
         #for el in Layer:
         #    if isinstance(el, element.Str):
         #        self.fuzz_Str(el)
@@ -467,10 +467,11 @@ class Blockor:
         #        self.fuzz_Int(el)
         # must handle relationships between Elements:
         # True when PtFunc, LenFunc, TransFunc are not None
-        # when Pt, Len, Trans are pointing to other Elements: .Str(), .Int(), or subclass, or list of Element subclass ... whatelse
+        # when Pt, Len, Trans are pointing to other Elements: .Str(), .Int(), 
+        # or subclass, or list of Element subclass ... whatelse
         
-    def fuzz_Block(self, Block):
-        pass
+    #def fuzz_Block(self, Block):
+        #pass
         # loop on Layer in Block, and call fuzz_Layer() 
         #for l in Block:
         #    if isinstance(lay, Layer):
@@ -478,10 +479,7 @@ class Blockor:
         #        
         # must handle relationship between Layers:
         # True when PtFunc, LenFunc, TransFunc are not None
-        # when Pt, Len, Trans are pointing to other Layers: .get_payload(), .get_header(), .get_previous(), .get_next()
-    '''
-    
-
-
+        # when Pt, Len, Trans are pointing to other Layers: .get_payload(), 
+        # .get_header(), .get_previous(), .get_next()
 
 
