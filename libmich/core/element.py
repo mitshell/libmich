@@ -73,38 +73,63 @@ from socket import inet_ntoa
 from binascii import hexlify
 from re import split, sub
 
+# exports the following constants:
+# type_funcs, debug_level, ERR, WNG, DBG,
+# functions: 
+# debug(), log(), show()
+# classes:
+# Element(), Str(), Int(), Bit(), Layer(), RawLayer(), Block(), testTLV()
+
+######
 # defines a tuple of function-like 
 class Dummy(object):
     def __init__(self):
         pass
-type_funcs = (type(lambda x:1), \
-              type(Dummy().__init__), \
-              type(inet_ntoa), \
-             )
+type_funcs = ( type(lambda x:1), \
+               type(Dummy().__init__), \
+               type(inet_ntoa) )
 del Dummy
-
+######
+#
+######
 # defines debugging facility
 debug_level = {1:'ERR', 2:'WNG', 3:'DBG'}
 def debug(thres, level, string):
-    if level<=thres:
-        print '[%s] %s' %(debug_level[level], string)
+    if level and level<=thres:
+        print('[%s] %s' %(debug_level[level], string))
 
+ERR = 1
+WNG = 2
+DBG = 3
+def log(level=DBG, string=''):
+    # if needed can be changed to write somewhere else
+    # will redirect all logs from the library
+    print('[%s] %s' % (debug_level[level], string))
+######
+#
+######
 # defines printing facility
 def show(element):
     if hasattr(element, 'show'):
-        print element.show()
+        print('%s' % element.show())
+######
 
 
-# Now defines Elements: Str, Int, Bit 
+######
+# Now defines Elements: Str, Int, Bit
+# Element is a wrapping object for all the 3 following
+# and has some common methods 
 class Element(object):
     '''
     encapsulating class for:
     Str, Bit, Int
     '''
+    # checking Element boundaries extensively
     safe = True
     #safe = False
-    # Element debugging threshold:
-    dbg = 1
+    
+    # Element debugging threshold: 0, ERR, WNG, DBG
+    dbg = ERR
     
     # value assignment facilities
     def __lt__(self, Val):
@@ -113,6 +138,25 @@ class Element(object):
     def __gt__(self, Pt):
         self.Pt = Pt
     
+    # this is to get a nice object representation:
+    # can possibly be called with `show(element)`
+    def show(self):
+        tr, re = '', ''
+        if self.TransFunc is not None:
+            if self.safe: 
+                assert( type(self.TransFunc(self.Trans)) is bool )
+            if self.TransFunc(self.Trans): tr = ' - transparent'
+            else: tr = ''
+        elif self.Trans is True: tr = ' - transparent'
+        if self.ReprName != '':
+            re = ''.join((self.ReprName, ' '))
+        return '<%s[%s%s] : %s>' % ( re, self.CallName, tr, repr(self) )
+    
+    # this is to retrieve element's dynamicity from a mapped element
+    def reautomatize(self):
+        if self.Val is not None and self.PtFunc:
+            self.Val = None
+
 
 class Str(Element):
     '''
@@ -233,9 +277,9 @@ class Str(Element):
         # if defined, self.Val overrides self.Pt capabilities
         elif self.Val is not None:
             # allow to pass tuple or list of libmich internal instances
-            if isinstance(self.Val, (list, tuple)) and \
-            False not in map(self.__is_intern_inst, self.Val):
-                    return ''.join(map(str, self.Val))[:l]
+            if isinstance(self.Val, (list, tuple)) \
+            and False not in map(self.__is_intern_inst, self.Val):
+                return ''.join(map(str, self.Val))[:l]
             return str(self.Val)[:l]
         # else: use self.Pt capabilities to get the string
         elif self.PtFunc is not None: 
@@ -244,9 +288,9 @@ class Str(Element):
             return str(self.PtFunc(self.Pt))[:l]
         else:
             # allow to pass tuple or list of libmich internal instances
-            if isinstance(self.Pt, (list, tuple)) and \
-            False not in map(self.__is_intern_inst, self.Pt):
-                    return ''.join(map(str, self.Pt))[:l]
+            if isinstance(self.Pt, (list, tuple)) \
+            and False not in map(self.__is_intern_inst, self.Pt):
+                return ''.join(map(str, self.Pt))[:l]
             # otherwise, handle simply as is
             if self.safe: 
                 assert(hasattr(self.Pt, '__str__'))
@@ -343,11 +387,11 @@ class Str(Element):
             if self.__is_intern_inst(self.Val):
                 ret = repr(self.Val)
             # allow to assign a list or tuple of Block or Layer...
-            if isinstance(self.Pt, (list, tuple)) and \
-            False not in map(self.__is_intern_inst, self.Pt):
+            if isinstance(self.Pt, (list, tuple)) \
+            and False not in map(self.__is_intern_inst, self.Pt):
                 ret = '|'.join(map(repr, self.Pt))
-            if isinstance(self.Val, (list, tuple)) and \
-            False not in map(self.__is_intern_inst, self.Val):
+            if isinstance(self.Val, (list, tuple)) \
+            and False not in map(self.__is_intern_inst, self.Val):
                 ret = '|'.join(map(repr, self.Val))
             # finally, self.Val can be a raw value... still
             if self.Val is not None and hasattr(self.Val, '__repr__'):
@@ -366,7 +410,7 @@ class Str(Element):
     
     def showattr(self):
         for a in self.getattr():
-            print "%s : %s" % ( a, repr(self.__getattribute__(a)) )
+            print('%s : %s' % (a, repr(self.__getattribute__(a))) )
     
     # cloning an Element, useful for "duplicating" an Element 
     # without keeping any dependency
@@ -387,36 +431,20 @@ class Str(Element):
                  self.Trans, self.TransFunc )
         return clone
     
-    # standard method show() to print in a beautiful format
-    def show(self):
-        tr, re = '', ''
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): tr = ' - transparent'
-            else: tr = ''
-        elif self.Trans is True: tr = ' - transparent'
-        if self.ReprName != '':
-            re = ''.join((self.ReprName, ' '))
-        return '<%s[%s%s] : %s>' % ( re, self.CallName, tr, repr(self) )
-        
+   
     # standard method map() to map a string to the Element
     def map(self, string=''):
         if self.TransFunc is not None:
-            if self.safe: 
+            if self.safe:
                 assert( type(self.TransFunc(self.Trans)) is bool )
             if not self.TransFunc(self.Trans):
                 self.Val = string[:self.map_len()]
         elif not self.Trans:
             self.Val = string[:self.map_len()]
-            if self.dbg:
-                debug(self.dbg, 3, '(Element) %s, %s, %s' \
-                      % (repr(string), self.CallName, repr(self)))
-    
-    # this is to retrieve element's dynamicity from a mapped element
-    def reautomatize(self):
-        if self.Val is not None and self.PtFunc:
-            self.Val = None
+            if self.dbg >= DBG:
+                log(DBG, '(Element) %s, %s, %s' \
+                    % (repr(string), self.CallName, repr(self)))
+
 
 class Int(Element):
     '''
@@ -436,10 +464,13 @@ class Int(Element):
     TransFunc: when defined, TransFunc(Trans) is used to command 
                the transparent aspect: used e.g. for conditional element;
     '''
+    # endianness is 'little' or 'big'
     _endian = "big"
+    # types format for struct library
     _types = { "int8":"b", "int16":"h", "int32":"i", "int64":"q",
                "uint8":"B", "uint16":"H", "uint32":"I", "uint64":"Q",
                "uint24":None }
+    # for object representation
     _reprs = ["hex", "bin", "hum"]
     
     def __init__(self, CallName="", ReprName=None, 
@@ -567,7 +598,7 @@ class Int(Element):
             return (len(self)*8-len(binstr))*'0' + binstr
         # negative signed
         else : 
-            #takes 2' complement to the signed val
+            # takes 2' complement to the signed val
             binstr = format(self()+pow(2, len(self)*8-1), 'b')
             return '1' + (len(self)*8-len(binstr)-1)*'0' + binstr
     
@@ -599,9 +630,9 @@ class Int(Element):
     def showattr(self):
         for a in self.getattr():
             if a == "Dict" and self.Dict is not None: 
-                print "%s : %s" % ( a, self.__getattribute__(a).__class__ )
+                print('%s : %s' % ( a, self.__getattribute__(a).__class__) )
             else: 
-                print "%s : %s" % ( a, repr(self.__getattribute__(a)) )
+                print('%s : %s' % ( a, repr(self.__getattribute__(a))) )
     
     def clone(self):
         clone = self.__class__(
@@ -612,18 +643,6 @@ class Int(Element):
                  self.Trans, self.TransFunc )
         #clone._endian = self._endian
         return clone
-    
-    def show(self):
-        tr, re = '', ''
-        if self.TransFunc is not None:
-            if self.safe:
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): tr = ' - transparent'
-            else: tr = ''
-        elif self.Trans is True: tr = ' - transparent'
-        if self.ReprName != '':
-            re = ''.join((self.ReprName, ' '))
-        return '<%s[%s%s] : %s>' % ( re, self.CallName, tr, repr(self) )
     
     def map(self, string=''):
         if self.TransFunc is not None:
@@ -648,19 +667,21 @@ class Int(Element):
         return self.__unpack_u24(string)
     
     def __pack_u24(self):
-        # does not support little endian
-        # bit dirty ...
-        return pack('>BH', self()//65536, self()%65536)
+        if self._endian == 'little':
+            # would need some verif
+            return pack('<HB', self()%65536, self()//65536)
+        else:
+            return pack('>BH', self()//65536, self()%65536)
         
     def __unpack_u24(self, string='\0\0\0'):
-        # does not support little endian
-        msb, lsb = unpack('>BH', string)
-        return msb*65536+lsb
-    
-    # this is to retrieve element's dynamicity from a mapped element
-    def reautomatize(self):
-        if self.Val is not None and self.PtFunc:
-            self.Val = None
+        if self._endian == 'little':
+            # would need some verif
+            lsb, msb = unpack('<HB', string)
+            return msb*65536+lsb
+        else:
+            msb, lsb = unpack('>BH', string)
+            return msb*65536+lsb
+
 
 class Bit(Element):
     '''
@@ -684,7 +705,7 @@ class Bit(Element):
     TransFunc: when defined, TransFunc(Trans) is used to command 
                the transparent aspect: used for conditional element;
     '''
-    
+    # for object representation
     _reprs = ["hex", "bin", "hum"]
     
     def __init__(self, CallName="", ReprName=None, 
@@ -746,7 +767,8 @@ class Bit(Element):
         if self.Val is None and self.Pt is None: return 0
         if self.Val is not None: return self.__confine(self.Val) 
         elif self.PtFunc is not None:
-            if self.safe: assert( type(self.PtFunc(self.Pt)) is int )
+            if self.safe:
+                assert( type(self.PtFunc(self.Pt)) is int )
             return self.__confine(self.PtFunc(self.Pt))
         else: return self.__confine(self.Pt)
     
@@ -819,9 +841,9 @@ class Bit(Element):
     def showattr(self):
         for a in self.getattr():
             if a == "Dict" and self.Dict is not None: 
-                print "%s : %s" % ( a, self.__getattribute__(a).__class__ )
+                print('%s : %s' % ( a, self.__getattribute__(a).__class__) )
             else: 
-                print "%s : %s" % ( a, repr(self.__getattribute__(a)) )
+                print('%s : %s' % ( a, repr(self.__getattribute__(a))) )
     
     # cloning an element, used in set of elements
     def clone(self):
@@ -834,18 +856,6 @@ class Bit(Element):
                  self.Trans, self.TransFunc )
         return clone
     
-    def show(self):
-        tr, re = '', ''
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): tr = ' - transparent'
-            else: tr = ''
-        elif self.Trans is True: tr = ' - transparent'
-        if self.ReprName != '':
-            re = ''.join((self.ReprName, ' '))
-        return '<%s[%s%s] : %s>' % ( re, self.CallName, tr, repr(self) )
-    
     def map(self, string=''):
         # string mapping only works when Bit element is in a Layer
         pass
@@ -857,11 +867,7 @@ class Bit(Element):
         if self.safe: 
             assert( 0 <= value <= pow(2, self.bit_len()) )
         self.Val = value
-    
-    # this is to retrieve element's dynamicity from a mapped element
-    def reautomatize(self):
-        if self.Val is not None and self.PtFunc:
-            self.Val = None
+
 
 class Layer(object):
     '''
@@ -883,7 +889,7 @@ class Layer(object):
     and last but not least: Layer itself can be stacked into Layer...
     '''
     # debugging threshold for Layer:
-    dbg = 1
+    dbg = ERR
     # add some sanity checks
     safe = True
     # reserved attributes:
@@ -918,11 +924,13 @@ class Layer(object):
             # make Layer recursive (so will have Layer() into Layer())
             if isinstance(e, (Element, Layer)):
                 if e.CallName in self.Reservd:
-                    debug(self.dbg, 1,'(Layer) using a reserved attribute' \
-                          'as CallName %s' % e.CallName)
+                    if self.dbg >= ERR:
+                        log(self.dbg, '(Layer) using a reserved attribute' \
+                          'as CallName %s: aborting...' % e.CallName)
                     return
                 if e.CallName in CallNames:
-                    debug(self.dbg, 2, '(Layer) different elements ' \
+                    if self.dbg >= WNG:
+                        log(self.dbg, '(Layer) different elements ' \
                           'have the same CallName %s' % e.CallName)
                 if isinstance(e, Element):
                     self.append(e.clone())
@@ -938,8 +946,8 @@ class Layer(object):
         # also check if fixed length can be deduced
         BitLen, Len = 0, 0
         for e in self.elementList:
-            debug(self.dbg, 3, '(Layer) length verification for %s' \
-                  % e.CallName)
+            if self.dbg >= DBG:
+                log(DBG, '(Layer) length verification for %s'  % e.CallName)
             if isinstance(e, Bit):
                 BitLen += e.bit_len()
             elif hasattr(e, 'Len') and type(e.Len) is int:
@@ -957,7 +965,7 @@ class Layer(object):
     # define some basic list facilities for managing elements into the Layer, 
     # through the "elementList" attribute:
     def __iter__(self):
-        if self.__dict__.has_key('elementList'):
+        if 'elementList' in self.__dict__.keys():
             return self.__dict__['elementList'].__iter__()
         else: return [].__iter__()
     
@@ -975,10 +983,9 @@ class Layer(object):
         #if isinstance(element, Element):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
-            if element.CallName in CallNames:
-                debug(self.dbg, 2, '(Element) different elements ' \
-                      'have same CallName %s' \
-                      % element.CallName)
+            if element.CallName in CallNames and self.dbg >= WNG:
+                log(WNG, '(Layer) different elements have same CallName %s' \
+                    % element.CallName)
             self.elementList.append(element)
     
     def __lshift__(self, element):
@@ -991,10 +998,9 @@ class Layer(object):
         #if isinstance(element, Element):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
-            if element.CallName in CallNames:
-                debug(self.dbg, 2, '(Element) different elements ' \
-                      'have same CallName %s' \
-                      % element.CallName)
+            if element.CallName in CallNames and self.dbg >= WNG:
+                log(WNG, '(Layer) different elements have same CallName %s' \
+                    % element.CallName)
             self.elementList.insert(index, element)
     
     def __rshift__(self, element):
@@ -1097,9 +1103,9 @@ class Layer(object):
                     #while BitStream:
                     #    s += pack('!B', int(BitStream[:8], 2))
                     #    BitStream = BitStream[8:]
-                if self.dbg:
-                    debug(self.dbg, 3, '(Element) %s: %s, %s\nBitstream: %s' \
-                          % (e.CallName, e(), e.__bin__(), BitStream))
+                if self.dbg >= DBG:
+                    log(DBG, '(Element) %s: %s, %s\nBitstream: %s' \
+                        % (e.CallName, e(), e.__bin__(), BitStream))
             # when going to standard Str or Int element, 
             # or directly end of __str__ function 
             # verify the full BitStream has been consumed
@@ -1115,10 +1121,9 @@ class Layer(object):
         return s
     
     def __is_aligned(self, BitStream):
-        if BitStream:
-            debug(self.dbg, 2, '(Layer) some of the Bit elements ' \
-                  'have not been stacked in the "str(Layer)"\n' \
-                  'remaining bitstream: %s' % BitStream)
+        if BitStream and self.dbg >= ERR:
+            log(ERR, '(Layer) some of the Bit elements have not been stacked' \
+                ' in the "str(Layer)"\nremaining bitstream: %s' % BitStream)
             if self.safe:
                 assert(not BitStream)
     
@@ -1153,7 +1158,7 @@ class Layer(object):
     
     def showattr(self):
         for a in self.getattr():
-            print "%s : %s" % ( a, repr(self.__getattr__(a)) )
+            print('%s : %s' % ( a, repr(self.__getattr__(a))) )
     
     def clone(self):
         clone = self.__class__()
@@ -1165,12 +1170,14 @@ class Layer(object):
             # DictFunc, TransFunc), the object pointed
             # is not updated in the clone...
             if isinstance(e, Element):
-                debug(self.dbg, 2, '(Layer) cloning element does not ' \
-                      'update dynamic elements')
+                if self.dbg >= WNG:
+                    log(WNG, '(Layer) cloning element %s does not update ' \
+                        'dynamic elements' % e.CallName)
                 clone.append(e.clone())
             elif isinstance(e, Layer):
-                debug(self.dbg, 2, '(Layer) cloning layer in layer ' \
-                      'is actually only done by reference, no copy')
+                if self.dbg >= WNG:
+                    log(WNG, '(Layer) cloning layer %s in layer is actually ' \
+                        'only done by reference, no copy' % e.CallName)
                 clone.append(e)
         clone.hierarchy = self.hierarchy
         return clone
@@ -1216,9 +1223,9 @@ class Layer(object):
                 # if BitStack is byte aligned, go and map it!
                 if not BitStack_len % 8:
                     # create a bit stream "s_bin" for the full BitStack
-                    if len(string) < BitStack_len//8:
-                        debug(1, self.dbg, 'String buffer not long enough ' \
-                              'for %s' % e.CallName)
+                    if len(string) < BitStack_len//8 and self.dbg >= ERR:
+                        log(ERR, 'String buffer not long enough for %s' \
+                            % e.CallName)
                         #if self.safe:
                         #    return
                     s_stack = string[:BitStack_len//8]
@@ -1236,14 +1243,14 @@ class Layer(object):
                     BitStack, BitStack_len = [], 0
             # for other element, standard processing (easier...)    
             else:
-                if BitStack_len > 0:
-                    debug(self.dbg, 2, '(Layer) some of the Bit elements ' \
-                          'have not been mapped in the "Layer"')
+                if BitStack_len > 0 and self.dbg > WNG:
+                    log(WNG, '(Layer) some of the Bit elements have not been ' \
+                        'mapped in the "Layer"')
                 if isinstance(e, Layer) and not e.Trans \
                 or isinstance(e, Element):
-                    if len(string) < e.map_len():
-                        debug(1, self.dbg, 'String buffer not long enough ' \
-                              'for %s' % e.CallName)
+                    if len(string) < e.map_len() and self.dbg >= ERR:
+                        log(ERR, 'String buffer not long enough for %s' \
+                            % e.CallName)
                         #if self.safe:
                         #    return
                     e.map(string)
@@ -1363,7 +1370,7 @@ class Block(object):
 
     # define some basic list facilities for managing layers into the Block:
     def __iter__(self):
-        if self.__dict__.has_key('layerList'):
+        if 'layerList' in self.__dict__.keys():
             return self.__dict__['layerList'].__iter__()
         else: return [].__iter__()
     
@@ -1430,12 +1437,14 @@ class Block(object):
         for l in self: l.hierarchy -= 1-ref
     
     # define operations to insert layers into a block:
-    # OR: block | new_layer, append the new_layer with the same hierarchy as last layer in the block
+    # OR: block | new_layer, append the new_layer with the same hierarchy 
+    # as last layer in the block
     def __or__(self, newLayer):
         self.append(newLayer)
         self[-1].hierarchy = self[-2].hierarchy
     
-    # LSHIFT: block << new_layer, append the new_layer with a higher hierarchy than last layer in the block
+    # LSHIFT: block << new_layer, append the new_layer with a higher hierarchy
+    # than last layer in the block
     def __lshift__(self, newLayer):
         self.append(newLayer)
         if self.num() > 1:
@@ -1443,7 +1452,8 @@ class Block(object):
         else:
             self[-1].hierarchy = self.hierarchy
     
-    # RSHIFT: block >> new_layer, append the new_layer with a lower hierarchy than last layer in the block
+    # RSHIFT: block >> new_layer, append the new_layer with a lower hierarchy
+    # than last layer in the block
     def __rshift__(self, newLayer):
         self.append(newLayer)
         self[-1].dec_hierarchy( self[-2].hierarchy )
@@ -1478,9 +1488,8 @@ class Block(object):
         for l in self:
             if isinstance(l, Layer): 
                 clone.append( l.clone() )
-            else: 
-                debug(self.dbg, 2, '(Block) cloning not implemented for: ' \
-                      '%s' % l)
+            elif self.dbg >= ERR:
+                log(ERR, '(Block) cloning not implemented for: %s' % l)
         return clone
     
     def show(self):
