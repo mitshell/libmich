@@ -1,9 +1,10 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
-# * Copyright © 2011. Benoit Michau. France Telecom.
+# * Copyright © 2012. Benoit Michau.
+# * Made In France(Telecom)
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -70,15 +71,18 @@
 
 from struct import pack, unpack
 from socket import inet_ntoa
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 from re import split, sub
+from libmich.core.shtr import shtr, decomposer
 
 # exports the following constants:
 # type_funcs, debug_level, ERR, WNG, DBG,
 # functions: 
-# debug(), log(), show()
+# debug(), log(), show(), showattr()
 # classes:
 # Element(), Str(), Int(), Bit(), Layer(), RawLayer(), Block(), testTLV()
+# functions / classes from external libraries:
+# pack, unpack, inet_ntoa, hexlify, unhexlify, split, sub, shtr, decomposer
 
 ######
 # defines a tuple of function-like 
@@ -112,6 +116,10 @@ def log(level=DBG, string=''):
 def show(element):
     if hasattr(element, 'show'):
         print('%s' % element.show())
+
+def showattr(element):
+    if hasattr(element, 'showattr'):
+        print('%s' % element.showattr())
 ######
 
 
@@ -156,7 +164,10 @@ class Element(object):
     def reautomatize(self):
         if self.Val is not None and self.PtFunc:
             self.Val = None
-
+    
+	# this is for uniformity with Block()
+    def parse(self, s=''):
+        self.map(s)
 
 class Str(Element):
     '''
@@ -263,12 +274,12 @@ class Str(Element):
     
     # building basic methods for manipulating easily the Element 
     # from its attributes
-    def __call__(self):
-        # when Len has fixed value:
-        if type(self.Len) is int: 
+    def __call__(self, l=None):
+        # when length has fixed value:
+        if not l and type(self.Len) is int:
             l = self.Len
-        else: 
-            l = None
+        #else:
+        #    l = None
         # when no values are defined at all:
         if self.Val is None and self.Pt is None: 
             if l: return l * self._padding_byte
@@ -431,7 +442,6 @@ class Str(Element):
                  self.Trans, self.TransFunc )
         return clone
     
-   
     # standard method map() to map a string to the Element
     def map(self, string=''):
         if self.TransFunc is not None:
@@ -442,7 +452,7 @@ class Str(Element):
         elif not self.Trans:
             self.Val = string[:self.map_len()]
             if self.dbg >= DBG:
-                log(DBG, '(Element) %s, %s, %s' \
+                log(DBG, '(Element) mapping %s on %s, %s' \
                     % (repr(string), self.CallName, repr(self)))
 
 
@@ -645,6 +655,11 @@ class Int(Element):
         return clone
     
     def map(self, string=''):
+        # error log will be done by the Layer().map() method
+        # but do this not to throw exception
+        if len(string) < self.Len:
+            return
+        # standard handling
         if self.TransFunc is not None:
             if self.TransFunc(self.Trans) is False:
                 self.Val = self.__unpack(string[:self.Len])
@@ -743,7 +758,7 @@ class Bit(Element):
                 if val is not None and not isinstance(val, type_funcs) :
                     raise AttributeError("PtFunc must be a function")
             elif attr == "Val":
-                if val is not None and not isinstance(val, int):
+                if val is not None and not isinstance(val, (int, long)):
                     raise AttributeError("Val must be an int")
             elif attr == "BitLenFunc":
                 if val is not None and not isinstance(val, type_funcs) :
@@ -777,11 +792,16 @@ class Bit(Element):
         return max( 0, min( pow(2, self.bit_len())-1, value ))
     
     def __str__(self):
-        # have a str existence only when used inside a "Layer" 
-        # and correctly stacked with other "Bit" object 
-        # to get a byte-aligned content... 
-        # (do not think about 114 bit length of GSM burst... yet)
-        return ''
+        # return the string representation of the integer value
+        # big-endian encoded
+        # left-aligned according to the bit length
+        # -> last bits of the last byte are nullified
+        # 
+        # do it the dirty way:
+        h = self.__hex__()
+        if len(h) % 2:
+            h = ''.join(('0', h))
+        return shtr(unhexlify(h)) << (8 - (self.bit_len() % 8))
     
     def __len__(self):
         # just for fun here, 
@@ -798,11 +818,13 @@ class Bit(Element):
                 assert( type(self.BitLen) is int )
             return self.BitLen
     
+    # map_len() is a-priori not needed in "Int" element, 
+    # but still kept for Element uniformity
     def map_len(self):
-        # need special length definition when mapping a string to the Bit element 
-        # that has no fixed length
-        # uses BitLenFunc(BitLen), when length is variable:
-        return self.bit_len()//8
+        bitlen = self.bit_len()
+        if bitlen % 8:
+            return (bitlen//8)+1
+        return bitlen//8
     
     def __hex__(self):
         hexa = hex(self())[2:]
@@ -857,14 +879,14 @@ class Bit(Element):
         return clone
     
     def map(self, string=''):
-        # string mapping only works when Bit element is in a Layer
-        pass
-        # or self.map_bit( int(string) ) ???
+        # map each bit of the string from left to right
+        # using the shtr() class to shift the string
+        # string must be ascii-encoded (see shtr)
+        self.map_bit( shtr(string).left_val(self.bit_len()) )
     
     def map_bit(self, value=0):
-        # this looks a bit like useless...
-        # nevermind
-        if self.safe: 
+        # map an int / long value
+        if self.safe:
             assert( 0 <= value <= pow(2, self.bit_len()) )
         self.Val = value
 
@@ -875,7 +897,8 @@ class Layer(object):
     got from the initial constructorList.
     
     when instantiated:
-    clones the list of "Str", "Int", "Bit" elements in the constructorList: self.elementList;
+    clones the list of "Str", "Int", "Bit" elements in the constructorList
+    to build self.elementList;
     manages a common hierarchy level for the whole layer (for use into "Block"): 
         self.hierarchy (int), self.inBlock (bool)
         when .inBlock is True, provides: .get_payload(), .get_header(), 
@@ -900,7 +923,7 @@ class Layer(object):
     # structure description:
     constructorList = []
     
-    def __init__(self, CallName='', ReprName='', Trans=False):
+    def __init__(self, CallName='', ReprName='', Trans=False, **kwargs):
         if type(CallName) is not str:
             raise AttributeError('CallName must be a string')
         elif len(CallName) == 0:
@@ -925,13 +948,14 @@ class Layer(object):
             if isinstance(e, (Element, Layer)):
                 if e.CallName in self.Reservd:
                     if self.dbg >= ERR:
-                        log(self.dbg, '(Layer) using a reserved attribute' \
-                          'as CallName %s: aborting...' % e.CallName)
+                        log(self.dbg, '(Layer - %s) using a reserved '
+                            'attribute as CallName %s: aborting...' \
+                          % (self.__class__, e.CallName))
                     return
                 if e.CallName in CallNames:
                     if self.dbg >= WNG:
-                        log(self.dbg, '(Layer) different elements ' \
-                          'have the same CallName %s' % e.CallName)
+                        log(self.dbg, '(Layer - %s) different elements have ' \
+                           'the same CallName %s' % (self.__class__, e.CallName))
                 if isinstance(e, Element):
                     self.append(e.clone())
                 # do not clone Layer() as it breaks dynamic element inside
@@ -947,7 +971,8 @@ class Layer(object):
         BitLen, Len = 0, 0
         for e in self.elementList:
             if self.dbg >= DBG:
-                log(DBG, '(Layer) length verification for %s'  % e.CallName)
+                log(DBG, '(Layer - %s) length verification for %s' \
+                    % (self.__class__, e.CallName))
             if isinstance(e, Bit):
                 BitLen += e.bit_len()
             elif hasattr(e, 'Len') and type(e.Len) is int:
@@ -958,9 +983,21 @@ class Layer(object):
         if Len == "var": 
             self.Len = Len
         else:
-            if self.safe:
-                assert(BitLen % 8 == 0)
+            if not BitLen % 8 and self.dbg >= WNG:
+                log(WNG, '(Layer - %s) Bit elements seem not to be '\
+                    'byte-aligned: hope you made some transparent!' \
+                    % self.__class__)
+            # this is bad, for the reason just expressed in the log:
             self.Len = Len + BitLen//8
+        #
+        # check additional args that would correspond to contained Element
+        if self.dbg >= DBG:
+            print(DBG, '(%s) init kwargs: %s' % (self.__class__, kwargs.keys()))
+        args = kwargs.keys()
+        for e in self:
+            if hasattr(e, 'CallName') and hasattr(e, 'Pt') \
+            and e.CallName in args:
+                e.Pt = kwargs[e.CallName]
     
     # define some basic list facilities for managing elements into the Layer, 
     # through the "elementList" attribute:
@@ -984,8 +1021,8 @@ class Layer(object):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
             if element.CallName in CallNames and self.dbg >= WNG:
-                log(WNG, '(Layer) different elements have same CallName %s' \
-                    % element.CallName)
+                log(WNG, '(Layer - %s) different elements have same CallName %s' \
+                    % (self.__class__, element.CallName))
             self.elementList.append(element)
     
     def __lshift__(self, element):
@@ -999,8 +1036,8 @@ class Layer(object):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
             if element.CallName in CallNames and self.dbg >= WNG:
-                log(WNG, '(Layer) different elements have same CallName %s' \
-                    % element.CallName)
+                log(WNG, '(Layer - %s) different elements have same CallName %s' \
+                    % (self.__class__, element.CallName))
             self.elementList.insert(index, element)
     
     def __rshift__(self, element):
@@ -1122,8 +1159,9 @@ class Layer(object):
     
     def __is_aligned(self, BitStream):
         if BitStream and self.dbg >= ERR:
-            log(ERR, '(Layer) some of the Bit elements have not been stacked' \
-                ' in the "str(Layer)"\nremaining bitstream: %s' % BitStream)
+            log(ERR, '(Layer - %s) some of the Bit elements have not been ' \
+                'stacked in the "str(Layer)"\nremaining bitstream: %s' \
+                % (self.__class__, BitStream))
             if self.safe:
                 assert(not BitStream)
     
@@ -1171,13 +1209,14 @@ class Layer(object):
             # is not updated in the clone...
             if isinstance(e, Element):
                 if self.dbg >= WNG:
-                    log(WNG, '(Layer) cloning element %s does not update ' \
-                        'dynamic elements' % e.CallName)
+                    log(WNG, '(Layer - %s) cloning element %s does not update' \
+                        ' dynamic elements' % (self.__class__, e.CallName))
                 clone.append(e.clone())
             elif isinstance(e, Layer):
                 if self.dbg >= WNG:
-                    log(WNG, '(Layer) cloning layer %s in layer is actually ' \
-                        'only done by reference, no copy' % e.CallName)
+                    log(WNG, '(Layer - %s) cloning layer %s in layer is ' \
+                        'actually only done by reference, no copy' \
+                        % (self.__class__, e.CallName))
                 clone.append(e)
         clone.hierarchy = self.hierarchy
         return clone
@@ -1196,65 +1235,89 @@ class Layer(object):
         return sub('\n', ''.join(['\n']+self.hierarchy*['\t']), s)
     
     def map(self, string=''):
-        BitStack, BitStack_len = [], 0
+        # Bit() elements are processed intermediary: 
+        # 1st placed into BitStack
+        # and when BitStack is byte-aligned (check against BitStack_len)
+        # string buffer is then mapped to it
+        self.__BitStack = []
+        self.__BitStack_len = 0
+        # Furthermore, it manages only contiguous Bit elements 
+        # for commodity... otherwise, all other elements should be shifted
+        #
         for e in self:
-            # need special processing for stacking and mapping "Bit" element
-            # manage only contiguous Bit elements (for commodity, again)
-            # need to take into account (Trans, TransFunc), and bit_len()
+            # special processing for Bit() element:
             if isinstance(e, Bit):
-                if e.TransFunc is not None:
-                    if self.safe: 
-                        assert(type(e.TransFunc(e.Trans)) is bool)
-                    if not e.TransFunc(e.Trans):
-                        BitStack += [e]
-                        BitStack_len += e.bit_len()
-                elif not e.Trans:
-                    if self.safe:
-                        assert(type(e.Trans) is bool)
-                    BitStack += [e]
-                    BitStack_len += e.bit_len()
-                #
-                # TODO: instead of processing with "dummy" string
-                # could be better with some integer / shift kung-fu ?
-                #
-                # This would need to store a shifting value with each Bit
-                # element in the BitStack
-                #
-                # if BitStack is byte aligned, go and map it!
-                if not BitStack_len % 8:
-                    # create a bit stream "s_bin" for the full BitStack
-                    if len(string) < BitStack_len//8 and self.dbg >= ERR:
-                        log(ERR, 'String buffer not long enough for %s' \
-                            % e.CallName)
-                        #if self.safe:
-                        #    return
-                    s_stack = string[:BitStack_len//8]
-                    s_bin = ''
-                    while s_stack:
-                        s_bin_temp = bin( ord(s_stack[0]) )[2:]
-                        s_bin += ( 8 - len(s_bin_temp) )*'0' + s_bin_temp
-                        s_stack = s_stack[1:]
-                    # map the bit stream "s_bin" into each BitStack element
-                    for B in BitStack:
-                        B.map_bit( int(s_bin[:B.bit_len()], 2) )
-                        s_bin = s_bin[B.bit_len():]
-                    # consume the buffer to map and reinitialize Bit variables
-                    string = string[BitStack_len//8:]
-                    BitStack, BitStack_len = [], 0
-            # for other element, standard processing (easier...)    
+                self.__add_to_bitstack(e)
+                # if BitStack is byte aligned, map string to it:
+                if self.__BitStack_len % 8 == 0:
+                    string = self.__map_to_bitstack(string)
+            # for other elements (Str(), Int(), Layer()), standard processing:   
             else:
-                if BitStack_len > 0 and self.dbg > WNG:
-                    log(WNG, '(Layer) some of the Bit elements have not been ' \
-                        'mapped in the "Layer"')
+                if self.__BitStack_len > 0 and self.dbg >= ERR:
+                    log(WNG, '(Layer - %s) some of the Bit elements have not ' \
+                        'been mapped in the "Layer": not byte-aligned' \
+                        % self.__class__)
                 if isinstance(e, Layer) and not e.Trans \
                 or isinstance(e, Element):
                     if len(string) < e.map_len() and self.dbg >= ERR:
-                        log(ERR, 'String buffer not long enough for %s' \
-                            % e.CallName)
+                        log(ERR, '(Layer - %s) String buffer not long ' \
+                            'enough for %s' % (self.__class__, e.CallName))
                         #if self.safe:
                         #    return
                     e.map(string)
                     string = string[e.map_len():]
+        # delete .map() *internal* attributes
+        del self.__BitStack
+        del self.__BitStack_len
+    
+    def __add_to_bitstack(self, bit_elt):
+        # check for Bit() element transparency
+        if bit_elt.TransFunc is not None:
+            if self.safe: 
+                assert(type(bit_elt.TransFunc(bit_elt.Trans)) is bool)
+            if not bit_elt.TransFunc(bit_elt.Trans):
+                self.__BitStack += [bit_elt]
+                self.__BitStack_len += bit_elt.bit_len()
+        # otherwise take it as is
+        elif not bit_elt.Trans:
+            if self.safe:
+                assert(type(bit_elt.Trans) is bool)
+            self.__BitStack += [bit_elt]
+            self.__BitStack_len += bit_elt.bit_len()
+            
+    def __map_to_bitstack(self, string):
+        # 1st check if string is long enough for the prepared BitStack
+        if len(string) < self.__BitStack_len//8 and self.dbg >= ERR:
+            log(ERR, '(Layer - %s) String buffer not long enough for %s' \
+                % (self.__class__, self.__BitStack[-1].CallName))
+            #if self.safe:
+            #    return
+        # string buffer parsing is done through intermediary
+        # string buffer "s_stack"
+        s_stack = string[:self.__BitStack_len//8]
+        # create a bitstream "s_bin" for getting the full BitStack
+        s_bin = ''
+        for char in s_stack:
+            # convert to bitstream thanks to python native bit repr
+            s_bin_tmp = bin(ord(char))[2:]
+            # prepend 0 to align on byte (python does not do it)
+            # and append to the bitstream "s_bin" (string of 0 and 1)
+            s_bin = ''.join((s_bin, (8-len(s_bin_tmp))*'0', s_bin_tmp))
+        # map the bitstream "s_bin" into each BitStack element
+        for bit_elt in self.__BitStack:
+            # convert the bitstream "s_bin" into integer 
+            # according to the length in bit of bit_elt
+            bit_elt.map_bit( int(s_bin[:bit_elt.bit_len()], 2) )
+            # truncate the "s_bin" bitstream
+            s_bin = s_bin[bit_elt.bit_len():]
+        # consume the global string buffer that has been mapped 
+        # (from s_stack internal variable)
+        # and reinitialize self.__BitStack* attributes
+        string = string[self.__BitStack_len//8:]
+        self.__BitStack = []
+        self.__BitStack_len = 0
+        # finally return string to parent method .map()
+        return string
     
     # define methods when Layer is in a Block:
     # next, previous, header: return Layer object reference
@@ -1331,6 +1394,10 @@ class Layer(object):
         for e in self:
             if hasattr(e, 'reautomatize'):
                 e.reautomatize()
+    
+    def parse(self, s=''):
+        self.map(s)
+
 
 class RawLayer(Layer):
     constructorList = [
@@ -1489,7 +1556,8 @@ class Block(object):
             if isinstance(l, Layer): 
                 clone.append( l.clone() )
             elif self.dbg >= ERR:
-                log(ERR, '(Block) cloning not implemented for: %s' % l)
+                log(ERR, '(Block - %s) cloning not implemented for: %s' \
+                    % (self.__class__, l))
         return clone
     
     def show(self):
