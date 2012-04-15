@@ -74,24 +74,35 @@ class shtr(str):
     '''
     
     def left_val(self, val):
-        # get integer value from the `val' left bits of the str
+        '''
+        return big endian integer value from the `val' left bits of the shtr
+        '''
         acc = 0
+        # 1st get value of full bytes value
         for i in range(val/8):
             acc += ord(self[i]) << (val - ((i+1)*8))
-        acc += ord(self[val/8]) >> (8 - (val%8))
+        # then value of last bits
+        if val%8 and val/8 < len(self):
+            acc += ord(self[val/8]) >> (8 - (val%8))
         return acc
     
     def right_val(self, val):
-        # get integer value from the `val' right bits of the str
+        '''
+        return big endian integer value from the `val' right bits of the shtr
+        '''
         acc = 0
+        # 1st get value of full bytes value
         for i in range(val/8):
             acc += ord(self[-1-i]) << (i*8)
-        acc += (ord(self[-1-(val/8)]) & ((1<<(val%8))-1)) << (8*(val/8))
+        # then value of last bits
+        if val%8 and val/8 < len(self):
+            acc += (ord(self[-1-(val/8)]) & ((1<<(val%8))-1)) << (8*(val/8))
         return acc
-    
+        
     def __lshift__(self, val):
-        # left shift the string from the given `val' bits
-        # and return resulting shtring
+        '''
+        return resulting shtr after shifting left of `val' bits
+        '''
         # handle full byte shifting
         Bsh = val / 8
         buf = self[Bsh:] + Bsh*'\0'
@@ -105,8 +116,10 @@ class shtr(str):
         return shtr(buf2)
     
     def __rshift__(self, val):
-        # right shift the string from the given `val' bits
-        # and return resulting shtring
+        '''
+        return resulting shtr after shifting right of `val' bits
+        '''
+        # handle full byte shifting
         Bsh = val / 8
         buf = Bsh*'\0' + self[:len(self)-Bsh]
         # then bit shifting
