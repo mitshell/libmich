@@ -1,10 +1,9 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.2
+# * Version : 0.2.9
 # *
-# * Copyright © 2012. Benoit Michau.
-# * Made In France(Telecom)
+# * Copyright © 2012. Benoit Michau. France Telecom.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -160,6 +159,10 @@ class Element(object):
             re = ''.join((self.ReprName, ' '))
         return '<%s[%s%s] : %s>' % ( re, self.CallName, tr, repr(self) )
     
+    # when willing to bit shift str, call this instead of standard __str__()
+    def shtr(self):
+        return shtr(str(self))
+    
     # this is to retrieve element's dynamicity from a mapped element
     def reautomatize(self):
         if self.Val is not None and self.PtFunc:
@@ -173,23 +176,23 @@ class Str(Element):
     '''
     class defining a standard Element, 
     managed like a stream of byte(s) or string.
+    It is always byte-aligned (in term of length, at least)
     
     attributes:
     Pt: to point to another stream object (can simply be a string);
     PtFunc: when defined, PtFunc(Pt) is used 
-        to generate the string() / len() representation;
+            to generate the str() / len() representation;
     Val: when defined, overwrites the Pt (and PtFunc) string value, 
-        used when mapping string to the element;
-    Len: can be set to a fixed int value or point to something;
-    LenFunc: to be used when mapping string with variable length, 
-        LenFunc(Len) is used;
-    Repr: representation style, binary, hexa, human or ipv4;
-    Trans: to define Transparent element, 
-        which has empty string() and length() to 0 representation, 
-        or point to something;
-    TransFunc: when defined, TransFunc(Trans) is used 
-        to automate the transparent aspect: 
-        used e.g. for conditional element;
+         used when mapping a string buffer to the element;
+    Len: can be set to a fixed int value, or to another object
+         when called by LenFunc
+    LenFunc: to be used when mapping string buffer with variable length
+             (e.g. in TLV object), LenFunc(Len) is used;
+    Repr: python representation; binary, hexa, human or ipv4;
+    Trans: to define transparent element which has empty str() and len() to 0,
+           it "nullifies" its existence; can point to something for automation;
+    TransFunc: when defined, TransFunc(Trans) is used to automate the 
+               transparency aspect: used e.g. for conditional element;
     '''
     
     # this is used when printing the object representation
@@ -269,6 +272,7 @@ class Str(Element):
         object.__getattr__(self, attr)
     
     # the libmich internal instances check
+    # this is highly experimental...
     def __is_intern_inst(self, obj):
         return isinstance(obj, (Element, Layer, Block))
     
@@ -360,8 +364,8 @@ class Str(Element):
             return self.LenFunc(self.Len)
     
     def __int__(self):
-        # for convinience...
-        return len(self)
+        # big endian integer representation of the string buffer
+        return shtr(self).left_val(len(self)*8)
     
     def __bin__(self):
         # does not use the standard python "bin" function to keep 
@@ -459,20 +463,23 @@ class Str(Element):
 class Int(Element):
     '''
     class defining a standard element, managed like an integer.
+    It is always byte-aligned (in term of length, at least).
     
     attributes:
     Pt: to point to another object or direct integer value;
     PtFunc: when defined, PtFunc(Pt) is used to generate the integer value;
     Val: when defined, overwrites the Pt (and PtFunc) integer value, 
-         used when mapping string to the element;
-    Type: type of integer for encoding, signed / unsigned 
-          and 8/16/32/64 bits length;
-    Dict: dictionnary to use when representing the integer value into python;
-    Repr: representation style, binary, hexa or human: human uses Dict;
-    Trans: to define Transparent element, which has empty string value 
-           and length to 0.
-    TransFunc: when defined, TransFunc(Trans) is used to command 
-               the transparent aspect: used e.g. for conditional element;
+         used when mapping a string buffer to the element;
+    Type: type of integer for encoding, 8,16,32,64 bits signed or
+          8,16,24,32,67 unsigned integer;
+    Dict: dictionnary to use for a look-up when representing 
+          the element into python;
+    Repr: representation style, binary, hexa or human: human uses Dict 
+          if defined;
+    Trans: to define transparent element which has empty str() and len() to 0,
+           it "nullifies" its existence; can point to something for automation;
+    TransFunc: when defined, TransFunc(Trans) is used to automate the 
+               transparency aspect: used e.g. for conditional element;
     '''
     # endianness is 'little' or 'big'
     _endian = "big"
@@ -581,7 +588,12 @@ class Int(Element):
         return self.__pack()
     
     def __len__(self):
-        return len( str(self) )
+        if self.TransFunc is not None:
+            if self.safe: 
+                assert( type(self.TransFunc(self.Trans)) is bool )
+            if self.TransFunc(self.Trans): return 0
+        elif self.Trans: return 0
+        return self.Len
     
     def bit_len(self):
         return len(self)*8
@@ -589,12 +601,7 @@ class Int(Element):
     # map_len() is a-priori not needed in "Int" element, 
     # but still kept for Element uniformity
     def map_len(self):
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): return 0
-        elif self.Trans: return 0
-        return self.Len
+        return len(self)
     
     # define integer value
     def __int__(self):
@@ -700,25 +707,26 @@ class Int(Element):
 
 class Bit(Element):
     '''
-    class defining a standard element, managed like a bit or stream of bit. 
-    Values are corresponding to unsigned integer: from 0 to pow(2, bit_len)-1
+    class defining a standard element, managed like a bit (e.g. a flag)
+    or stream of variable bit length
+    Values are corresponding to unsigned integer: from 0 to pow(2, bit_len)-1.
+    It does not require to be byte-aligned.
     
     attributes:
     Pt: to point to another object or direct integer value;
-    PtFunc: when defined, function to apply to Pt to generate the integer value,
-            PtFunc(Pt) is used;
+    PtFunc: when defined, PtFunc(Pt) is used to generate the integer value;
     Val: when defined, overwrites the Pt (and PtFunc) integer value, 
          used when mapping string to the element;
     BitLen: length in bits of the bit stream;
     BitLenFunc: to be used when mapping string with variable bit-length, 
-                BitLenFunc(BitLen) is used 
-                (however, hope it's never going to be used anyway...);
-    Dict: dictionnary to use when representing the integer value;
+                BitLenFunc(BitLen) is used;
+    Dict: dictionnary to use for a look-up when representing 
+          the element into python;
     Repr: representation style, binary, hexa or human: human uses Dict;
-    Trans: to define Transparent element, 
-           which has empty string value and length to 0.
-    TransFunc: when defined, TransFunc(Trans) is used to command 
-               the transparent aspect: used for conditional element;
+    Trans: to define transparent element which has empty str() and len() to 0,
+           it "nullifies" its existence; can point to something for automation;
+    TransFunc: when defined, TransFunc(Trans) is used to automate the 
+               transparency aspect: used e.g. for conditional element;
     '''
     # for object representation
     _reprs = ["hex", "bin", "hum"]
@@ -797,6 +805,14 @@ class Bit(Element):
         # left-aligned according to the bit length
         # -> last bits of the last byte are nullified
         # 
+        # manages Element transparency
+        if self.TransFunc is not None:
+            if self.safe: 
+                assert( type(self.TransFunc(self.Trans)) is bool )
+            if self.TransFunc(self.Trans): 
+                return ''
+        elif self.Trans: 
+            return ''
         # do it the dirty way:
         h = self.__hex__()
         if len(h) % 2:
@@ -806,9 +822,21 @@ class Bit(Element):
     def __len__(self):
         # just for fun here, 
         # but do not use this in program...
-        return self.bit_len()//8
+        bitlen = self.bit_len()
+        if bitlen % 8:
+            return (bitlen//8) + 1
+        return bitlen//8
     
     def bit_len(self):
+        # manages Element transparency
+        if self.TransFunc is not None:
+            if self.safe: 
+                assert( type(self.TransFunc(self.Trans)) is bool )
+            if self.TransFunc(self.Trans): 
+                return 0
+        elif self.Trans: 
+            return 0
+        # and standard bit length processing
         if self.BitLenFunc is not None:
             if self.safe: 
                 assert( type(self.BitLenFunc(self.BitLen)) is int )
@@ -882,7 +910,12 @@ class Bit(Element):
         # map each bit of the string from left to right
         # using the shtr() class to shift the string
         # string must be ascii-encoded (see shtr)
-        self.map_bit( shtr(string).left_val(self.bit_len()) )
+        # transparency handling
+        if self.TransFunc is not None:
+            if self.TransFunc(self.Trans) is False:
+                self.map_bit( shtr(string).left_val(self.bit_len()) )
+        elif self.Trans is False:
+            self.map_bit( shtr(string).left_val(self.bit_len()) )
     
     def map_bit(self, value=0):
         # map an int / long value
@@ -893,30 +926,36 @@ class Bit(Element):
 
 class Layer(object):
     '''
-    class to construct stack of "Str", "Int" and "Bit" objects
+    class built from stack of "Str", "Int", "Bit" and "Layer" objects
     got from the initial constructorList.
+    Layer object is recursive: it can contain other Layer() instances
+    Layer does not require to be byte-aligned. This happens depending of the
+    presence of Bit() instances.
     
     when instantiated:
     clones the list of "Str", "Int", "Bit" elements in the constructorList
-    to build self.elementList;
-    manages a common hierarchy level for the whole layer (for use into "Block"): 
+    to build a dynamic elementList, that can be changed afterwards (adding /
+    removing objects);
+    A common hierarchy level for the whole Layer is defined, it is useful 
+    when used into "Block" to create hierarchical relationships: 
         self.hierarchy (int), self.inBlock (bool)
         when .inBlock is True, provides: .get_payload(), .get_header(), 
              .has_next(), .get_next(), .get_previous(), and .Block
-    provides several methods for calling elements in the layer:
+    It provides several methods for calling elements in the layer:
         by CallName / ReprName passed in attribute
         by index in the elementList
-        can be iterated
-    also some common methods as "Str", "Int" and "Bit" to emulate a common handling:
-        __str__, __len__, __int__, getattr, showattr, clone, show, map
-    and last but not least: Layer itself can be stacked into Layer...
+        can be iterated too
+        and many other manipulations are defined
+    IT has also some common methods with "Str", "Int" and "Bit" to emulate 
+    a common handling:
+    __str__, __len__, __int__, bit_len, getattr, showattr, show, map
     '''
     # debugging threshold for Layer:
     dbg = ERR
     # add some sanity checks
     safe = True
     # reserved attributes:
-    Reservd = ['CallName', 'ReprName', 'elementList', 'Len', \
+    Reservd = ['CallName', 'ReprName', 'elementList', 'Len', 'BitLen', \
                 'hierarchy', 'inBlock', 'Trans', 'ConstructorList', \
                 'dbg', 'Reservd']
     
@@ -947,7 +986,7 @@ class Layer(object):
             # make Layer recursive (so will have Layer() into Layer())
             if isinstance(e, (Element, Layer)):
                 if e.CallName in self.Reservd:
-                    if self.dbg >= ERR:
+                    if self.safe or self.dbg >= ERR:
                         log(self.dbg, '(Layer - %s) using a reserved '
                             'attribute as CallName %s: aborting...' \
                           % (self.__class__, e.CallName))
@@ -968,32 +1007,33 @@ class Layer(object):
         
         # check for bit alignment until we lost information on the Layer length
         # also check if fixed length can be deduced
-        BitLen, Len = 0, 0
+        self.BitLen = 0
         for e in self.elementList:
             if self.dbg >= DBG:
                 log(DBG, '(Layer - %s) length verification for %s' \
                     % (self.__class__, e.CallName))
             if isinstance(e, Bit):
-                BitLen += e.bit_len()
+                self.BitLen += e.bit_len()
             elif hasattr(e, 'Len') and type(e.Len) is int:
-                Len += e.Len
+                self.BitLen += (e.Len)*8
             else:
-                Len = "var"
+                self.BitLen, self.Len = "var", "var"
                 break
-        if Len == "var": 
-            self.Len = Len
-        else:
-            if not BitLen % 8 and self.dbg >= WNG:
-                log(WNG, '(Layer - %s) Bit elements seem not to be '\
-                    'byte-aligned: hope you made some transparent!' \
-                    % self.__class__)
-            # this is bad, for the reason just expressed in the log:
-            self.Len = Len + BitLen//8
+        if type(self.BitLen) is int :
+            if self.BitLen % 8:
+                if self.dbg >= WNG:
+                    log(WNG, '(Layer - %s) Elements seem not to be '\
+                        'byte-aligned: hope you expect it!' \
+                        % self.__class__)
+                # record length in bit (precise one) and in bytes (unprecised)
+                self.Len = 1 + self.BitLen//8
+            else:
+                self.Len = self.BitLen//8
         #
         # check additional args that would correspond to contained Element
-        if self.dbg >= DBG:
-            print(DBG, '(%s) init kwargs: %s' % (self.__class__, kwargs.keys()))
         args = kwargs.keys()
+        if self.dbg >= DBG:
+            print(DBG, '(%s) init kwargs: %s' % (self.__class__, args))
         for e in self:
             if hasattr(e, 'CallName') and hasattr(e, 'Pt') \
             and e.CallName in args:
@@ -1107,55 +1147,50 @@ class Layer(object):
     
     # define same methods as "Element" type for being use the same way
     def __str__(self):
-        s = ''
-        BitStream = ''
-        # loop on each element in the Layer
+        if self.dbg >= DBG:
+            log(DBG, '(Layer.__str__) entering str() for %s' % self.CallName)
+        # First take care of transparent Layer (e.g. in L3Mobile)
+        if hasattr(self, 'Trans') and self.Trans:
+            return ''
+        # then init resulting string 
+        # and bit offset needed to shift unaligned strings
+        s, off = shtr(''), 0
+        # loop on each element into the Layer
         # also on Layer into Layer...
         for e in self:
-            # need special processing for stacking "Bit" element: 
-            #   using "BitStream" variable
-            #   works only with contiguous "Bit" elements 
-            #   to avoid byte-misalignment of other element in the Layer 
-            #   (and programming complexity with shifting everywhere...)
-            if isinstance(e, Bit):
-                # manage element transparency with (Trans, TranFunc)
-                # and build a bitstream ('100110011...1101011') from Bit values
-                if e.TransFunc is not None:
-                    if self.safe:
-                        assert(type(e.TransFunc(e.Trans)) is bool)
-                    if not e.TransFunc(e.Trans):
-                        BitStream += str(e.__bin__())
-                elif not e.Trans:
-                    if self.safe:
-                        assert(type(e.Trans) is bool)
-                    BitStream += str(e.__bin__())
-                # when arriving on a byte boundary from bitstream, 
-                # create bytes and put it into the s variable
-                if len(BitStream) >= 8:
-                    while True:
-                        s += pack('!B', int(BitStream[:8], 2))
-                        BitStream = BitStream[8:]
-                        if len(BitStream) < 8:
-                            break
-                    #while BitStream:
-                    #    s += pack('!B', int(BitStream[:8], 2))
-                    #    BitStream = BitStream[8:]
-                if self.dbg >= DBG:
-                    log(DBG, '(Element) %s: %s, %s\nBitstream: %s' \
-                        % (e.CallName, e(), e.__bin__(), BitStream))
-            # when going to standard Str or Int element, 
-            # or directly end of __str__ function 
-            # verify the full BitStream has been consumed
-            # and continue to build the resulting string easily...
-            else:
-                # possible byte mis-alignment for Str / Int is not managed...
-                self.__is_aligned(BitStream)
-                BitStream = ''
-                if isinstance(e, Layer) and not e.Trans \
-                or isinstance(e, Element):
-                    s += str(e)
-        self.__is_aligned(BitStream)
-        return s
+            shtr_e, bitlen_e = e.shtr(), e.bit_len()
+            if self.dbg >= DBG:
+                log(DBG, '(Layer.__str__) %s: %s, %i, offset: %i' \
+                    % (e.CallName, hexlify(shtr_e), bitlen_e, off))
+            # check if s is already byte-aligned and e not transparent
+            if off and shtr_e:
+                # 1st update last bits of s with MSB of e, 
+                # before stacking with the rest of e
+                # (8 - off) is the room left in the LSB of s
+                s = ''.join((s[:-1], \
+                             chr(ord(s[-1]) + shtr_e.left_val(8-off)), \
+                             (shtr_e << (8-off))
+                           ))
+                # take care in case the shifting of e nullify its last byte
+                if bitlen_e%8 and (bitlen_e%8) - (8-off) <= 0:
+                    s = s[:-1]
+                # update offset (byte-disalignment)
+                if bitlen_e % 8:
+                    off += bitlen_e
+                    off = off % 8
+            # in case s is already aligned
+            elif shtr_e:
+                s = ''.join((s, shtr_e))
+                # update offset (byte-disalignment)
+                if bitlen_e % 8:
+                    off += bitlen_e % 8
+            if self.dbg >= DBG:
+                log(DBG, '(Layer.__str__) %s' % hexlify(s))
+        # well done!
+        return str(s)
+    
+    def shtr(self):
+        return shtr(str(self))
     
     def __is_aligned(self, BitStream):
         if BitStream and self.dbg >= ERR:
@@ -1170,6 +1205,19 @@ class Layer(object):
     
     def __len__(self):
         return len( str(self) )
+    
+    def bit_len(self):
+        # just go over all internal element t track their own bit length
+        # updated attributes initialized when Layer was constructed
+        self.BitLen = 0
+        for e in self:
+            if hasattr(e, 'bit_len'):
+                self.BitLen += e.bit_len()
+            elif hasattr(e, '__len__'):
+                self.BitLen += len(e)*8
+        self.Len = 1 + (self.BitLen // 8) if self.BitLen % 8 \
+                   else (self.BitLen // 8)
+        return self.BitLen
     
     def __int__(self):
         # really silly... still can be convinient: how knows?
@@ -1235,6 +1283,17 @@ class Layer(object):
         return sub('\n', ''.join(['\n']+self.hierarchy*['\t']), s)
     
     def map(self, string=''):
+        # in case the Layer is transparent
+        if hasattr(self, 'Trans') and self.Trans:
+            return
+        s = shtr(string)
+        # otherwise go to map() over all elements
+        for e in self:
+            # this is beautiful
+            e.map(s)
+            s = s << e.bit_len()
+    
+    def map_old(self, string=''):
         # Bit() elements are processed intermediary: 
         # 1st placed into BitStack
         # and when BitStack is byte-aligned (check against BitStack_len)
@@ -1606,4 +1665,33 @@ class testTLV(Layer):
         self.V.Len = self.L
         self.V.LenFunc = lambda X: int(X)-3
 
+class testA(Layer):
+    constructorList = [
+        Bit(CallName="T", ReprName="Tag", BitLen=6, Repr='hum', \
+            Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
+        Bit(CallName='F1', ReprName="Flag1", Pt=0, BitLen=4),
+        Bit(CallName='F2', ReprName="Flag2", Pt=1, BitLen=2),
+        Int(CallName="L", ReprName="Length", Type="uint8", Repr='bin'),
+        Str(CallName="V", ReprName="Value", Pt='default value'),
+        ]
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.L.Pt = self.V
+        self.L.PtFunc = lambda X: len(X)
+        self.V.Len = self.L
+        self.V.LenFunc = lambda X: int(X)
+
+class testB(Layer):
+    constructorList = [
+        Bit(CallName="T", ReprName="Tag", BitLen=6, Repr='hum', \
+            Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
+        Bit(CallName='F1', ReprName="Flag1", Pt=0, BitLen=4),
+        Bit(CallName='F2', ReprName="Flag2", Pt=1, BitLen=2),
+        Int(CallName="L", Pt=0, ReprName="Length", Type="uint16", Repr='bin'),
+        testA(V='super mega default value'),
+        testA(V='ultra colored'),
+        ]
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.L.PtFunc = lambda X: self[4].bit_len() + self[5].bit_len()
 
