@@ -78,10 +78,10 @@ class shtr(str):
         return big endian integer value from the `val' left bits of the shtr
         '''
         acc = 0
-        # 1st get value of full bytes value
-        for i in range(val/8):
+        # 1) get value of full bytes
+        for i in xrange(val/8):
             acc += ord(self[i]) << (val - ((i+1)*8))
-        # then value of last bits
+        # 2) get value of last bits
         if val%8 and val/8 < len(self):
             acc += ord(self[val/8]) >> (8 - (val%8))
         return acc
@@ -91,45 +91,54 @@ class shtr(str):
         return big endian integer value from the `val' right bits of the shtr
         '''
         acc = 0
-        # 1st get value of full bytes value
+        # 1) get value of full bytes
         for i in range(val/8):
             acc += ord(self[-1-i]) << (i*8)
-        # then value of last bits
+        # 2) get value of last bits
         if val%8 and val/8 < len(self):
             acc += (ord(self[-1-(val/8)]) & ((1<<(val%8))-1)) << (8*(val/8))
         return acc
-        
+    
+    # making an intermediate list of char that will be ''.join(map(chr, )) 
+    # looks much faster in python
+    # So I do so
+    
     def __lshift__(self, val):
         '''
         return resulting shtr after shifting left of `val' bits
         '''
-        # handle full byte shifting
-        Bsh = val / 8
-        buf = self[Bsh:] + Bsh*'\0'
-        # then bit shifting
-        bsh = val % 8
-        buf2 = ''
-        for i in range(len(buf)-1):
-            buf2 = ''.join((buf2, chr( ((ord(buf[i])<<bsh)%0x100) \
-                                      + (ord(buf[i+1])>>(8-bsh)) )))
-        buf2 = ''.join((buf2, chr((ord(buf[-1])<<bsh)%0x100)))
-        return shtr(buf2)
+        # 1) handle full byte shifting
+        Bsh = val/8
+        buf = ''.join((self[Bsh:], Bsh*'\0'))
+        # 2) then bit shifting
+        bsh = val%8
+        invbsh = 8-bsh
+        #
+        #                LSB of byte i       plus    MSB of byte i+1
+        strlist = [ ((ord(buf[i])<<bsh)%0x100) + (ord(buf[i+1])>>invbsh) \
+                    for i in xrange(len(buf)-1) ]
+        # and add last bits of the string
+        strlist.append( (ord(buf[-1])<<bsh)%0x100 )
+        #
+        return shtr(''.join(map(chr, strlist)))
     
     def __rshift__(self, val):
         '''
         return resulting shtr after shifting right of `val' bits
         '''
-        # handle full byte shifting
+        # 1) handle full byte shifting
         Bsh = val / 8
-        buf = Bsh*'\0' + self[:len(self)-Bsh]
-        # then bit shifting
+        buf = ''.join((Bsh*'\0', self[:len(self)-Bsh]))
+        # 2) then bit shifting
         bsh = val % 8
-        buf2 = ''
-        for i in reversed(range(1, len(buf))):
-            buf2 = ''.join((chr((ord(buf[i])>>bsh) + \
-                                ((ord(buf[i-1])&(pow(2, bsh)-1))<<(8-bsh))), \
-                            buf2))
-        buf2 = ''.join(( chr(ord(buf[0])>>bsh), buf2))
-        return shtr(buf2)
+        pbsh, invbsh = pow(2,bsh)-1, 8-bsh
+        # go over the string, from last byte to the 1st one
+        strlist = [ (ord(buf[i])>>bsh) + ((ord(buf[i-1])&pbsh)<<invbsh) \
+                    for i in reversed(xrange(1, len(buf))) ]
+        # add 1st bits of the string and reverse the list
+        strlist.append( ord(buf[0])>>bsh )
+        strlist.reverse()
+        #
+        return shtr(''.join(map(chr, strlist)))
 
 
