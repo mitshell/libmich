@@ -954,6 +954,8 @@ class Layer(object):
     dbg = ERR
     # add some sanity checks
     safe = True
+    # define the type of str() and map() method
+    _byte_aligned = True
     # reserved attributes:
     Reservd = ['CallName', 'ReprName', 'elementList', 'Len', 'BitLen', \
                 'hierarchy', 'inBlock', 'Trans', 'ConstructorList', \
@@ -1021,7 +1023,7 @@ class Layer(object):
                 break
         if type(self.BitLen) is int :
             if self.BitLen % 8:
-                if self.dbg >= WNG:
+                if self.dbg >= WNG and self._byte_aligned:
                     log(WNG, '(Layer - %s) Elements seem not to be '\
                         'byte-aligned: hope you expect it!' \
                         % self.__class__)
@@ -1152,6 +1154,13 @@ class Layer(object):
         # First take care of transparent Layer (e.g. in L3Mobile)
         if hasattr(self, 'Trans') and self.Trans:
             return ''
+        # dispatch to the right method depending of byte alignment
+        if self._byte_aligned is True:
+            return self.__str_aligned()
+        elif self._byte_aligned is False:
+            return self.__str_unaligned()
+    
+    def __str_unaligned(self):
         # then init resulting string 
         # and bit offset needed to shift unaligned strings
         s, off = shtr(''), 0
@@ -1191,6 +1200,57 @@ class Layer(object):
     
     def shtr(self):
         return shtr(str(self))
+    
+    def __str_aligned(self):
+        s = ''
+        BitStream = ''
+        # loop on each element in the Layer
+        # also on Layer into Layer...
+        for e in self:
+            # need special processing for stacking "Bit" element: 
+            #   using "BitStream" variable
+            #   works only with contiguous "Bit" elements 
+            #   to avoid byte-misalignment of other element in the Layer 
+            #   (and programming complexity with shifting everywhere...)
+            if isinstance(e, Bit):
+                # manage element transparency with (Trans, TranFunc)
+                # and build a bitstream ('100110011...1101011') from Bit values
+                if e.TransFunc is not None:
+                    if self.safe:
+                        assert(type(e.TransFunc(e.Trans)) is bool)
+                    if not e.TransFunc(e.Trans):
+                        BitStream += str(e.__bin__())
+                elif not e.Trans:
+                    if self.safe:
+                        assert(type(e.Trans) is bool)
+                    BitStream += str(e.__bin__())
+                # when arriving on a byte boundary from bitstream, 
+                # create bytes and put it into the s variable
+                if len(BitStream) >= 8:
+                    while True:
+                        s += pack('!B', int(BitStream[:8], 2))
+                        BitStream = BitStream[8:]
+                        if len(BitStream) < 8:
+                            break
+                    #while BitStream:
+                    #    s += pack('!B', int(BitStream[:8], 2))
+                    #    BitStream = BitStream[8:]
+                if self.dbg >= DBG:
+                    log(DBG, '(Element) %s: %s, %s\nBitstream: %s' \
+                        % (e.CallName, e(), e.__bin__(), BitStream))
+            # when going to standard Str or Int element, 
+            # or directly end of __str__ function 
+            # verify the full BitStream has been consumed
+            # and continue to build the resulting string easily...
+            else:
+                # possible byte mis-alignment for Str / Int is not managed...
+                self.__is_aligned(BitStream)
+                BitStream = ''
+                if isinstance(e, Layer) and not e.Trans \
+                or isinstance(e, Element):
+                    s += str(e)
+        self.__is_aligned(BitStream)
+        return s
     
     def __is_aligned(self, BitStream):
         if BitStream and self.dbg >= ERR:
@@ -1283,9 +1343,18 @@ class Layer(object):
         return sub('\n', ''.join(['\n']+self.hierarchy*['\t']), s)
     
     def map(self, string=''):
-        # in case the Layer is transparent
+        if self.dbg >= DBG:
+            log(DBG, '(Layer.map) entering map() for %s' % self.CallName)
+        # First take care of transparent Layer (e.g. in L3Mobile)
         if hasattr(self, 'Trans') and self.Trans:
             return
+        # dispatch to the right method depending of byte alignment
+        if self._byte_aligned is True:
+            self.__map_aligned(string)
+        elif self._byte_aligned is False:
+            self.__map_unaligned(string)
+    
+    def __map_unaligned(self, string=''):
         s = shtr(string)
         # otherwise go to map() over all elements
         for e in self:
@@ -1293,7 +1362,7 @@ class Layer(object):
             e.map(s)
             s = s << e.bit_len()
     
-    def map_old(self, string=''):
+    def __map_aligned(self, string=''):
         # Bit() elements are processed intermediary: 
         # 1st placed into BitStack
         # and when BitStack is byte-aligned (check against BitStack_len)
@@ -1427,7 +1496,8 @@ class Layer(object):
         return RawLayer()
     
     def get_payload(self):
-        #returns a Block, not a Layer like other methods for management into a Block
+        # return a Block, not a Layer like other methods 
+        # for management into a Block
         pay = Block('pay')
         if self.has_next():
             index = self.get_index()
@@ -1666,6 +1736,7 @@ class testTLV(Layer):
         self.V.LenFunc = lambda X: int(X)-3
 
 class testA(Layer):
+    _byte_aligned = False
     constructorList = [
         Bit(CallName="T", ReprName="Tag", BitLen=6, Repr='hum', \
             Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
@@ -1682,6 +1753,7 @@ class testA(Layer):
         self.V.LenFunc = lambda X: int(X)
 
 class testB(Layer):
+    _byte_aligned = False
     constructorList = [
         Bit(CallName="T", ReprName="Tag", BitLen=6, Repr='hum', \
             Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
