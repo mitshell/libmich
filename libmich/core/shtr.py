@@ -29,6 +29,9 @@
 
 #!/usr/bin/env python
 
+# exporting
+__all__ = ['decomposer', 'shtr']
+
 # Utility class to decompose / recompose integer
 # and manipulate str like integers (shifting them)
 
@@ -38,9 +41,9 @@ class decomposer(object):
     exponential (self.MUL), and returns the list or remainder:
     
     example:
-    decomposer(0x100).decompose(53) -> [5, 6]
+    decomposer(0x10).decompose(53) -> [5, 3]
     this means:
-    53 = 5 + (6 << 8)
+    53 = 5 + (3 << 4), with 0x10 = 1 << 4
     
     more generally:
     decomposer(1<<X).decompose(Y) -> [a, b, c, d ...]
@@ -49,16 +52,17 @@ class decomposer(object):
     '''
     def __init__(self, MUL=0x100):
         self.MUL = MUL
-        self._val_deced = []
+        self._val_dec = []
     
     def decompose(self, val):
-        self._val_to_dec = val
-        self._val_deced.append( self._val_to_dec % self.MUL )
-        if self._val_to_dec > self.MUL: 
-            self._val_to_dec = self._val_to_dec / self.MUL
-            self.decompose( self._val_to_dec )
-        return self._val_deced
-
+        if val == self.MUL:
+            self._val_dec.extend([0, 1])
+        else:
+            self._val_dec.append( val % self.MUL )
+        if val > self.MUL:
+            val = val / self.MUL
+            self.decompose( val )
+        return self._val_dec
 
 class shtr(str):
     '''
@@ -140,5 +144,3 @@ class shtr(str):
         strlist.reverse()
         #
         return shtr(''.join(map(chr, strlist)))
-
-

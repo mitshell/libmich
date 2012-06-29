@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
 # * Copyright © 2011. Benoit Michau. France Telecom.
 # *
@@ -145,7 +145,7 @@ class ALERTING(Layer3):
              Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
              Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                        V='\0'),
-             Type4_TLV('SS', ReprName='SS version indicator', \
+             Type4_TLV('SS', ReprName='Supplementary Service version indicator',\
                        T=0x7F, V='', Trans=True)])
         self._post_init(with_options)
 
@@ -170,7 +170,7 @@ class CALL_CONFIRMED(Layer3):
             [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap2', T=0x4, V=BearerCap(), Trans=True),
+             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
              Type4_TLV('Cause', T=0x8, V='\0\x80'),
              Type4_TLV('CCCap', T=0x15, V=CCCap()),
              Type4_TLV('StreamId', T=0x2D, V='\0'),
@@ -198,7 +198,7 @@ class CALL_PROCEEDING(Layer3):
             [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap2', T=0x4, V=BearerCap(), Trans=True),
+             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
              Type4_TLV('Facility', T=0x1C, V=''),
              Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
              Type1_TV('Priority', T=0x8, V=0),
@@ -302,7 +302,6 @@ class DISCONNECT(Layer3):
              Type4_TLV('AA', ReprName='Allowed Actions (CCBS)', \
                        T=0x7B, V='\0')])
         else:
-        #elif self.initiator == 'ME':
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
         self._post_init(with_options)
 
@@ -343,7 +342,6 @@ class FACILITY(Layer3):
         Layer3.__init__(self)
         self.extend([Type4_LV('Facility', T=0x1C, V='')])
         if self.initiator != 'Net':
-        #if self.initiator == 'ME':
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
         self._post_init(with_options)
 
@@ -452,7 +450,9 @@ class NOTIFY(Layer3):
     constructorList = [ie for ie in Header(3, 62)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend([Type3_V('NotifInd', V='\0', len=1)])
+        self.extend(\
+            [Str('NotifInd', ReprName='Notify Indication', \
+                 Pt='\0', Len=1, Repr='hex')])
 
 #section 9.3.17
 class PROGRESS(Layer3):
@@ -504,7 +504,7 @@ class CC_ESTABLISHMENT_CONFIRMED(Layer3):
             [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap2', T=0x4, V=BearerCap(), Trans=True),
+             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
              Type4_TLV('Cause', T=0x8, V='\0\x80'),
              Type4_TLV('SuppCodecs', T=0x40, V='\0\0\0')])
         self._post_init(with_options)
@@ -531,7 +531,7 @@ class RELEASE(Layer3):
         Layer3.__init__(self)
         self.extend( \
             [Type4_TLV('Cause', T=0x08, V='\0\x80'),
-             Type4_TLV('Cause2', T=0x08, V='\0\x80'),
+             Type4_TLV('Cause', T=0x08, V='\0\x80'),
              Type4_TLV('Facility', T=0x1C, V=''),
              Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                        V='\0')])
@@ -553,7 +553,7 @@ class RECALL(Layer3):
     def __init__(self, with_options=True):
         Layer3.__init__(self)
         self.extend( \
-            [Type3_V('Recall', V='\0'),
+            [Str('Recall', Pt='\0', Len=1, Repr='hex'),
              Type4_LV('Facility', V='\0')])
 
 #section 9.3.19
@@ -676,12 +676,12 @@ class SETUP(Layer3):
             [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap2', T=0x4, V=BearerCap(), Trans=True),
+             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
              Type4_TLV('Facility', T=0x1C, V='')])
         if self.initiator == 'Net':
             self.extend( \
             [Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
-             Type3_TV('Signal', T=0x34, V='\0', len=1),
+             Type3_TV('Signal', T=0x34, V='\0', Len=1),
              Type4_TLV('CallingBCD', T=0x5C, V='\0'),
              Type4_TLV('CallingSub', T=0x5D, V=''),
              Type4_TLV('CalledBCD', T=0x5E, V='\0'),
@@ -691,11 +691,11 @@ class SETUP(Layer3):
              Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('LowLayerComp', T=0x7C, V='\0'),
-             Type4_TLV('LowLayerComp2', T=0x7C, V='\0', Trans=True),
+             Type4_TLV('LowLayerComp_2', T=0x7C, V='\0', Trans=True),
              Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('HighLayerComp', T=0x7D, V='\0'),
-             Type4_TLV('HighLayerComp2', T=0x7D, V='\0', Trans=True),
+             Type4_TLV('HighLayerComp_2', T=0x7D, V='\0', Trans=True),
              Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                        V='\0'),
              Type1_TV('Priority', T=0x8, V=0),
@@ -712,11 +712,11 @@ class SETUP(Layer3):
              Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('LowLayerComp', T=0x7C, V='\0'),
-             Type4_TLV('LowLayerComp2', T=0x7C, V='\0', Trans=True),
+             Type4_TLV('LowLayerComp_2', T=0x7C, V='\0', Trans=True),
              Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
              Type4_TLV('HighLayerComp', T=0x7D, V='\0'),
-             Type4_TLV('HighLayerComp2', T=0x7D, V='\0', Trans=True),
+             Type4_TLV('HighLayerComp_2', T=0x7D, V='\0', Trans=True),
              Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                        V='\0'),
              Type4_TLV('SSversion', T=0x7F, V=''),
@@ -755,7 +755,7 @@ class START_DTMF(Layer3):
     constructorList = [ie for ie in Header(3, 53)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend([Type3_TV('Keypad', T=0x2C, V='\0', len=1)])
+        self.extend([Type3_TV('Keypad', T=0x2C, V='\0', Len=1)])
         self._post_init(with_options)
 
 #section 9.3.25
@@ -769,7 +769,7 @@ class START_DTMF_ACKNOWLEDGE(Layer3):
     constructorList = [ie for ie in Header(3, 54)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend([Type3_TV('Keypad', T=0x2C, V='\0', len=1)])
+        self.extend([Type3_TV('Keypad', T=0x2C, V='\0', Len=1)])
         self._post_init(with_options)
 
 #section 9.3.26
@@ -800,7 +800,7 @@ class STATUS(Layer3):
         Layer3.__init__(self)
         self.extend( \
             [Type4_LV('Cause', V='\0\x80'),
-             Type3_V('CallState', V='\0', len=1),
+             Str('CallState', Pt='\0', Len=1, Repr='hex'),
              Type4_TLV('AuxState', V=AuxState())])
         self._post_init(with_options)
 
@@ -845,5 +845,4 @@ class USER_INFORMATION(Layer3):
              Type2('MoreData', T=0xA0)])
         self._post_init(with_options)
 
-#
 #

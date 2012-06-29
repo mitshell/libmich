@@ -1,9 +1,9 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
-# * Copyright © 2011. Benoit Michau. France Telecom.
+# * Copyright © 2011. Benoit Michau. France Telecom. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -29,7 +29,7 @@
 #!/usr/bin/env python
 
 # generic imports
-from libmich.core.element import Bit, Str, Int, Layer, Block, show, debug
+from libmich.core.element import Bit, Str, Int, Layer, Block, show
 
 ###
 # pcap headers format
@@ -56,4 +56,35 @@ class Record(Layer):
         Int('incl_len', Pt=0, Type='uint32', Repr='hum'),
         Int('orig_len', Pt=0, Type='uint32', Repr='hum')]
 
+###
+# gsmtap header format
+# http://bb.osmocom.org/trac/wiki/GSMTAP
+# or in libosmocore: include/osmocom/core/gsmtap.h
+###
+GSMTAPType_dict = {
+    1 : 'GSM Um',
+    2 : 'GSM Abis',
+    3 : 'GSM Um burst',
+    4 : 'SIM APDU',
+    5 : 'TETRA I1',
+    6 : 'TETRA I1 burst',
+    7 : 'WiMAX burst',
+    8 : 'GPRS LLC',
+    9 : 'GPRS SNDCP',
+    10 : 'GMR-1 L2 packets',
+    }
 
+class gsmtap(Layer):
+    constructorList = [
+        Int('version', Pt=2, Type='uint8'),
+        Int('hdr_len', Pt=4, Type='uint8'),
+        Int('type', Pt=1, Type='uint8', Dict=GSMTAPType_dict),
+        Int('timeslot', Pt=0, Type='uint8'),
+        Int('arfcn', Pt=0, Type='uint16'),
+        Int('signal_dbm', Pt=0, Type='int8'),
+        Int('snr_db', Pt=0, Type='int8'),
+        Int('frame_number', Pt=0, Type='uint32'),
+        Int('sub_type', Pt=0, Type='uint8'),
+        Int('antenna_nr', Pt=0, Type='uint8'),
+        Int('sub_slot', Pt=0, Type='uint8'),
+        Int('res', Pt=0, Type='uint8')]

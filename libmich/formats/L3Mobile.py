@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
 # * Copyright © 2011. Benoit Michau. France Telecom.
 # *
@@ -28,85 +28,111 @@
 
 #!/usr/bin/env python
 
-from libmich.core.element import RawLayer, Block, show, debug
-from libmich.formats.L3Mobile_MM import *
-from libmich.formats.L3Mobile_CC import *
-from libmich.formats.L3GSM_RR import *
-from libmich.formats.L3Mobile_24007 import PD_dict
+from libmich.core.element import RawLayer, Block, show, debug, \
+    log, ERR, WNG, DBG
+from L3Mobile_MM import *
+from L3Mobile_CC import *
+from L3GSM_RR import *
+from L3Mobile_24007 import PD_dict
 
 # Handles commonly all defined L3Mobile_XYZ stacks
 
 L3Call = {
 # L3Mobile_CC, PD=3
 3:{
-1:ALERTING,
-2:CALL_PROCEEDING,
-3:PROGRESS,
-4:CC_ESTABLISHMENT,
-5:SETUP,
-6:CC_ESTABLISHMENT_CONFIRMED,
-7:CONNECT,
-8:CALL_CONFIRMED,
-9:START_CC,
-11:RECALL,
-14:EMERGENCY_SETUP,
-15:CONNECT_ACKNOWLEDGE,
-16:USER_INFORMATION,
-19:MODIFY_REJECT,
-23:MODIFY,
-24:HOLD,
-25:HOLD_ACKNOWLEDGE,
-26:HOLD_REJECT,
-28:RETRIEVE,
-29:RETRIEVE_ACKNOWLEDGE,
-30:RETRIEVE_REJECT,
-31:MODIFY_COMPLETE,
-37:DISCONNECT,
-42:RELEASE_COMPLETE,
-45:RELEASE,
-49:STOP_DTMF,
-50:STOP_DTMF_ACKNOWLEDGE,
-52:STATUS_ENQUIRY,
-53:START_DTMF,
-54:START_DTMF_ACKNOWLEDGE,
-55:START_DTMF_REJECT,
-57:CONGESTION_CONTROL,
-58:FACILITY,
-61:STATUS,
-62:NOTIFY,
-0x100:Header,},
+    1:ALERTING,
+    2:CALL_PROCEEDING,
+    3:PROGRESS,
+    4:CC_ESTABLISHMENT,
+    5:SETUP,
+    6:CC_ESTABLISHMENT_CONFIRMED,
+    7:CONNECT,
+    8:CALL_CONFIRMED,
+    9:START_CC,
+    11:RECALL,
+    14:EMERGENCY_SETUP,
+    15:CONNECT_ACKNOWLEDGE,
+    16:USER_INFORMATION,
+    19:MODIFY_REJECT,
+    23:MODIFY,
+    24:HOLD,
+    25:HOLD_ACKNOWLEDGE,
+    26:HOLD_REJECT,
+    28:RETRIEVE,
+    29:RETRIEVE_ACKNOWLEDGE,
+    30:RETRIEVE_REJECT,
+    31:MODIFY_COMPLETE,
+    37:DISCONNECT,
+    42:RELEASE_COMPLETE,
+    45:RELEASE,
+    49:STOP_DTMF,
+    50:STOP_DTMF_ACKNOWLEDGE,
+    52:STATUS_ENQUIRY,
+    53:START_DTMF,
+    54:START_DTMF_ACKNOWLEDGE,
+    55:START_DTMF_REJECT,
+    57:CONGESTION_CONTROL,
+    58:FACILITY,
+    61:STATUS,
+    62:NOTIFY,
+    #0x100:Header,
+    },
 # L3Mobile_MM, PD=5
 5:{
-1:IMSI_DETACH_INDICATION,
-2:LOCATION_UPDATING_ACCEPT,
-4:LOCATION_UPDATING_REJECT,
-8:LOCATION_UPDATING_REQUEST,
-17:AUTHENTICATION_REJECT,
-18:AUTHENTICATION_REQUEST,
-20:AUTHENTICATION_RESPONSE,
-24:IDENTITY_REQUEST,
-25:IDENTITY_RESPONSE,
-26:TMSI_REALLOCATION_COMMAND,
-27:TMSI_REALLOCATION_COMPLETE,
-28:AUTHENTICATION_FAILURE,
-33:CM_SERVICE_ACCEPT,
-34:CM_SERVICE_REJECT,
-35:CM_SERVICE_ABORT,
-36:CM_SERVICE_REQUEST,
-37:CM_SERVICE_PROMPT,
-40:CM_REESTABLISHMENT_REQUEST,
-41:ABORT,
-48:MM_NULL,
-49:MM_STATUS,
-50:MM_INFORMATION,
-0x100:Header,},
+    1:IMSI_DETACH_INDICATION,
+    2:LOCATION_UPDATING_ACCEPT,
+    4:LOCATION_UPDATING_REJECT,
+    8:LOCATION_UPDATING_REQUEST,
+    17:AUTHENTICATION_REJECT,
+    18:AUTHENTICATION_REQUEST,
+    20:AUTHENTICATION_RESPONSE,
+    24:IDENTITY_REQUEST,
+    25:IDENTITY_RESPONSE,
+    26:TMSI_REALLOCATION_COMMAND,
+    27:TMSI_REALLOCATION_COMPLETE,
+    28:AUTHENTICATION_FAILURE,
+    33:CM_SERVICE_ACCEPT,
+    34:CM_SERVICE_REJECT,
+    35:CM_SERVICE_ABORT,
+    36:CM_SERVICE_REQUEST,
+    37:CM_SERVICE_PROMPT,
+    40:CM_REESTABLISHMENT_REQUEST,
+    41:ABORT,
+    48:MM_NULL,
+    49:MM_STATUS,
+    50:MM_INFORMATION,
+    #0x100:Header,
+    },
 # L3GSM_RR, PD=6
 6:{
-13:CHANNEL_RELEASE,
-41:ASSIGNMENT_COMPLETE,
-46:ASSIGNMENT_COMMAND,
-47:ASSIGNMENT_FAILURE,},
-# Nothing more yet...
+    0:SI_13,
+    2:SI_2bis,
+    3:SI_2ter,
+    5:SI_5bis,
+    6:SI_5ter,
+    7:SI_2quater,
+    13:CHANNEL_RELEASE,
+    19:CLASSMARK_ENQUIRY,
+    21:MEASUREMENT_REPORT,
+    22:CLASSMARK_CHANGE,
+    25:SI_1,
+    26:SI_2,
+    27:SI_3,
+    28:SI_4,
+    29:SI_5,
+    30:SI_6,
+    33:PAGING_REQUEST_1,
+    34:PAGING_REQUEST_2,
+    36:PAGING_REQUEST_3,
+    39:PAGING_RESPONSE,
+    41:ASSIGNMENT_COMPLETE,
+    46:ASSIGNMENT_COMMAND,
+    47:ASSIGNMENT_FAILURE,
+    50:CIPHERING_MODE_COMPLETE,
+    53:CIPHERING_MODE_COMMAND,
+    63:IMMEDIATE_ASSIGNMENT,
+    },
+    # Nothing more yet...
 }
 
 # Define a dummy RAW L3 header / message for parts not implemented
@@ -116,13 +142,13 @@ class RawL3(Layer3):
         Bit('PD', ReprName='Protocol Discriminator', \
             BitLen=4, Dict=PD_dict, Repr='hum'),
         Int('Type', Pt=0, Type='uint8'),
-        Str('Msg', Pt='', Repr='hex')]
+        Str('Msg', Pt='', Len=None, Repr='hex')]
 #
 
 def parse_L3(buf):
     # select message from PD and Type
     if len(buf) < 2:
-        print('[ERR] Message too short for L3 mobile')
+        log(ERR, '(parse_L3) message too short for L3 mobile')
         return RawLayer(buf)
     # protocol is 4 last bits of 1st byte
     # type is 6 last bits of 2nd byte
@@ -130,27 +156,33 @@ def parse_L3(buf):
     # get the right protocol from PD
     if Prot not in L3Call.keys():
         if Prot not in PD_dict.keys():
-            print('[ERR] non-standard L3 protocol discriminator: PD=%i' % Prot)
+            log(ERR, '(parse_L3) unknown L3 prot discr PD: %i' % Prot)
         else:
-            print('[WNG] L3 protocol %s not implemented (yet)' % PD_dict[Prot])
-        ret = RawL3()
-        ret.map(buf)
-        return ret
+            log(WNG, '(parse_L3) L3 protocol %s not implemented' % PD_dict[Prot])
+        l3 = RawL3()
+        l3.map(buf)
     # get the right type from Type
-    if Type not in L3Call[Prot].keys():
-        print('[ERR] L3 message type %i non-standard or not implemented for %s' \
+    elif Type not in L3Call[Prot].keys():
+        log(ERR, '(parse_L3) L3 message type %i undefined for protocol %s' \
               % (Type, PD_dict[Prot]))
-        ret = RawL3()
+        l3 = RawL3()
+        l3.map(buf)
         # for L3GSM_RR, still use the msg type dict
         if Prot == 6:
-            ret.Type.Dict = GSM_RR_dict
-        ret.map(buf)
-        return ret
-    l3 = L3Call[Prot][Type]()
-    l3.map(buf)
+            l3.Type.Dict = GSM_RR_dict
+    # select the correct L3 signalling message
+    else:
+        l3 = L3Call[Prot][Type]()
+        #l3.map(buf)
+        try:
+            l3.map(buf)
+        except:
+            log(ERR, '(parse_L3) mapping buffer on L3 message failed')
+            l3 = RawL3()
+            l3.map(buf)
     return l3
 
-    
+
 #
 # OpenBTS typical sequence:
 bts = \

@@ -41,7 +41,7 @@ def t2():
         t.F1, t.F2
         del t
     
-def t3(path_to_bmp='/home/mich/logo_anssi/colors/red2.bmp'):
+def t3(path_to_bmp='./red2.bmp'):
     Int._endian = 'little'
     print('test 3: parsing BMP() %i times' % RND_T3)
     bin=open(path_to_bmp, 'rb', -1).read()

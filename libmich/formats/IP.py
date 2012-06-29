@@ -555,7 +555,6 @@ class IPv6(Layer):
     constructorList = [
         Bit(CallName='ver', ReprName='Version', Pt=6, BitLen=4, Repr='hum'),
         Bit(CallName='cla', ReprName='Traffic class', Pt=0, BitLen=8, \
-
             Repr='hum'),
         Bit(CallName='flo', ReprName='Flow label', Pt=0, BitLen=20, \
             Repr='hex'),
@@ -575,9 +574,8 @@ class IPv6(Layer):
         # manages payload length
         self.plen.Pt = self.get_payload
         self.plen.PtFunc = lambda pay: pay()
-    
 
-
+# for calling the right layer from Eth() and IPv4() or IPv6()
 binder = {
     RawLayer : 0x0000,
     Vlan : 0x8100,

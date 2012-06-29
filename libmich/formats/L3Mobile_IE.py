@@ -1,9 +1,9 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
-# * Copyright © 2011. Benoit Michau. France Telecom.
+# * Copyright © 2011. Benoit Michau. France Telecom. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -28,26 +28,31 @@
 
 #!/usr/bin/env python
 
+# exporting
+__all__ = ['LAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
+           'PLMN', 'PLMNlist', 'AuxState',
+           'BearerCap', 'CCCap', 'AccessTechnoType_dict']
+
+# for convinience
 from binascii import hexlify
+#
 from libmich.core.element import Bit, Int, Str, Layer, \
     show, debug
 from libmich.core.IANA_dict import IANA_dict
+from libmich.core.CSN1 import CSN1, BREAK, BREAK_LOOP
 from libmich.formats.MCCMNC import MCC_dict, MNC_dict
-#from libmich.formats.TS24007 import PD_dict
+
 
 # TS 24.008 defines L3 signalling for mobile networks
-#
-# section 10: 
-# IE coding
+# section 10: IE coding
 #
 # describes mobile L3 signalling information element
 # each L3 message composed of Information Element (IE)
-#
-# ...
 # It's going to rock again!
-
-
 #
+# Take care with naming convention here
+# as it is used to pull automatically IEs into L3 messages when parsing them
+
 # section 10.5.1.3
 # Local Area Identifier, LAC is MNO-specific
 class LAI(Layer):
@@ -76,12 +81,18 @@ class LAI(Layer):
         self.MNC3 > int(mccmnc[5])
         
     def __repr__(self):
-        MCC = '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
+        return '<[LAI]: MCC: %s / MNC: %s / LAC: %s>' \
+               % (self.MCC(), self.MNC(), hexlify(self.LAC()))
+    
+    def MCC(self):
+        return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
+    
+    def MNC(self):
         if self.MNC3() == 0b1111:
-            MNC = '%i%i' % (self.MNC1(), self.MNC2())
+            return '%i%i' % (self.MNC1(), self.MNC2())
         else:
-            MNC = '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
-        return '<[LAI]: MCC: %s / MNC: %s / LAC: %s>' % (MCC, MNC, hexlify(self.LAC()))
+            return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
+    
 #
 
 # section 10.5.1.4
@@ -221,21 +232,143 @@ class MSCm2(Layer):
         Bit('A53', Pt=0, BitLen=1, Repr='hum'),
         Bit('A52', Pt=0, BitLen=1, Repr='hum')]
 
-# section 10.5.1.10a
-# Protocol Discriminator and Service Access Point Identifier
-#SAPI_dict = {
-#    0:'SAPI 0',
-#    1:'reserved',
-#    2:'reserved',
-#    3:'SPAI 3'}
-#    
-#class SAPI_PD(Layer):
-#    constructorList = [
-#        Bit('spare', Pt=0, BitLen=2),
-#        Bit('SPAI', ReprName='Service access point identifier', \
-#            Pt=0, BitLen=2, Repr='hum', Dict=SAPI_dict),
-#        Bit('PD', ReprName='Protocol discriminator', Pt=6, \
-#            BitLen=4, Repr='hum', Dict=PD_dict)]
+# section 10.5.1.7
+# Mobile Station Classmark 3
+# CSN1' style
+class A5bits(CSN1):
+    csn1List = [
+        Bit('A57', Pt=0, BitLen=1),
+        Bit('A56', Pt=0, BitLen=1),
+        Bit('A55', Pt=0, BitLen=1),
+        Bit('A54', Pt=0, BitLen=1)
+        ]
+
+class RSupport(CSN1):
+    csn1List = [
+        Bit('RGSMBandAssociatedRadioCapability', Pt=0, BitLen=3),
+        ]
+
+class HSCSDMultiSlotCapability(CSN1):
+    csn1List = [
+        Bit('HSCSDMultiSlotClass', Pt=0, BitLen=5),
+        ]
+
+class MSMeasurementCapability(CSN1):
+    csn1List = [
+        Bit('SMS_VALUE', Pt=0, BitLen=4),
+        Bit('SM_VALUE', Pt=0, BitLen=4),
+        ]
+
+class MSPositioningMethodCapability(CSN1):
+    csn1List = [
+        Bit('MSPositioningMethod', Pt=0, BitLen=5),
+        ]
+
+class ECSDMultiSlotCapability(CSN1):
+    csn1List = [
+        Bit('ECSDMultiSlotClass', Pt=0, BitLen=5),
+        ]
+
+class PSK8(CSN1):
+    csn1List = [
+        Bit('ModulationCapability', Pt=0, BitLen=1),
+        {'0':BREAK, '1':Bit('PSK8RFPowerCapability1', Pt=0, BitLen=2)},
+        {'0':BREAK, '1':Bit('PSK8RFPowerCapability2', Pt=0, BitLen=2)},
+        ]
+
+class SingleBandSupport(CSN1):
+    csn1List = [
+        Bit('GSMBand', Pt=0, BitLen=4),
+        ]
+
+class GERANIuModeCapabilities(CSN1):
+    csn1List = [
+        Bit('Length', Pt=0, BitLen=4),
+        # Rel.6 addition:
+        Bit('FLOIuCapability', Pt=0, BitLen=1),
+        Bit('spare', Pt=0)
+        ]
+    def __init__(self, **kwargs):
+        CSN1.__init__(self, **kwargs)
+        self.csn1List[2].BitLen = self.csn1List[0]
+        self.csn1List[2].BitLenFunc = lambda l: l()
+
+class MSCm3(CSN1):
+    csn1List = [
+        Bit('spare', Pt=0, BitLen=1),
+        {'000':A5bits(),
+         '101':(A5bits(), \
+                Bit('AssociatedRadioCapability2', Pt=0, BitLen=4), \
+                Bit('AssociatedRadioCapability1', Pt=0, BitLen=4)),
+         '110':(A5bits(), \
+                Bit('AssociatedRadioCapability2', Pt=0, BitLen=4), \
+                Bit('AssociatedRadioCapability1', Pt=0, BitLen=4)),
+         '001':(A5bits(), \
+                Bit('spare', Pt=0, BitLen=4), \
+                Bit('AssociatedRadioCapability1', Pt=0, BitLen=4)),
+         '010':(A5bits(), \
+                Bit('spare', Pt=0, BitLen=4), \
+                Bit('AssociatedRadioCapability1', Pt=0, BitLen=4)),
+         '100':(A5bits(), \
+                Bit('spare', Pt=0, BitLen=4), \
+                Bit('AssociatedRadioCapability1', Pt=0, BitLen=4))},
+        {'0':BREAK, '1':RSupport()},
+        {'0':BREAK, '1':HSCSDMultiSlotCapability()},
+        Bit('UCS2treatment', Pt=0, BitLen=1),
+        Bit('ExtendedMeasurementCapability', Pt=0, BitLen=1),
+        {'0':BREAK, '1':MSMeasurementCapability()},
+        {'0':BREAK, '1':MSPositioningMethodCapability()},
+        {'0':BREAK, '1':ECSDMultiSlotCapability()},
+        {'0':BREAK, '1':PSK8()},
+        {'0':BREAK, '1':(Bit('GSM400BandsSupported', Pt=1, BitLen=2),
+                        Bit('GSM400AssociatedRadioCapability', Pt=0, BitLen=4))},
+        {'0':BREAK, '1':Bit('GSM850AssociatedRadioCapability', Pt=0, BitLen=4)},
+        {'0':BREAK, '1':Bit('GSM1900AssociatedRadioCapability', Pt=0, BitLen=4)},
+        Bit('UMTSFDDRadioAccessTechnologyCapability', Pt=0, BitLen=1),
+        Bit('UMTS384McpsTDDRadioAccessTechnologyCapability', Pt=0, BitLen=1),
+        Bit('CDMA2000RadioAccessTechnologyCapability', Pt=0, BitLen=1),
+        {'0':BREAK, 
+         '1':(Bit('DTMGPRSMultiSlotClass', Pt=0, BitLen=2),
+              Bit('SingleSlotDTM', Pt=0, BitLen=1),
+              {'0':BREAK, '1':Bit('DTMEGPRSMultiSlotClass', Pt=0, BitLen=2)})},
+        # Rel.4:
+        {'0':BREAK, '1':SingleBandSupport()},
+        {'0':BREAK, '1':Bit('GSM750AssociatedRadioCapability', Pt=0, BitLen=4)},
+        Bit('UMTS128McpsTDDRadioAccessTechnologyCapability', Pt=0, BitLen=1),
+        Bit('GERANFeaturePackage1', Pt=0, BitLen=1),
+        {'0':BREAK, 
+         '1':(Bit('ExtendedDTMGPRSMultiSlotClass', Pt=0, BitLen=2),
+              Bit('ExtendedDTMEGPRSMultiSlotClass', Pt=0, BitLen=2))},
+        # Rel.5:
+        {'0':BREAK, '1':Bit('HighMultislotCapability', Pt=0, BitLen=2)},
+        {'0':BREAK, '1':GERANIuModeCapabilities()},
+        Bit('GERANFeaturePackage2', Pt=0, BitLen=1),
+        Bit('GMSKMultislotPowerProfile', Pt=0, BitLen=2),
+        Bit('PSK8MultislotPowerProfile', Pt=0, BitLen=2),
+        # Rel.6:
+        {'0':BREAK, '1':(Bit('TGSM400BandsSupported', Pt=1, BitLen=2),
+                        Bit('TGSM400AssociatedRadioCapability', Pt=0, BitLen=4))},
+        Bit('unused', Pt=0, BitLen=1),
+        Bit('DownlinkAdvancedReceiverPerformance', Pt=0, BitLen=2),
+        Bit('DTMEnhancementsCapability', Pt=0, BitLen=1),
+        {'0':BREAK,
+         '1':(Bit('DTMGPRSHighMultiSlotClass', Pt=0, BitLen=3),
+              Bit('OffsetRequired', Pt=0, BitLen=1),
+              {'0':BREAK, '1':Bit('DTMEGPRSHighMultiSlotClass', Pt=0, BitLen=3)})},
+        Bit('RepeatedACCHCapability', Pt=0, BitLen=1),
+        # Rel.7:
+        {'0':BREAK, '1':Bit('GSM710AssociatedRadioCapability', Pt=0, BitLen=4)},
+        {'0':BREAK, '1':Bit('TGSM810AssociatedRadioCapability', Pt=0, BitLen=4)},
+        Bit('CipheringModeSettingCapability', Pt=0, BitLen=1),
+        Bit('AdditionalPositioningCapabilities', Pt=0, BitLen=1),
+        # Rel.8:
+        Bit('EUTRAFDDSupport', Pt=0, BitLen=1),
+        Bit('EUTRATDDSupport', Pt=0, BitLen=1),
+        Bit('EUTRAMeasurementAndReportingSupport', Pt=0, BitLen=1),
+        Bit('PriorityBasedReselectionSupport', Pt=0, BitLen=1),
+        Bit('spare', Pt=0, BitLen=1),
+        ]
+
 
 # section 10.5.1.13
 # PLMN list
@@ -371,9 +504,20 @@ class CCCap(Layer):
         Bit('maxspeech', ReprName='Maximum speech bearers', Pt=1, \
             BitLen=4, Repr='hum')]
 
-#
-
-
-
-
-#
+# TS 24.008, section 10.5.5.12a
+AccessTechnoType_dict = {
+    0 : 'GSM P',
+    1 : 'GSM E  --note that GSM E covers GSM P',
+    2 : 'GSM R  --note that GSM R covers GSM E and GSM P',
+    3 : 'GSM 1800',
+    4 : 'GSM 1900',
+    5 : 'GSM 450',
+    6 : 'GSM 480',
+    7 : 'GSM 850',
+    8 : 'GSM 750',
+    9 : 'GSM T 380',
+    10 : 'GSM T 410',
+    11 : 'unused',
+    12 : 'GSM 710',
+    13 : 'GSM T 810',
+    }

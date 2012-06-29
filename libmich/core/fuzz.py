@@ -455,31 +455,10 @@ class Layor:
 
 
 class Blockor:
-    
     pass
-    
-    #def fuzz_Layer(self, Layer):
-       #pass
-        #for el in Layer:
-        #    if isinstance(el, element.Str):
-        #        self.fuzz_Str(el)
-        #    elif isinstance(el, element.Int):
-        #        self.fuzz_Int(el)
-        # must handle relationships between Elements:
-        # True when PtFunc, LenFunc, TransFunc are not None
-        # when Pt, Len, Trans are pointing to other Elements: .Str(), .Int(), 
-        # or subclass, or list of Element subclass ... whatelse
-        
-    #def fuzz_Block(self, Block):
-        #pass
-        # loop on Layer in Block, and call fuzz_Layer() 
-        #for l in Block:
-        #    if isinstance(lay, Layer):
-        #        self.fuzz_Layer(lay)
         #        
         # must handle relationship between Layers:
         # True when PtFunc, LenFunc, TransFunc are not None
         # when Pt, Len, Trans are pointing to other Layers: .get_payload(), 
         # .get_header(), .get_previous(), .get_next()
-
 

@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.9
+# * Version : 0.2.2
 # *
 # * Copyright © 2012. Benoit Michau. France Telecom.
 # *
@@ -28,9 +28,9 @@
 
 #!/usr/bin/env python
 
-##############
-# The Libmich#
-##############
+###############
+# The Libmich #
+###############
 '''
 # Python library, works with python 2.6 and over 
 # not tested with older version, 
@@ -43,15 +43,16 @@
 #   `Str': for byte stream
 #   `Bit': for bit stream (actually assigned with integer value)
 #   `Int': for integer value
+#   all are instances of `Element'
 #
 # elements can be stacked into a layer: 
-#   `Layer': stacks [Str, Bit, Byte, Layer]
-#   allows to manage dependencies between elements in the layer 
-#   and with surrounding layers (next, previous, header, payload),
-#   when placed in a block,
+#   `Layer': stacks [Str, Bit, Byte, Layer] (yes, it's recursive)
+#   allows to manage dependencies between elements within the layer ,
+#   and with surrounding layers (next, previous, header, payload)
+#   when placed in a block
 #   
 # layers can be stacked into a block:
-#   `Block': stacks [Layer]
+#   `Block': stacks [Layer] (and only Layer)
 #   allows to manage intelligently dependencies between layers 
 #   (next, previous, header, payload)
 #   with a hierarchy attribute assigned to each layer.
@@ -61,13 +62,36 @@
 # or like file structure: zip, PNG, elf, MPEG4, ...
 #
 # TODO:
-# + check how to manage a Layer self reference when computing the "len(Layer)" 
-#   within a "Layer.Element" and still managing (Trans, TransFunc) transparency 
-#       >>> with the current transparency handling, when mapping a string to a Layer, 
-#           a "Layer.Element.Len" cannot point to "Layer" before the string has been mapped...
+# + actually, still a lot !
 # + defines plenty of formats
 '''
 
+# check python version for deepcopy bug in 2.6
+import sys
+def __version_err():
+    print('[ERR] only python 2.6 and 2.7 are supported (unfortunately)')
+    raise(Exception)
+if sys.version_info.major == 2:
+    if sys.version_info.minor == 6:
+        import copy
+        import types
+        def _deepcopy_method(x, memo):
+            return type(x)(x.im_func, deepcopy(x.im_self, memo), x.im_class)
+        copy._deepcopy_dispatch[types.MethodType] = _deepcopy_method
+    elif sys.version_info.minor != 7:
+        __version_err()
+else:
+    __version_err()
+#
+
+# exporting
+__all__ = ['Element', 'Str', 'Int', 'Bit', 'Layer', 'Block',
+           'type_funcs', 'debug_level', 'debug', 'ERR', 'WNG', 'DBG', 'log',
+           'show', 'showattr',
+           'testTLV', 'testA', 'testB']
+
+
+from copy import deepcopy
 from struct import pack, unpack
 from socket import inet_ntoa
 from binascii import hexlify, unhexlify
@@ -105,16 +129,18 @@ ERR = 1
 WNG = 2
 DBG = 3
 def log(level=DBG, string=''):
-    # if needed can be changed to write somewhere else
+    # if needed, can be changed to write somewhere else
     # will redirect all logs from the library
     print('[%s] %s' % (debug_level[level], string))
 ######
 #
 ######
 # defines printing facility
-def show(element):
+def show(element, with_trans=False):
     if hasattr(element, 'show'):
-        print('%s' % element.show())
+        print('%s' % element.show(with_trans))
+    else:
+        print('%s' % element)
 
 def showattr(element):
     if hasattr(element, 'showattr'):
@@ -145,16 +171,33 @@ class Element(object):
     def __gt__(self, Pt):
         self.Pt = Pt
     
-    # this is to get a nice object representation:
-    # can possibly be called with `show(element)`
-    def show(self):
-        tr, re = '', ''
+    # transparency handling, common to all Element:
+    def is_transparent(self):
         if self.TransFunc is not None:
             if self.safe: 
                 assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): tr = ' - transparent'
-            else: tr = ''
-        elif self.Trans is True: tr = ' - transparent'
+            if self.TransFunc(self.Trans): 
+                return True
+            else:
+                return False
+        elif self.Trans:
+            if self.safe:
+                assert(type(self.Trans) is bool)
+            return True
+        else:
+            return False
+    
+    # this is to get a nice object representation:
+    # can possibly be called with `show(element)`
+    def show(self, with_trans=False):
+        tr, re = '', ''
+        if self.is_transparent():
+            # TODO: eval the best convinience here
+            if not with_trans:
+                return ''
+            tr = ' - transparent'
+        else:
+            tr = ''
         if self.ReprName != '':
             re = ''.join((self.ReprName, ' '))
         return '<%s[%s%s] : %s>' % ( re, self.CallName, tr, repr(self) )
@@ -313,14 +356,7 @@ class Str(Element):
     
     def __str__(self):
         # when Element is Transparent:
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): 
-                return ''
-        elif self.Trans: 
-            if self.safe: 
-                assert( type(self.Trans) is bool )
+        if self.is_transparent():
             return ''
         #else: 
         return self()
@@ -344,18 +380,9 @@ class Str(Element):
         # and TransFunc, applied to Trans, to managed potential transparency
         # (e.g. for optional element triggered by other element)
         #
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): 
-                return 0
-        elif self.Trans:
-            if self.safe:
-                assert( type(self.Trans) is bool )
-            return 0
         if self.Len is None:
-            #return None
-            return 0
+            return None
+            #return 0
         if self.LenFunc is None: 
             return self.Len
         else:
@@ -448,13 +475,12 @@ class Str(Element):
     
     # standard method map() to map a string to the Element
     def map(self, string=''):
-        if self.TransFunc is not None:
-            if self.safe:
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if not self.TransFunc(self.Trans):
-                self.Val = string[:self.map_len()]
-        elif not self.Trans:
-            self.Val = string[:self.map_len()]
+        if not self.is_transparent():
+            l = self.map_len()
+            if l is not None:
+                self.Val = string[:l]
+            else:
+                self.Val = string
             if self.dbg >= DBG:
                 log(DBG, '(Element) mapping %s on %s, %s' \
                     % (repr(string), self.CallName, repr(self)))
@@ -577,22 +603,14 @@ class Int(Element):
     
     def __str__(self):
         # manages Element transparency
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): 
+        if self.is_transparent():
                 return ''
-        elif self.Trans: 
-            return ''
         # otherwise returns standard string values
         return self.__pack()
     
     def __len__(self):
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): return 0
-        elif self.Trans: return 0
+        if self.is_transparent(): 
+            return 0
         return self.Len
     
     def bit_len(self):
@@ -637,7 +655,11 @@ class Int(Element):
                 except KeyError: val = self()
             else:
                 val = self()
-            return repr(val)
+            #return repr(val)
+            rep = repr(val)
+            if rep[-1] == 'L':
+                rep = rep[:-1]
+            return rep
     
     def getattr(self):
         #return self.__dict__.keys()
@@ -665,12 +687,12 @@ class Int(Element):
         # error log will be done by the Layer().map() method
         # but do this not to throw exception
         if len(string) < self.Len:
+            if self.dbg >= WNG:
+                log(WNG, '(%s) %s map(string) : string not long enough' \
+                    % (self.__class__, self.CallName))
             return
         # standard handling
-        if self.TransFunc is not None:
-            if self.TransFunc(self.Trans) is False:
-                self.Val = self.__unpack(string[:self.Len])
-        elif self.Trans is False:
+        if not self.is_transparent():
             self.Val = self.__unpack(string[:self.Len])
     
     def __pack(self):
@@ -806,18 +828,14 @@ class Bit(Element):
         # -> last bits of the last byte are nullified
         # 
         # manages Element transparency
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): 
-                return ''
-        elif self.Trans: 
+        if self.is_transparent():
             return ''
         # do it the dirty way:
         h = self.__hex__()
-        if len(h) % 2:
-            h = ''.join(('0', h))
-        return shtr(unhexlify(h)) << (8 - (self.bit_len() % 8))
+        if not h:
+            return ''
+        if len(h) % 2: h = ''.join(('0', h))
+        return shtr(unhexlify(h)) << (8-(self.bit_len()%8))%8
     
     def __len__(self):
         # just for fun here, 
@@ -829,12 +847,7 @@ class Bit(Element):
     
     def bit_len(self):
         # manages Element transparency
-        if self.TransFunc is not None:
-            if self.safe: 
-                assert( type(self.TransFunc(self.Trans)) is bool )
-            if self.TransFunc(self.Trans): 
-                return 0
-        elif self.Trans: 
+        if self.is_transparent():
             return 0
         # and standard bit length processing
         if self.BitLenFunc is not None:
@@ -855,7 +868,13 @@ class Bit(Element):
         return bitlen//8
     
     def __hex__(self):
+        bitlen = self.bit_len()
+        if not bitlen:
+            return ''
         hexa = hex(self())[2:]
+        if hexa[-1] == 'L':
+            # thx to python to add 'L' for long on hex repr...
+            hexa = hexa[:-1]
         if self.bit_len()%4: 
             return '0'*(self.bit_len()//4 + 1 - len(hexa)) + hexa
         else: 
@@ -865,8 +884,11 @@ class Bit(Element):
         return self()
         
     def __bin__(self):
+        bitlen = self.bit_len()
+        if not bitlen:
+            return ''
         binary = format(self(), 'b')
-        return (self.bit_len() - len(binary))*'0' + binary
+        return (bitlen - len(binary))*'0' + binary
         
     def __repr__(self):
         if self.Repr == "hex": return "0x%s" % self.__hex__()
@@ -882,7 +904,11 @@ class Bit(Element):
                 except KeyError: val = self()
             else: 
                 val = self()
-            return repr(val)
+            #return repr(val)
+            rep = repr(val)
+            if rep[-1] == 'L':
+                rep = rep[:-1]
+            return rep
     
     def getattr(self):
         return ["CallName", "ReprName", "Pt", "PtFunc", "Val", "BitLen", \
@@ -910,11 +936,7 @@ class Bit(Element):
         # map each bit of the string from left to right
         # using the shtr() class to shift the string
         # string must be ascii-encoded (see shtr)
-        # transparency handling
-        if self.TransFunc is not None:
-            if self.TransFunc(self.Trans) is False:
-                self.map_bit( shtr(string).left_val(self.bit_len()) )
-        elif self.Trans is False:
+        if not self.is_transparent():
             self.map_bit( shtr(string).left_val(self.bit_len()) )
     
     def map_bit(self, value=0):
@@ -946,7 +968,7 @@ class Layer(object):
         by index in the elementList
         can be iterated too
         and many other manipulations are defined
-    IT has also some common methods with "Str", "Int" and "Bit" to emulate 
+    It has also some common methods with "Str", "Int" and "Bit" to emulate 
     a common handling:
     __str__, __len__, __int__, bit_len, getattr, showattr, show, map
     '''
@@ -976,7 +998,7 @@ class Layer(object):
         else: 
             self.ReprName = ''
         self.elementList = []
-        self.hierarchy = 0
+        self.set_hierarchy(0)
         self.inBlock = False
         self.Trans = Trans
         
@@ -1002,9 +1024,9 @@ class Layer(object):
                 # do not clone Layer() as it breaks dynamic element inside
                 # i.e. element with PtFunc, LenFunc, DictFunc, TransFunc defined
                 # TODO: patch Layer().clone() method to solve this...
-                # maybe some day
+                # lets try with deepcopy()
                 elif isinstance(e, Layer):
-                    self.append(e)
+                    self.append(e.clone())
             CallNames.append(e.CallName)
         
         # check for bit alignment until we lost information on the Layer length
@@ -1108,8 +1130,13 @@ class Layer(object):
     # list facilities can be preferred in this case
     def __getattr__(self, name):
         for e in self:
-            if name == e.CallName or name == e.ReprName: 
+            if name in (e.CallName, e.ReprName):
                 return e
+            #l = []
+            #if name == e.CallName or name == e.ReprName: 
+            #    l.append( e )
+        #if len(l) == 1: return l[0]
+        #else: return l
         return object.__getattribute__(self, name)
         raise AttributeError( '"Layer" has no "%s" attribute: %s' \
               % (name, self.getattr()) )
@@ -1135,17 +1162,29 @@ class Layer(object):
               % (name, self.getattr()) )
     
     # method for managing the Layer hierarchy (easy):
+    def set_hierarchy(self, hier=0):
+        self.hierarchy = hier
+        for e in self:
+            if isinstance(e, Layer):
+                e.set_hierarchy(hier)
+        
     def inc_hierarchy(self, ref=None):
-        if ref is None: 
-            self.hierarchy += 1
+        if ref is None:
+            self.set_hierarchy(self.hierarchy+1)
         else: 
-            self.hierarchy = ref + 1
+            self.set_hierarchy(self.hierarchy+ref+1)
+        #for l in self:
+        #    if isinstance(l, Layer):
+        #        l.hierarchy = self.hierarchy
     
     def dec_hierarchy(self, ref=None):
         if ref is None: 
-            self.hierarchy -= 1
+            self.set_hierarchy(self.hierarchy-1)
         else: 
-            self.hierarchy = ref - 1
+            self.set_hierarchy(self.hierarchy+ref-1)
+        #for l in self:
+        #    if isinstance(l, Layer):
+        #        l.hierarchy = self.hierarchy
     
     # define same methods as "Element" type for being use the same way
     def __str__(self):
@@ -1215,14 +1254,7 @@ class Layer(object):
             if isinstance(e, Bit):
                 # manage element transparency with (Trans, TranFunc)
                 # and build a bitstream ('100110011...1101011') from Bit values
-                if e.TransFunc is not None:
-                    if self.safe:
-                        assert(type(e.TransFunc(e.Trans)) is bool)
-                    if not e.TransFunc(e.Trans):
-                        BitStream += str(e.__bin__())
-                elif not e.Trans:
-                    if self.safe:
-                        assert(type(e.Trans) is bool)
+                if not e.is_transparent():
                     BitStream += str(e.__bin__())
                 # when arriving on a byte boundary from bitstream, 
                 # create bytes and put it into the s variable
@@ -1307,6 +1339,9 @@ class Layer(object):
             print('%s : %s' % ( a, repr(self.__getattr__(a))) )
     
     def clone(self):
+        return deepcopy(self)
+    
+    def clone2(self):
         clone = self.__class__()
         clone.CallName, clone.ReprName, clone.Len, clone.elementList = \
             self.CallName, self.ReprName, self.Len, []
@@ -1326,21 +1361,40 @@ class Layer(object):
                         'actually only done by reference, no copy' \
                         % (self.__class__, e.CallName))
                 clone.append(e)
-        clone.hierarchy = self.hierarchy
+        clone.set_hierarchy(self.hierarchy)
         return clone
     
-    def show(self):
+    def is_transparent(self):
+        if self.Trans:
+            return True
+        else:
+            return False
+    
+    def show(self, with_trans=False):
         re, tr = '', ''
         if self.ReprName != '':
             re = '%s ' % self.ReprName
-        if self.Trans:
+        if self.is_transparent():
+            # TODO: eval the best convinience here
+            if not with_trans:
+                return ''
             tr = ' - transparent'
-        s = ''.join((self.hierarchy * '\t', \
-                     '### %s[%s]%s ###\n' % (re, self.CallName, tr)))
-        for e in self:
-            s += ''.join((e.show(), '\n'))
-        s = s[:-1]
-        return sub('\n', ''.join(['\n']+self.hierarchy*['\t']), s)
+        # Layer content
+        str_lst = [e.show().replace('\n', '\n ') for e in self]
+        #str_lst = []
+        #for e in self:
+        #    if not e.is_transparent() and hasattr(e, 'Pt') \
+        #    and isinstance(e.Pt, Layer):
+        #        str_lst.append(e.Pt.show(with_trans).replace('\n', '\n '))
+        #    else:
+        #        str_lst.append(e.show(with_trans).replace('\n', '\n '))
+        #
+        # insert spaces for nested layers and filter out empty content
+        str_lst = [' %s\n' % s for s in str_lst if s]
+        # insert layer's title
+        str_lst.insert(0, '### %s[%s]%s ###\n' % (re, self.CallName, tr))
+        # return full inline string without last CR
+        return ''.join(str_lst)[:-1]
     
     def map(self, string=''):
         if self.dbg >= DBG:
@@ -1385,10 +1439,9 @@ class Layer(object):
                     log(WNG, '(Layer - %s) some of the Bit elements have not ' \
                         'been mapped in the "Layer": not byte-aligned' \
                         % self.__class__)
-                if isinstance(e, Layer) and not e.Trans \
-                or isinstance(e, Element):
-                    if len(string) < e.map_len() and self.dbg >= ERR:
-                        log(ERR, '(Layer - %s) String buffer not long ' \
+                if isinstance(e, (Layer, Element)) and not e.is_transparent():
+                    if len(string) < e.map_len() and self.dbg >= WNG:
+                        log(WNG, '(Layer - %s) String buffer not long ' \
                             'enough for %s' % (self.__class__, e.CallName))
                         #if self.safe:
                         #    return
@@ -1400,16 +1453,7 @@ class Layer(object):
     
     def __add_to_bitstack(self, bit_elt):
         # check for Bit() element transparency
-        if bit_elt.TransFunc is not None:
-            if self.safe: 
-                assert(type(bit_elt.TransFunc(bit_elt.Trans)) is bool)
-            if not bit_elt.TransFunc(bit_elt.Trans):
-                self.__BitStack += [bit_elt]
-                self.__BitStack_len += bit_elt.bit_len()
-        # otherwise take it as is
-        elif not bit_elt.Trans:
-            if self.safe:
-                assert(type(bit_elt.Trans) is bool)
+        if not bit_elt.is_transparent():
             self.__BitStack += [bit_elt]
             self.__BitStack_len += bit_elt.bit_len()
             
@@ -1433,11 +1477,13 @@ class Layer(object):
             s_bin = ''.join((s_bin, (8-len(s_bin_tmp))*'0', s_bin_tmp))
         # map the bitstream "s_bin" into each BitStack element
         for bit_elt in self.__BitStack:
-            # convert the bitstream "s_bin" into integer 
-            # according to the length in bit of bit_elt
-            bit_elt.map_bit( int(s_bin[:bit_elt.bit_len()], 2) )
-            # truncate the "s_bin" bitstream
-            s_bin = s_bin[bit_elt.bit_len():]
+            bitlen = bit_elt.bit_len()
+            if bitlen:
+                # convert the bitstream "s_bin" into integer 
+                # according to the length in bit of bit_elt
+                bit_elt.map_bit( int(s_bin[:bit_elt.bit_len()], 2) )
+                # truncate the "s_bin" bitstream
+                s_bin = s_bin[bit_elt.bit_len():]
         # consume the global string buffer that has been mapped 
         # (from s_stack internal variable)
         # and reinitialize self.__BitStack* attributes
@@ -1530,7 +1576,7 @@ class Layer(object):
 
 class RawLayer(Layer):
     constructorList = [
-        Str(CallName="s", Pt=""),
+        Str(CallName="s", Pt="", Len=None),
         ]
     
     def __init__(self, s=""):
@@ -1561,7 +1607,7 @@ class Block(object):
             raise AttributeError("CallName must be a string")
         self.CallName = Name
         self.layerList = []
-        self.hierarchy = 0
+        self.set_hierarchy(0)
         self.inBlock = False
 
     # define some basic list facilities for managing layers into the Block:
@@ -1621,23 +1667,28 @@ class Block(object):
     def set_hierarchy(self, hier):
         self.hierarchy = hier
         for l in self:
-            l.hierarchy += hier
+            l.set_hierarchy(l.hierarchy + hier)
     
     # method for managing all the Layers hierarchy in the Block (easy):
     def inc_hierarchy(self, ref=0):
-        self.hierarchy += 1+ref
-        for l in self: l.hierarchy += 1+ref
-    
+        #self.hierarchy += 1+ref
+        #for l in self: l.hierarchy += 1+ref
+        self.set_hierarchy(self.hierarchy+1+ref)
+        
     def dec_hierarchy(self, ref=0):
-        self.hierarchy -= 1-ref
-        for l in self: l.hierarchy -= 1-ref
+        #self.hierarchy -= 1-ref
+        #for l in self: l.hierarchy -= 1-ref
+        self.set_hierarchy(self.hierarchy-1+ref)
     
     # define operations to insert layers into a block:
     # OR: block | new_layer, append the new_layer with the same hierarchy 
     # as last layer in the block
     def __or__(self, newLayer):
         self.append(newLayer)
-        self[-1].hierarchy = self[-2].hierarchy
+        self[-1].set_hierarchy(self[-2].hierarchy)
+        #for l in self[-1]:
+        #    if isinstance(l, Layer):
+        #        l.hierarchy = self[-1].hierarchy
     
     # LSHIFT: block << new_layer, append the new_layer with a higher hierarchy
     # than last layer in the block
@@ -1646,7 +1697,7 @@ class Block(object):
         if self.num() > 1:
             self[-1].inc_hierarchy( self[-2].hierarchy )
         else:
-            self[-1].hierarchy = self.hierarchy
+            self[-1].set_hierarchy(self.hierarchy)
     
     # RSHIFT: block >> new_layer, append the new_layer with a lower hierarchy
     # than last layer in the block
@@ -1689,10 +1740,10 @@ class Block(object):
                     % (self.__class__, l))
         return clone
     
-    def show(self):
+    def show(self, with_trans=False):
         s = '%s[[[ %s ]]]\n' % (self.hierarchy*'\t', self.CallName)
-        for e in self: 
-            s += e.show() + '\n'
+        for l in self:
+            s += '\t'*l.hierarchy + l.show(with_trans).replace('\n', '\n'+'\t'*l.hierarchy) + '\n'
         return s[:-1]
     
     def map(self, string=''):
@@ -1742,7 +1793,7 @@ class testA(Layer):
             Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
         Bit(CallName='F1', ReprName="Flag1", Pt=0, BitLen=4),
         Bit(CallName='F2', ReprName="Flag2", Pt=1, BitLen=2),
-        Int(CallName="L", ReprName="Length", Type="uint8", Repr='bin'),
+        Int(CallName="L", ReprName="Length", Type="uint8", Repr='hum'),
         Str(CallName="V", ReprName="Value", Pt='default value'),
         ]
     def __init__(self, **kwargs):

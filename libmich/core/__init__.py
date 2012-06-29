@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
 # * Copyright © 2011. Benoit Michau. France Telecom.
 # *
@@ -26,4 +26,4 @@
 # *--------------------------------------------------------
 #*/ 
 
-__all__ = ['element', 'shtr', 'fuzz', 'IANA_dict']
+__all__ = ['element', 'shtr', 'fuzz', 'CSN1', 'IANA_dict']

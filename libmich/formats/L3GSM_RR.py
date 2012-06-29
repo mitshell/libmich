@@ -1,9 +1,9 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
-# * Copyright © 2011. Benoit Michau. France Telecom.
+# * Copyright © 2011. Benoit Michau. France Telecom. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -28,89 +28,38 @@
 
 #!/usr/bin/env python
 
-from libmich.core.element import Bit, Int, Str, Layer, show, debug
+__all__ = ['ASSIGNMENT_COMMAND', 'ASSIGNMENT_COMPLETE', 'ASSIGNMENT_FAILURE',
+           'CHANNEL_RELEASE', 'CHANNEL_REQUEST', 'MEASUREMENT_REPORT',
+           'CLASSMARK_ENQUIRY', 'CLASSMARK_CHANGE',
+           'CIPHERING_MODE_COMMAND', 'CIPHERING_MODE_COMPLETE',
+           'IMMEDIATE_ASSIGNMENT', 'PAGING_REQUEST_1', 'PAGING_REQUEST_2',
+           'PAGING_REQUEST_3', 'PAGING_RESPONSE',
+           'SI_1', 'SI_2', 'SI_2bis', 'SI_2ter', 'SI_2quater', 'SI_3',
+           'SI_4', 'SI_5', 'SI_5bis', 'SI_5ter', 'SI_6', 'SI_13',
+           'RestOctets', 'GSM_RR_dict']
+
+# convinience
+#from binascii import unhexlify as unh
+#
+from libmich.core.element import Bit, Int, Str, Layer, show, showattr, log, \
+    ERR, WNG, DBG
 from libmich.core.IANA_dict import IANA_dict
-from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, \
-     Type4_LV, Type4_TLV, PD_dict, Layer3
+from L3Mobile_24007 import *
+from L2GSM import LengthRR
+from L3Mobile_MM import CKSN_dict
+from L3Mobile_IE import ID, LAI, MSCm2, MSCm3
+from L3GSM_IE import *
+from L3GSM_rest import *
 
 
-# TS 44.006 defines data link format
-# which carry signalling for 2G mobile networks
-#
-# section 5: 
-# Frame structure for p2p communication
-#
-# It's going to rock! (again...)
-#
-# 44006, section 5.1
-# frame Bbis, for BCCH, PCH, NCH, AGCH
-# this is what gsm-receiver gets by default
-#
+######
 # TS 44.018 defines Radio Ressource Control protocol
 # which is carried over the data-link
 #
 # section 8: basic structures
 # section 9: messages stuctures (pffff...)
 # section 10: general aspect and IE coding
-
-# Defining a Str class that will handle '2b' padding
-class StrRR(Str):
-    _padding_byte = '\x2b'
-    
-    # building basic methods for manipulating easily the Element from its attributes
-    def __call__(self):
-        # when Len has fixed value:
-        if self.LenFunc is not None:
-            if self.safe: assert(type(self.LenFunc(self.Len)) is int)
-            l = self.LenFunc(self.Len)
-        elif type(self.Len) is int: 
-            l = self.Len
-        else: 
-            l = None
-        # when no values are defined at all:
-        if self.Val is None and self.Pt is None: 
-            if l: return l * self._padding_byte
-            else: return ''
-        # returning the right string:
-        # if defined, self.Val overrides self.Pt capabilities
-        elif self.Val is not None: 
-            return str(self.Val)[:l]
-        # else: use self.Pt capabilities to get the string
-        elif self.PtFunc is not None: 
-            if self.safe: 
-                assert( type(self.PtFunc(self.Pt)) is str )
-            return self.PtFunc(self.Pt)[:l]
-        else:
-            if self.safe: 
-                assert( type(self.Pt) is str )
-            return str(self.Pt)[:l]
-
-
-# Actually, this is not truly part of L3, but from the 
-# data link layer
-#
-# 44006, section 6.2
-# Address field
-class AddressRR(Layer):
-    constructorList = [
-        Bit('spare', Pt=0, BitLen=1),
-        Bit('LPD', Pt=0, BitLen=2),
-        Bit('SAPI', Pt=0, BitLen=4),
-        Bit('CR', ReprName='Command / Response', Pt=0, BitLen=1),
-        Bit('EA', ReprName='No extension', Pt=1, BitLen=1)]
-
-# 44006, section 6.6
-# Length indicator field
-class LengthRR(Layer):
-    constructorList = [
-        Bit('len', Pt=0, BitLen=6),
-        Bit('M', ReprName='More data bit', Pt=0, BitLen=1),
-        Bit('EL', ReprName='Length field not extended', Pt=1, BitLen=1)]
-
-
-
 ##################
-# This is truly L3
 # 44018, section 10.1
 # Header field
 #
@@ -119,12 +68,12 @@ class LengthRR(Layer):
 GSM_RR_dict = {
     0:'SYSTEM INFORMATION TYPE 13',
     1:'SYSTEM INFORMATION TYPE 14',
-    2:'SYSTEM INFORMATION TYPE 2bis',
-    3:'SYSTEM INFORMATION TYPE 2ter',
+    2:'SYSTEM INFORMATION TYPE 2 bis',
+    3:'SYSTEM INFORMATION TYPE 2 ter',
     4:'SYSTEM INFORMATION TYPE 9',
-    5:'SYSTEM INFORMATION TYPE 5bis',
-    6:'SYSTEM INFORMATION TYPE 5ter',
-    7:'SYSTEM INFORMATION TYPE 2quater',
+    5:'SYSTEM INFORMATION TYPE 5 bis',
+    6:'SYSTEM INFORMATION TYPE 5 ter',
+    7:'SYSTEM INFORMATION TYPE 2 quater',
     9:'VGCS UPLINK GRANT',
     10:'PARTIAL RELEASE',
     13:'CHANNEL RELEASE',
@@ -137,7 +86,7 @@ GSM_RR_dict = {
     20:'FREQUENCY REDEFINITION',
     21:'MEASUREMENT REPORT',
     22:'CLASSMARK CHANGE',
-    22:'MBMS ANNOUNCEMENT',
+    #22:'MBMS ANNOUNCEMENT',
     23:'CHANNEL MODE MODIFY ACKNOWLEDGE',
     24:'SYSTEM INFORMATION TYPE 8',
     25:'SYSTEM INFORMATION TYPE 1',
@@ -181,8 +130,8 @@ GSM_RR_dict = {
     65:'SYSTEM INFORMATION TYPE 19',
     66:'SYSTEM INFORMATION TYPE 20',
     67:'SYSTEM INFORMATION TYPE 15',
-    68:'SYSTEM INFORMATION TYPE 13alt',
-    69:'SYSTEM INFORMATION TYPE 2n',
+    68:'SYSTEM INFORMATION TYPE 13 alt',
+    69:'SYSTEM INFORMATION TYPE 2 n',
     70:'SYSTEM INFORMATION TYPE 21',
     72:'DTM ASSIGNMENT FAILURE',
     73:'DTM REJECT',
@@ -236,7 +185,6 @@ class Header(Layer):
         self.PD.Pt = prot
         self.Type.Pt = type
 
-
 ##################
 # 44018, section 9
 # RRC messages
@@ -245,7 +193,7 @@ class Header(Layer):
 # 44018, section 9.1.2
 class ASSIGNMENT_COMMAND(Layer3):
     '''
-    Net -> ME
+    Net -> ME (in DCCH)
     Dual
     # content #
     ChanDesc2: description of the 1st channel, after time, 3 bytes
@@ -255,110 +203,246 @@ class ASSIGNMENT_COMMAND(Layer3):
     constructorList = [ie for ie in Header(6, 46)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend( \
-            [Str('ChanDesc2', ReprName='Chann Description 2', Pt='\0\0\0', \
-                 Len=3),
-             Str('PowCmd', ReprName='Power Command', Pt='\0', Len=1),
-             Type4_TLV('FreqList', ReprName='Frequency list, after time', \
-                       T=0x05, V='\0\0'),
-             Type3_TV('CellChanDesc', ReprName='Cell Channel description', \
-                      T=0x62, V=16*'\0', len=16),
-             Type4_TLV('MultAlloc', ReprName='Multi-slot allocation', \
-                       T=0x10, V='\0'),
-             Type3_TV('ChanSet1', ReprName='Channel Set 1', T=0x63, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet2', ReprName='Channel Set 2', T=0x11, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet3', ReprName='Channel Set 3', T=0x13, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet4', ReprName='Channel Set 4', T=0x14, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet5', ReprName='Channel Set 5', T=0x15, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet6', ReprName='Channel Set 6', T=0x16, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet7', ReprName='Channel Set 7', T=0x17, \
-                      V='\0', len=1),
-             Type3_TV('ChanSet8', ReprName='Channel Set 8', T=0x18, \
-                      V='\0', len=1),
-             Type3_TV('ChanDesc2', ReprName='2nd channel description, after time', \
-                      T=0x64, V='\0\0\0', len=3),
-             Type3_TV('ChanMod2', ReprName='Channel Mode 2', T=0x64, \
-                      V='\0', len=1),
-             Type4_TLV('MobAlloc', ReprName='Mobile allocation', T=0x72, \
-                       V='\0'),
-             Type3_TV('Start', ReprName='Starting time', T=0x7C, \
-                      V='\0\0', len=2),
-             Type4_TLV('FreqListB', ReprName='Frequency list, before time', \
-                       T=0x19, V='\0\0'),
-             Type3_TV('ChanDescB', ReprName='1st channel description, before time', \
-                      T=0x1C, V='\0\0\0', len=3),
-             Type3_TV('ChanDesc2B', ReprName='2nd channel description, before time', \
-                      T=0x1D, V='\0\0\0', len=3),
-             Type3_TV('FreqChanSeq', ReprName='Frequency channel sequence', \
-                      T=0x1E, V=9*'\0', len=9),
-             Type4_TLV('MobAllocB', ReprName='Mobile allocation, before time', \
-                       T=0x21, V='\0'),
-             Type2('CiphMod', ReprName='Cipher mode setting', T=0x09),
-             Type4_TLV('VGCSind', ReprName='VGCS target mode indication', \
-                       T=0x01, V='\0'),
-             Type4_TLV('MRconf', ReprName='Multi-rate config', T=0x03, V='\0\0'),
-             Type4_TLV('VGCSciph', ReprName='VGCS ciphering parameters', \
-                       T=0x04, V='\0')])
+        self.extend([ \
+            Str('ChanDesc', ReprName='Channel Description 2', Pt=ChanDesc(), \
+                Len=3), # TODO: check 10.5.2.5a, with diff TDMAoff_dict
+            Str('PowCmd', ReprName='Power Command', Pt='\0', Len=1),
+            Type4_TLV('FreqList', ReprName='Frequency list, after time', \
+                      T=0x05, V='\0\0'),
+            Type3_TV('CellChan', ReprName='Cell Channel description', \
+                     T=0x62, V=CellChan(), Len=16),
+            Type4_TLV('MultAlloc', ReprName='Multi-slot allocation', \
+                      T=0x10, V='\0'),
+            Type3_TV('ChanSet1', ReprName='Channel Set 1', T=0x63, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet2', ReprName='Channel Set 2', T=0x11, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet3', ReprName='Channel Set 3', T=0x13, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet4', ReprName='Channel Set 4', T=0x14, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet5', ReprName='Channel Set 5', T=0x15, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet6', ReprName='Channel Set 6', T=0x16, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet7', ReprName='Channel Set 7', T=0x17, \
+                     V='\0', Len=1),
+            Type3_TV('ChanSet8', ReprName='Channel Set 8', T=0x18, \
+                     V='\0', Len=1),
+            Type3_TV('ChanDesc_2', ReprName='2nd channel description, ' \
+                     'after time', T=0x64, V=ChanDesc(), Len=3),
+            Type3_TV('ChanMod2', ReprName='Channel Mode 2', T=0x64, \
+                     V='\0', Len=1),
+            Type4_TLV('MobAlloc', ReprName='Mobile allocation', T=0x72, \
+                      V=MobAlloc()),
+            Type3_TV('Start', ReprName='Starting time', T=0x7C, \
+                     V='\0\0', Len=2),
+            Type4_TLV('FreqListB', ReprName='Frequency list, before time', \
+                      T=0x19, V='\0\0'),
+            Type3_TV('ChanDesc_3', ReprName='1st channel description, ' 
+                     'before time', T=0x1C, V=ChanDesc(), Len=3),
+            Type3_TV('ChanDesc2B', ReprName='2nd channel description, ' \
+                     'before time', T=0x1D, V='\0\0\0', Len=3),
+            Type3_TV('FreqChanSeq', ReprName='Frequency channel sequence', \
+                     T=0x1E, V=9*'\0', Len=9),
+            Type4_TLV('MobAlloc', ReprName='Mobile allocation, before time', \
+                      T=0x21, V=MobAlloc()),
+            Type2('CiphMod', ReprName='Cipher mode setting', T=0x09),
+            Type4_TLV('VGCSind', ReprName='VGCS target mode indication', \
+                      T=0x01, V='\0'),
+            Type4_TLV('MRconf', ReprName='Multi-rate config', \
+                      T=0x03, V='\0\0'),
+            Type4_TLV('VGCSciph', ReprName='VGCS ciphering parameters', \
+                      T=0x04, V='\0')])
         self._post_init(with_options)
 
 # 44018, section 9.1.3
 class ASSIGNMENT_COMPLETE(Layer3):
     '''
-    ME -> Net
+    ME -> Net (in DCCH)
     Dual
     # content #
     RR Cause is 1 byte
     '''
-    constructorList = [ie for ie in Header(6, 41)]
-    def __init__(self, with_options=True):
-        Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')])
+    constructorList = [ie for ie in Header(6, 41)] + \
+        [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')]
  
 # 44018, section 9.1.4
 class ASSIGNMENT_FAILURE(Layer3):
     '''
-    ME -> Net
+    ME -> Net (in DCCH)
     Dual
     # content #
     RR Cause is 1 byte
     '''
-    constructorList = [ie for ie in Header(6, 47)]
-    def __init__(self, with_options=True):
-        Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')])
+    constructorList = [ie for ie in Header(6, 47)] + \
+        [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')]
 
 # 44018, section 9.1.7
 class CHANNEL_RELEASE(Layer3):
     '''
-    Net -> ME
+    Net -> ME (in DCCH)
     Dual
-    # content #
-    
     '''
-    constructorList = [ie for ie in Header(6, 13)]
+    constructorList = [ie for ie in Header(6, 13)] + \
+        [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')]
+        # TODO: add optional IE during __init__()
+
+# 44.018, section 9.1.12
+class CLASSMARK_ENQUIRY(Layer3):
+    '''
+    Net -> ME (in DCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in Header(6, 19)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')])
-#
+        self.extend([ \
+            Type4_TLV('CmEnq', ReprName='Classmark Enquiry mask', T=0x10, \
+                       V=CmEnq())])
+        self._post_init(with_options)
 
+# 44.018, section 9.1.
+class CLASSMARK_CHANGE(Layer3):
+    '''
+    ME -> Net (in DCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in Header(6, 22)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Type4_LV('MSCm2', V=MSCm2()), # in L3Mobile_IE.py
+            Type4_TLV('MSCm3', T=0x20, V='\0\0\0\0\0\0\0')]) # in L3Mobile_IE.py, CSN1 field
+        self._post_init(with_options)
+
+# 44018, section 9.1.9
+AlgId_dict = {
+    0 : 'A5/1',
+    1 : 'A5/2',
+    2 : 'A5/3',
+    3 : 'A5/4',
+    4 : 'A5/5',
+    5 : 'A5/6',
+    6 : 'A5/7',
+    7 : 'reserved',
+    }
+StCiph_dict = {
+    0 : 'No ciphering',
+    1 : 'Start ciphering',
+    }
+CiphRes_dict = {
+    0 : 'IMEISV shall not be included',
+    1 : 'IMEISV shall be included',
+    }
+class CIPHERING_MODE_COMMAND(Layer3):
+    '''
+    Net -> ME (in DCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in Header(6, 53)] + [ \
+        Bit('AlgId', ReprName='Algorithm Identifier', Pt=0, BitLen=3, \
+            Repr='hum', Dict=AlgId_dict),
+        Bit('SC', ReprName='Start Ciphering', Pt=0, BitLen=1, \
+            Repr='hum', Dict=StCiph_dict),
+        Bit('spare', Pt=0, BitLen=3, Repr='hex'),
+        Bit('CMRes', ReprName='Cipher Mode Response', Pt=0, BitLen=1, \
+            Repr='hum', Dict=CiphRes_dict)
+        ]
+
+# 44018, section 9.1.10
+class CIPHERING_MODE_COMPLETE(Layer3):
+    '''
+    ME -> Net (in DCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in Header(6, 50)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([Type4_TLV('ID', T=0x17, V=ID())])
+        self._post_init(with_options)
+
+
+# 44.018, section 9.1.8
+# establishment cause can be 3 to 6 bits length
+# depending if NECI bit is set by he network: 4 or 6 bits length
+# or not set: 3 or 4 bits length
+#ChanReqNoNECI_dict = {
+#    5 : 'Emergency call',
+#    6 : 'Call re-establishment; TCH/F or TCH/H was in use',
+#    4 : 'Answer to paging',
+#    3 : 'Answer to paging (dual rate)',
+#    2 : 'Answer to paging (dual rate)',
+#    1 : 'Answer to paging (SDCCH)', 
+#    7 : 'Originating call, or procedures that can be completed with a SDCCH',
+#    0 : 'Location updating',
+#    }
+#ChanReqNECI_dict = {
+#    5 : 'Emergency call',
+#    6 : 'Call re-establishment; TCH/F was in use',
+#    26 : 'Call re-establishment; TCH/H was in use',
+#    27 : 'Call re-establishment; TCH/H + TCH/H was in use',
+#    4 : 'Answer to paging',
+#    3 : 'Answer to paging (dual rate)',
+#    2 : 'Answer to paging (dual rate)',
+#    1 : 'Answer to paging (SDCCH)',
+#    7 : 'Originating call and TCH/F is needed',
+#    #4: 'Originating speech call from dual rate mobile station when TCH/H is sufficient and supported by the MS for speech calls',
+#    #5: 'Originating data call from dual rate mobile station when TCH/H	is sufficient and supported by the MS for data calls',
+#    0 : 'Location updating',
+#    #1: '',
+#    }
+class CHANNEL_REQUEST(Layer3):
+    '''
+    ME -> Net (in RACH)
+    '''
+    constructorList = [
+        Bit('estab', ReprName='Establishment cause', Pt=7, BitLen=3, \
+            Repr='hum'),
+        Bit('ra', ReprName='Random reference', BitLen=5, Repr='hum')
+        ]
+    # TODO: check how to deal with this mess of a bit-length...
+    # we need stateful (NECI from SI_3 or SI_4)
+    # anyway, we dont need to implement that crap into this lib !
+
+# 44018, section 9.1.21
+class MEASUREMENT_REPORT(Layer3):
+    '''
+    ME -> Net (in SACCH)
+    Dual
+    '''
+    constructorList = [ie for ie in Header(6, 21)] + \
+        [Str('MeasRes', ReprName='Measurement Results', \
+             Pt=MeasRes(build_auto=True), Len=16)]
+
+# 44.018, section 10.5.2.26
+Page_dict = {
+    0 : 'Normal paging',
+    1 : 'Extended paging',
+    2 : 'Paging reorganization',
+    3 : 'Same as before',
+    }
+# 44.018, section 10.5.2.25b: dedicated chan assignment (for voice ?), 
+# or TBF (for GPRS)
+Dedic_dict = {
+    0 : 'dedicated mode resource assignment',
+    1 : 'uplink TBF assignment or second message of two in a two-message ' \
+        'assignment of an uplink or downlink TBF',
+    3 : 'downlink TBF assignment to the mobile station identified in ' \
+        'the IA Rest Octets IE',
+    5 : 'first message of two in a two-message assignment of an uplink TBF',
+    7 : 'first message of two in a two-message assignment of a downlink TBF ' \
+        'to the mobile station identified in the IA Rest Octets IE',
+    }
 
 # 44018, section 9.1.18
 class IMMEDIATE_ASSIGNMENT(Layer3):
     '''
-    Net -> ME
+    Net -> ME (in CCCH)
     Dual
     # content #
     Page mode: 4 bits
-    Dedicated mode: 4 bits, can be ignore by ME
+    Dedicated mode: 4 bits,
     Channel description: 3 bytes, conditional to Dedicated mode
     Packet channel description: 3 bytes, conditional to Dedicated mode
     ... options ...
@@ -366,59 +450,341 @@ class IMMEDIATE_ASSIGNMENT(Layer3):
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 63)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('Page', ReprName='Page mode', Pt=0, BitLen=4),
-             Bit('Dedi', ReprName='Dedicated mode or TBF', Pt=0, BitLen=4),
-             Str('ChanDesc', ReprName='Channel description', \
-                 Pt='\0\0\0', Len=3),
-             Str('pChanDesc', ReprName='Packet channel description', \
-                Pt='\0\0\0', Len=3),
-             Str('ReqRef', ReprName='Request reference', Pt='\0\0\0', \
-                 Len=3),
-             Str('TimeAdv', ReprName='Timing advance', Pt='\0', Len=1),
-             Type4_LV('MobAlloc', ReprName='Mobile allocation', V=''),
-             Type3_TV('Start', ReprName='Starting time', T=0x7C, \
-                      V='\0\0', ),
-             StrRR('IArest', ReprName='IA rest octets')])
+        self.extend([ \
+            Bit('Dedicated', ReprName='Dedicated mode or TBF', Pt=0, \
+                BitLen=4, Repr='hum', Dict=Dedic_dict),
+            Bit('Page', ReprName='Page mode', Pt=0, BitLen=4, Repr='hum', \
+                Dict=Page_dict),
+            Str('ChanDesc', ReprName='Channel description', \
+                Pt=ChanDesc(), Len=3), # 44018, 10.5.2.5, in L3GSM_IE.py
+            Str('PChanDesc', ReprName='Packet channel description', \
+                Pt=PChanDesc(build_auto=True), Len=3), # TODO: 44018, 10.5.2.25a
+            Str('ReqRef', ReprName='Request reference', Pt=ReqRef(), \
+                Len=3), # TODO: 44018, 10.5.2.30
+            Int('TimeAdv', ReprName='Timing Advance', Pt=0, Type='uint8'),
+            Type4_LV('MobAlloc', ReprName='Mobile allocation', \
+                     V=''), # 44018, 10.5.2.21, in L3GSM_IE.py
+            Type3_TV('Start', ReprName='Starting time', T=0x7C, \
+                     V='\0\0', Len=2), # 44018, 10.5.2.38
+            StrRR('IARestOctets', Repr='hex')]) # 44018, 10.5.2.16
         self._post_init(with_options)
-        # Now, automatic fields
-        # L2 pseudo header
-        self.len.Pt = (self.MobAlloc, self.Start)
-        self.len.PtFunc = lambda L: sum(map(len, L))+14
-        self.IArest.Len = self.len
-        self.IArest.LenFunc = lambda l: 22-l()-len(l)
-        # TODO: handle correctly dedicated chan assignment and IE
-        self.ChanDesc.Trans = self.Dedi
-        self.ChanDesc.TransFunc = lambda dedi: False
-        self.pChanDesc.Trans = self.Dedi
-        self.pChanDesc.TransFunc = lambda dedi: False
+        # L2 pseudo header automation
+        self.len.Pt = (self.ChanDesc, self.PChanDesc, self.MobAlloc, self.Start)
+        self.len.PtFunc = lambda x: sum(map(len, x))+7
+        self.IARestOctets.Len = self.len
+        self.IARestOctets.LenFunc = lambda l: 22-l()
+        # Handling of packet / CS dedicated chan assignment
+        self.ChanDesc.Trans = self.Dedicated
+        self.ChanDesc.TransFunc = lambda dedi: False if dedi() == 0 else True
+        self.PChanDesc.Trans = self.Dedicated
+        self.PChanDesc.TransFunc = lambda dedi: False if dedi() in (1,3,5,7) \
+                                                else True
 
 # 44018, section 9.1.22
+ChanNeed_dict = {
+    0 : 'Any channel',
+    1 : 'SDCCH',
+    2 : 'TCH/F (Full rate)',
+    3 : 'TCH/H or TCH/F (Dual rate)'
+    }
 class PAGING_REQUEST_1(Layer3):
     '''
-    Net -> ME
+    Net -> ME (in CCCH)
     Dual
     # content #
     Page mode: 4 bits
-    
     ... options ...
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 33)]
     def __init__(self, with_options=True):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('Page', ReprName='Page mode', Pt=0, BitLen=4),
-             Bit('ChanNeed', ReprName='Channel needed', Pt=0, BitLen=4),
-             Type4_LV('ID', V=ID()),
-             Type4_TLV('ID2', T=0x17, V=ID()),
-             StrRR('IArest', ReprName='IA rest octets')])
+        self.extend([ \
+            Bit('ChanNeedID2', ReprName='Channel needed', Pt=1, BitLen=2, \
+               Dict=ChanNeed_dict, Repr='hum'), # 10.5.2.8
+            Bit('ChanNeedID1', ReprName='Channel needed', Pt=1, BitLen=2, \
+               Dict=ChanNeed_dict, Repr='hum'), # 10.5.2.8
+            Bit('Page', ReprName='Page mode', Pt=0, BitLen=4, \
+               Dict= Page_dict, Repr='hum'), # 10.5.2.26
+            Type4_LV('ID', V=ID()), # never IMEI, in L3Mobile_IE.py
+            Type4_TLV('ID_2', T=0x17, V=ID()), # never IMEI, in L3Mobile_IE.py
+            StrRR('P1RestOctets', Repr='hex')])
+        self._post_init(with_options)
+        # L2 pseudo header automation
+        self.len.Pt = (self.ID, self.ID_2)
+        self.len.PtFunc = lambda x: sum(map(len, x))+3
+        self.P1RestOctets.Len = self.len
+        self.P1RestOctets.LenFunc = lambda l: 22-l()
+
+# 44018, section 9.1.23
+class PAGING_REQUEST_2(Layer3):
+    '''
+    Net -> ME (in CCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 34)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Bit('ChanNeedID2', ReprName='Channel needed', Pt=1, BitLen=2, \
+               Dict=ChanNeed_dict, Repr='hum'), # 10.5.2.8
+            Bit('ChanNeedID1', ReprName='Channel needed', Pt=1, BitLen=2, \
+               Dict=ChanNeed_dict, Repr='hum'), # 10.5.2.8
+            Bit('Page', ReprName='Page mode', Pt=0, BitLen=4, \
+               Dict=Page_dict, Repr='hum'), # 10.5.2.26
+            # only TMSI / P-TMSI, 10.5.2.42, for the 2 mandatory IDs
+            Str('TMSI_1', Pt='\0\0\0\0', Len=4, Repr='hex'),
+            Str('TMSI_2', Pt='\0\0\0\0', Len=4, Repr='hex'),
+            Type4_TLV('ID', T=0x17, V=ID()), # can be MBMS, but never IMEI
+            StrRR('P2RestOctets', Repr='hex')])
         self._post_init(with_options)
         # Now, automatic fields
         # L2 pseudo header
-        self.len.Pt = (self.ID, self.ID2)
-        self.len.PtFunc = lambda L: sum(map(len, L))+3
-        self.IArest.Len = self.len
-        self.IArest.LenFunc = lambda l: 22-l()-len(l)
+        self.len.Pt = self.ID
+        self.len.PtFunc = lambda i:  len(i)+11
+        self.P2RestOctets.Len = self.len
+        self.P2RestOctets.LenFunc = lambda l: 22-l()
 
+# 44018, section 9.1.24
+class PAGING_REQUEST_3(Layer3):
+    '''
+    Net -> ME (in CCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 36)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Bit('ChanNeedID2', ReprName='Channel needed', Pt=1, BitLen=2, \
+               Dict=ChanNeed_dict, Repr='hum'), # 10.5.2.8
+            Bit('ChanNeedID1', ReprName='Channel needed', Pt=1, BitLen=2, \
+               Dict=ChanNeed_dict, Repr='hum'), # 10.5.2.8
+            Bit('Page', ReprName='Page mode', Pt=0, BitLen=4, \
+               Dict=Page_dict, Repr='hum'), # 10.5.2.26
+            # only TMSI / P-TMSI, 10.5.2.42, for the 4 mandatory IDs
+            Str('TMSI_1', Pt='\0\0\0\0', Len=4, Repr='hex'),
+            Str('TMSI_2', Pt='\0\0\0\0', Len=4, Repr='hex'),
+            Str('TMSI_3', Pt='\0\0\0\0', Len=4, Repr='hex'),
+            Str('TMSI_4', Pt='\0\0\0\0', Len=4, Repr='hex'),
+            StrRR('P3RestOctets', Len=3, Repr='hex')]) # 10.5.2.25
+        self.len.Pt = 19
 
+# 44018, section 9.1.25
+class PAGING_RESPONSE(Layer3):
+    '''
+    ME -> Net (in DCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in Header(6, 39)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Bit('spare', Pt=0, BitLen=4),
+            Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
+                Pt=0, BitLen=4, Dict=CKSN_dict), # 10.5.1.2, see L3Mobile_MM.py
+            Type4_LV('MSCm2', V=MSCm2()), # in L3Mobile_IE.py
+            Type4_LV('ID', V=ID())]) # in L3Mobile_IE.py
 
+# 44018, section 9.1.31
+class SI_1(Layer3):
+    '''
+    Net -> ME (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 25)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('CellChan', ReprName='Cell Channel Description', \
+                Pt=CellChan(), Len=16), # 44018, 10.5.2.1b, in L3Mobile_RR.py
+            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+                Len=3), # 44018, 10.5.2.29, in L3Mobile_RR.py
+            # rest octet is purely padding: 2b
+            StrRR('SI1RestOctets', Len=1, Repr='hex')]) # 10.5.2.32
+        self.len.Pt = 21
+
+# 44018, section 9.1.32
+class SI_2(Layer3):
+    '''
+    Net -> ME (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 26)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('BCCHFreq', ReprName='Neighbour Cell Description', \
+                Pt=BCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
+            Bit('NCCPerm', ReprName='NCC Permitted', Pt=255, BitLen=8, \
+                Repr='bin'), # 44018, 10.5.2.27
+            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+                Len=3)]) # 44018, 10.5.2.29, in L3GSM_IE.py
+        self.len.Pt = 22
+
+# 44018, section 9.1.33
+# message to be ignored by P-GSM 900 band only mobiles
+class SI_2bis(Layer3):
+    '''
+    Net -> ME (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 2)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('ExtBCCHFreq', ReprName='Neighbour Cell Description', \
+                Pt=ExtBCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
+            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+                Len=3), # 44018, 10.5.2.29, in L3GSM_IE.py
+            StrRR('SI2bisRestOctets', Len=1, Repr='hex')]) # 10.5.2.33
+        self.len.Pt = 21
+
+# 44018, section 9.1.34
+# message to be ignored by P-GSM 900 band or DCS 1800 band only mobiles
+class SI_2ter(Layer3):
+    '''
+    Net -> ME (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 3)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('ExtBCCHFreq', ReprName='Neighbour Cell Description', \
+                Pt=ExtBCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
+            StrRR('SI2terRestOctets', Len=4, Repr='hex')]) # 10.5.2.33a
+        self.len.Pt = 18
+
+# 44018, section 9.1.34a
+# info on UTRAN, E-UTRAN and 3G/4G CSG cells
+class SI_2quater(Layer3):
+    '''
+    Net -> ME (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 7)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            StrRR('SI2quaterRestOctets', Len=20, Repr='hex')]) # 10.5.2.33b
+        self.len.Pt = 1
+
+# 44018, section 9.1.35
+class SI_3(Layer3):
+    '''
+    Net -> ME  (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 27)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('CellID', Pt='\0\0', ReprName='Cell identity', Len=2, \
+                Repr='hex'), # 44018, 10.5.1.1
+            Str('LAI', ReprName='Location Area Identity', Pt=LAI(), \
+                Len=5), # 44018, 10.5.1.3, in L3Mobile_IE.py
+            Str('CChanDesc', ReprName='Control Channel Description', \
+                Pt=CChanDesc(), Len=3), # 44018, 10.5.2.11, in L3GSM_IE.py
+            Str('CellOpt', ReprName='Cell Options (BCCH)', Pt=CellOpt(), \
+                Len=1), # 44018, 10.5.2.3, in L3GSM_IE.py
+            Str('CellSel', ReprName='Cell Selection Parameters', \
+                Pt=CellSel(), Len=2), # 44018, 10.5.2.4
+            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+                Len=3), # 44018, 10.5.2.29
+            StrRR('SI3RestOctets', Len=4, Repr='hex')]) # 44018, 10.5.2.33a
+        self.len.Pt = 18
+        if hasattr(self.CellSel, 'ACS'): self.CellSel.ACS.Dict = ACS_SI3_dict
+            
+
+# 44018, section 9.1.36
+class SI_4(Layer3):
+    '''
+    Net -> ME  (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 28)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('LAI', ReprName='Location Area Identity', Pt=LAI(), Len=5, \
+                Repr='hex'), # 44018, 10.5.1.3, in L3Mobile_IE.py
+            Str('CellSel', ReprName='Cell Selection Parameters', \
+                Pt=CellSel(), Len=2), # 44018, 10.5.2.4
+            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+                Len=3), # 44018, 10.5.2.29, in L3GSM_IE.py
+            Type3_TV('ChanDesc', ReprName='CBCH Channel Description', T=0x7C, \
+                V=ChanDesc(), Len=3), # 44018, 10.5.2.5, in L3GSM_IE.py
+            Type4_TLV('MobAlloc', ReprName='CBCH Mobile Allocation', T=0x72, \
+                V=MobAlloc()), # 44018, 10.5.2.21, in L3GSM_IE.py
+            StrRR('SI4RestOctets', Repr='hex')]) # 44018, 10.5.2.35
+        self._post_init(with_options)
+        if hasattr(self.CellSel, 'ACS'): self.CellSel.ACS.Dict = ACS_SI4_dict
+        # L2 pseudo header automation
+        self.len.Pt = self.MobAlloc
+        self.len.PtFunc = lambda m: len(m)+16
+        self.SI4RestOctets.Len = self.len
+        self.SI4RestOctets.LenFunc = lambda l: 22-l()
+
+class SI_5(Layer3):
+    '''
+    Net -> ME (in SACCH)
+    Dual
+    '''
+    # no LengthRR as it will come from LAPDm (see L2GSM)
+    constructorList = [ie for ie in Header(6, 29)] + \
+        [Str('BCCHFreq', ReprName='Neighbour Cell Description', \
+             Pt=BCCHFreq(), Len=16)] # 44018, 10.5.2.22a, in L3GSM_IE.py
+
+class SI_5bis(Layer3):
+    '''
+    Net -> ME (in SACCH)
+    Dual
+    '''
+    # no LengthRR as it will come from LAPDm (see L2GSM)
+    constructorList = [ie for ie in Header(6, 5)] + \
+        [Str('BCCHFreq', ReprName='Neighbour Cell Description', \
+             Pt=BCCHFreq(), Len=16)] # 44018, 10.5.2.22, in L3GSM_IE.py
+
+class SI_5ter(Layer3):
+    '''
+    Net -> ME (in SACCH)
+    Dual
+    '''
+    # no LengthRR as it will come from LAPDm (see L2GSM)
+    constructorList = [ie for ie in Header(6, 6)] + \
+        [Str('ExtBCCHFreq', ReprName='Extended Neighbour Cell Description', \
+             Pt=ExtBCCHFreq(), Len=16)] # 44018, 10.5.2.22a, in L3GSM_IE.py
+
+class SI_6(Layer3): 
+    '''
+    Net -> ME (in SACCH)
+    Dual
+    '''
+    # no LengthRR as it will come from LAPDm (see L2GSM)
+    constructorList = [ie for ie in Header(6, 30)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('CellID', Pt='\0\0', ReprName='Cell identity', Len=2, \
+                Repr='hex'), # 44018, 10.5.1.1
+            Str('LAI', ReprName='Location Area Identity', Pt=LAI(), \
+                Len=5), # 44018, 10.5.1.3, in L3Mobile_IE.py
+            Str('CellOpt', ReprName='Cell Options (BCCH)', Pt=CellOpt(), \
+                Len=1), # 44018, 10.5.2.3, in L3GSM_IE.py
+            Bit('NCCPerm', ReprName='NCC Permitted', Pt=255, BitLen=8, \
+                Repr='bin'), # 44018, 10.5.2.27
+            StrRR('SI6RestOctets', Len=7, Repr='hex')]) # 44018, 10.5.2.35a
+        #self.len.Pt = 11 # WTF ! RestOctets are 7 and length should be 11 ?
+        # anyway, length is in LAPDm, not directly into L3...
+
+class SI_13(Layer3):
+    '''
+    Net -> ME  (in BCCH)
+    Dual
+    '''
+    constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 0)]
+    def __init__(self, with_options=True):
+        Layer3.__init__(self)
+        self.extend([ \
+            StrRR('SI13RestOctets', Len=20, Repr='hex')]) # 44018, 10.5.2.33a
+        self.len.Pt = 0
+#

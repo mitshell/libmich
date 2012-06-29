@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
 # * Copyright © 2011. Benoit Michau. France Telecom.
 # *
@@ -162,9 +162,9 @@ CKSN_dict={7:'No key is available (from MS)'\
              '/ reserved (from network)'}
 
 
-################
-# Now, message formats #
-################
+###################
+# message formats #
+###################
 # TS 24.008, section 9
 class Header(Layer):
     constructorList = [
@@ -198,7 +198,6 @@ class IMSI_DETACH_INDICATION(Layer3):
     def __init__(self, with_options=True):
         Layer3.__init__(self)
         self.extend( \
-            #[Str('MSCm1', Pt='\x80', Len=1),
             [Str('MSCm1', Pt=MSCm1(), Len=1),
              Type4_LV('ID', V=ID())])
 
@@ -472,7 +471,7 @@ class CM_REESTABLISHMENT_REQUEST(Layer3):
                  Pt=0, BitLen=4, Dict=CKSN_dict),
              Type4_LV('MSCm2', V=MSCm2()),
              Type4_LV('ID', V=ID()),
-             Type3_TV('LAI', T=0x13, V=LAI(), len=5)])
+             Type3_TV('LAI', T=0x13, V=LAI(), Len=5)])
         self._post_init(with_options)
 
 # section 9.2.8
@@ -509,9 +508,9 @@ class MM_INFORMATION(Layer3):
             [Type4_TLV('NetFullName', T=0x43, V='\0'),
              Type4_TLV('NetShortName', T=0x45, V='\0'),
              Type3_TV('TZ', ReprName='Local Time Zone', T=0x46, \
-                V='\0', len=1),
+                V='\0', Len=1),
              Type3_TV('TZTime', ReprName='Time Zone and Time',\
-                      T=0x47, V='\0\0\0\0\0\0\0', len=7),
+                      T=0x47, V='\0\0\0\0\0\0\0', Len=7),
              Type4_TLV('LSAid', ReprName='Localised Service Area Identity', \
                        T=0x48, V=''),
              Type4_TLV('DTime', ReprName='Daylight Saving Time',\
@@ -540,10 +539,3 @@ class MM_NULL(Layer3):
     -- must not ignored --
     '''
     constructorList = [ie for ie in Header(5, 48)]
-
-#
-
-
-
-
-#

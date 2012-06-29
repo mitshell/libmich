@@ -754,9 +754,9 @@ class Trans(Layer):
         self.tID.Dict = TransformID[int(self.type)]
         return Layer.__repr__(self)
     
-    def show(self):
+    def show(self, with_trans=False):
         self.tID.Dict = TransformID[int(self.type)]
-        return Layer.show(self)
+        return Layer.show(self, with_trans)
     
     def map(self, string=''):
         Layer.map(self, string)
