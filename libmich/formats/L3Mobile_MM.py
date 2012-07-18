@@ -291,8 +291,9 @@ class AUTHENTICATION_REQUEST(Layer3):
             [Bit('spare', Pt=0, BitLen=4),
              Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
                  Pt=0, BitLen=4, Dict=CKSN_dict),
-             Str('RAND', Pt=16*'\0', Len=16),
+             Str('RAND', Pt=16*'\0', Len=16, Repr='hex'),
              Type4_TLV('AUTN', T=0x20, V=16*'\0')])
+        self.AUTN.V.Repr = 'hex'
         self._post_init(with_options)
 
 # section 9.2.3
