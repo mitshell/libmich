@@ -851,11 +851,11 @@ class Bit(Element):
             return 0
         # and standard bit length processing
         if self.BitLenFunc is not None:
-            if self.safe: 
+            if self.safe:
                 assert( type(self.BitLenFunc(self.BitLen)) is int )
             return self.BitLenFunc(self.BitLen)
         else:
-            if self.safe: 
+            if self.safe:
                 assert( type(self.BitLen) is int )
             return self.BitLen
     
@@ -1412,6 +1412,10 @@ class Layer(object):
         s = shtr(string)
         # otherwise go to map() over all elements
         for e in self:
+            if self.dbg >= DBG:
+                log(DBG, '(Layer.__map_unaligned) %s, bit length: %i' \
+                    % (e.CallName, e.bit_len()))
+                log(DBG, '(Layer.__map_unaligned) string: %s' % hexlify(s))
             # this is beautiful
             e.map(s)
             s = s << e.bit_len()
