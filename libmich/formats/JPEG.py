@@ -32,6 +32,7 @@ from libmich.core.element import Str, Int, Bit, Layer, Block, log, \
     DBG, WNG, ERR, show, showattr
 from libmich.core.IANA_dict import IANA_dict
 
+# Segment containing JPEG meta-data
 Seg_dict = IANA_dict({
     
     # reserved markers
@@ -132,16 +133,206 @@ class segment(Layer):
         ]
     
     # these are segment types that have a variable length payload
-    var_len = (0xC0, 0xC2, 0xC4, 0xDA, 0xDB, 0xDD, 224, 225, 226, 227, 228, \
-               229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 0xFE)
+    #_var_len = (0xC0, 0xC2, 0xC4, 0xDA, 0xDB, 0xDD, 224, 225, 226, 227, 228, \
+    #            229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 0xFE)
+    # these are segment types without length / payload
+    _no_pay = (0xD8, 0xD9)
     
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
         self.len.Trans = self.type
-        self.len.TransFunc = lambda t: False if t() in self.var_len else True
+        #self.len.TransFunc = lambda t: False if t() in self._var_len else True
+        self.len.TransFunc = lambda t: True if t() in self._no_pay else False
         self.pay.Len = self.len
         self.pay.LenFunc = lambda l: l()-2
         self.len.Pt = self.pay
         self.len.PtFunc = lambda p: len(p)+2
-
+#
+# Start Of Frame specificities
+class SOF(Layer):
+    constructorList = [
+        Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
+        Int('type', Pt=0xC0, Type='uint8', Repr='hum', Dict=Seg_dict),
+        Int('len', Pt=0, Type='uint16'),
+        Int('P', ReprName='Sample Precision', Pt=0, Type='uint8'),
+        Int('Y', ReprName='Number of lines', Pt=0, Type='uint16'),
+        Int('X', ReprName='Number of sample per line', Pt=0, Type='uint16'),
+        Int('Nf', ReprName='Number of image components in frame', Pt=0, \
+            Type='uint8'),
+        Str('components', Pt=''),
+        ]
     
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.components.Len = self.len
+        self.components.LenFunc = lambda l: l()-8
+        self.len.Pt = self.components
+        self.len.PtFunc = lambda p: len(p)+8
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        if len(self.components) / 3.0 == self.Nf():
+            cpn_s = self.components()
+            self.remove(self.components)
+            while len(cpn_s) > 0:
+                self.append(SOFComponent())
+                self[-1].map(cpn_s)
+                cpn_s = cpn_s[3:]
+
+class SOFComponent(Layer):
+    constructorList = [
+        Int('C', ReprName='Component identifier', Pt=0, Type='uint8'),
+        Bit('H', ReprName='Horizontal sampling factor', Pt=0, BitLen=4, \
+            Repr='hum'),
+        Bit('V', ReprName='Vertical sampling factor', Pt=0, BitLen=4, \
+            Repr='hum'),
+        Int('Tq', ReprName='Quantization table destination selector', Pt=0, \
+            Type='uint8'),
+        ]
+#
+# Start Of Scan specificities
+class SOS(Layer):
+    constructorList = [
+        Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
+        Int('type', Pt=0xDA, Type='uint8', Repr='hum', Dict=Seg_dict),
+        Int('len', Pt=0, Type='uint16'),
+        Int('Nf', ReprName='Number of image components in frame', Pt=0, \
+            Type='uint8'),
+        Str('components', Pt=''),
+        Int('Ss', ReprName='Start of spectral or predictor selection', Pt=0, \
+            Type='uint8'),
+        Int('Se', ReprName='End of spectral selection', Pt=0, Type='uint8'),
+        Bit('Ah', ReprName='Successive approximation bit position high', \
+            Pt=0, BitLen=4, Repr='hum'),
+        Bit('Al', ReprName='Successive approximation bit position low', \
+            Pt=0, BitLen=4, Repr='hum'),
+        ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.components.Len = self.len
+        self.components.LenFunc = lambda l: l()-6
+        self.len.Pt = self.components
+        self.len.PtFunc = lambda p: len(p)+6
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        if len(self.components) / 2.0 == self.Nf():
+            cpn_s = self.components()
+            self.remove(self.components)
+            pos = 4
+            while len(cpn_s) > 0:
+                self.insert(pos, SOSComponent())
+                self[pos].map(cpn_s)
+                cpn_s = cpn_s[2:]
+                pos += 1
+
+class SOSComponent(Layer):
+    constructorList = [
+        Int('Cs', ReprName='Scan component selector', Pt=0, Type='uint8'),
+        Bit('Td', ReprName='DC entropy coding table destination selector', \
+            Pt=0, BitLen=4, Repr='hum'),
+        Bit('Ta', ReprName='AC entropy coding table destination selector', \
+            Pt=0, BitLen=4, Repr='hum'),
+        ]
+
+class data(Layer):
+    constructorList = [ Str('data', Pt='') ]
+
+#
+# JPEG Block, to parse entire JPEG image
+class JPEG(Block):
+    # segment specific processing
+    SEG_SPECIFICS = {
+        # Start Of Frame
+        0xC0 : SOF, 
+        0xC1 : SOF, 
+        0xC2 : SOF, 
+        0xC3 : SOF, 
+        0xC5 : SOF, 
+        0xC6 : SOF, 
+        0xC7 : SOF,
+        0xC8 : SOF, 
+        0xC9 : SOF, 
+        0xCA : SOF, 
+        0xCB : SOF, 
+        0xCD : SOF, 
+        0xCE : SOF, 
+        0xCF : SOF,
+        # Start Of Scan
+        0xDA : SOS,
+        }
+    
+    def __init__(self, ):
+        Block.__init__(self, Name="JPEG")
+        self << segment(type=Seg_dict['SOI'])
+    
+    def parse(self, im=''):
+        self.__init__()
+        self[-1].map(im)
+        im = im[2:]
+        # start by scanning header segments
+        while len(im) > 0:
+            self.append( segment() )
+            self[-1].map(im)
+            # check for segment specific processing
+            # e.g. SOF, SOS...
+            self._chk_segment()
+            #
+            self[-1].set_hierarchy(1)
+            im = im[len(self[-1]):]
+            #
+            # if Start of Scan segment, stop parsing header segment
+            # scan the (compressed) raw data, interleaved marker
+            # and finish with EOI:
+            # 0xFF data byte is always stuffed with a NULL byte
+            # so it shouldn't clash with a segment marker
+            if self[-1].type() == 0xDA:
+                break
+        #
+        m = self._scan_for_marker(im)
+        while m >= 0:
+            # real marker found
+            # get compressed data before the marker
+            if m > 0:
+                self.append( data() )
+                self[-1].map( im[:m] )
+                self[-1].set_hierarchy(1)
+                im = im[m:]
+            # get corresponding marker segment
+            self.append( segment() )
+            self[-1].map(im)
+            self._chk_segment()
+            self[-1].set_hierarchy(1)
+            im = im[len(self[-1]):]
+            # check for more marker
+            m = self._scan_for_marker(im)
+        # finalize
+        if self[-1].type() == Seg_dict['EOI']:
+            self[-1].set_hierarchy(0)
+    
+    def _chk_segment(self):
+        if self.SEG_SPECIFICS.has_key(self[-1].type()):
+            seg_type = self[-1].type()
+            seg_buf = str(self[-1])
+            #seg_hier = self[-1].hierarchy
+            # remove current segment from the JPEG Block
+            self.remove(self.num()-1)
+            # and add an instance of the one more specifics
+            self.append( self.SEG_SPECIFICS[seg_type]() )
+            self[-1].map(seg_buf)
+            #self[-1].set_hierarchy(seg_hier)
+    
+    def _scan_for_marker(self, im=''):
+        offset = 0
+        while True:
+            m = im[offset:].find('\xFF')
+            if m >= 0 and im[offset+m+1] != '\0':
+                # found a real marker
+                return offset+m
+            elif m == -1:
+                # in case no marker is found
+                return -1
+            else:
+                # continue scanning
+                offset += m+2
