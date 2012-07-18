@@ -49,6 +49,9 @@ Addr_len = {0:0, 1:0, 2:2, 3:8}
 class IEEE802154(Block):
     # debugging level:
     dbg=1
+    # global format parameters
+    PHY_INCL = False
+    FCS_INCL = False
     
     def __init__(self):
         Block.__init__(self, Name='IEEE 802.15.4')
@@ -56,7 +59,7 @@ class IEEE802154(Block):
     
     def parse(self, s='', phy_included=True, fcs_included=True):
         #
-        if phy_included:
+        if self.PHY_INCL:
             # insert PHY() preamble and map the buffer to it
             if len(self.layerList) > 0 :
                 self.layerList = []
@@ -82,10 +85,10 @@ class IEEE802154(Block):
         # insert DATA layer
         if len(s) > 2:
             self << Data()
-            if fcs_included: self[-1].map(s[:-2])
+            if self.FCS_INCL: self[-1].map(s[:-2])
             else: self[-1].map(s)
         # insert error detection code (CRC)
-        if fcs_included:
+        if self.FCS_INCL:
             self >> FCS()
             self[-1].map(s[-2:])
             #
@@ -109,6 +112,18 @@ class PHY(Layer):
         self.Length.Pt = self.get_payload
         self.Length.PtFunc = lambda pay: len(pay())
 
+# class Str() with LE representation
+class StrLE(Str):
+    def __repr__(self):
+        # for hex representation, revert byte
+        # 802.15.4 addresses are actually little endian integers
+        if self.Repr == "hex": 
+            h = hex(self)
+            return '0x%s' % h[-2:] + \
+                   ''.join([h[-i-2:-i] for i in range(2, len(h), 2)])
+        else:
+            return Str.__repr__(self)
+    
 class MAC(Layer):
     constructorList = [
         # frame ctrl, 1st byte, LE
@@ -125,10 +140,10 @@ class MAC(Layer):
         Bit('Res', Pt=0, BitLen=2),
         # addressing fields
         Int('SeqNum', Pt=0, Type='uint8', Repr='hum'),
-        Str('DstPANID', Len=2, Repr='hex'),
-        Str('DstAddr', Len=8, Repr='hex'),
-        Str('SrcPANID', Len=2, Repr='hex'),
-        Str('SrcAddr', Len=8, Repr='hex'),
+        StrLE('DstPANID', Len=2, Repr='hex'),
+        StrLE('DstAddr', Len=8, Repr='hex'),
+        StrLE('SrcPANID', Len=2, Repr='hex'),
+        StrLE('SrcAddr', Len=8, Repr='hex'),
         ]
     
     def __init__(self, **kwargs):
