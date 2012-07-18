@@ -341,13 +341,13 @@ class CIPHERING_MODE_COMMAND(Layer3):
     Dual
     '''
     constructorList = [ie for ie in Header(6, 53)] + [ \
+        Bit('spare', Pt=0, BitLen=3, Repr='hex'),
+        Bit('CMRes', ReprName='Cipher Mode Response', Pt=0, BitLen=1, \
+            Repr='hum', Dict=CiphRes_dict),
         Bit('AlgId', ReprName='Algorithm Identifier', Pt=0, BitLen=3, \
             Repr='hum', Dict=AlgId_dict),
         Bit('SC', ReprName='Start Ciphering', Pt=0, BitLen=1, \
             Repr='hum', Dict=StCiph_dict),
-        Bit('spare', Pt=0, BitLen=3, Repr='hex'),
-        Bit('CMRes', ReprName='Cipher Mode Response', Pt=0, BitLen=1, \
-            Repr='hum', Dict=CiphRes_dict)
         ]
 
 # 44018, section 9.1.10
