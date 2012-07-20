@@ -33,6 +33,10 @@
 from libmich.core.element import Bit, Str, Int, Layer, Block, show, debug, \
     log, ERR, WNG, DBG
 from libmich.utils.CRC16 import CRC16
+from binascii import unhexlify, hexlify
+
+def unh(buf):
+    return unhexlify(buf.replace('\n', '').replace(' ', ''))
 
 ###
 #
@@ -195,4 +199,47 @@ class FCS(Layer):
             return ''.join((cs[1], cs[0]))
         else:
             return '\0\0'
+
+###
+# Texas Instrument PSD format
+# Used (AFAIK) by the CC25XY (e.g. CC2531) product line
+# explained in the product documentation from TI: 
+# SmartRF Packet Sniffer User Manual (section 5), freely available
 #
+# 802.15.4 MAC and data are in .Data() Str element
+# PHY is not present, FCS is also not present (in general)
+# buf the boolean FCS indicates FCS verification done by the dongle
+#
+class TI_PSD(Layer):
+    constructorList = [
+        Bit('unused', Pt=0, BitLen=5, Repr='bin'),
+        Bit('Incomp', ReprName='Incomplete packet', Pt=0, BitLen=1, \
+            Repr='hum', Dict=Bool_dict),
+        Bit('Corrinc', ReprName='Correlation used', Pt=0, BitLen=1, \
+            Repr='hum', Dict=Bool_dict),
+        Bit('FCSinc', ReprName='FCS included', Pt=0, BitLen=1, \
+            Repr='hum', Dict=Bool_dict),
+        Int('Pnbr', ReprName='Packet number', Pt=0, Type='uint32'),
+        Int('Ts', ReprName='Timestamp', Pt=0, Type='uint64'),
+        Int('Length', Pt=0, Type='uint8'),
+        Str('Data', Pt='', Repr='hex'),
+        Int('RSSI', Pt=0, Type='int8'),
+        Bit('FCS', ReprName='FCS OK', Pt=0, BitLen=1, Repr='hum', \
+            Dict=Bool_dict),
+        Bit('Corr', ReprName='Correlation value', Pt=0, BitLen=7, \
+            Repr='hum', Trans=True),
+        Bit('LQI', Pt=0, BitLen=7, Repr='hum')
+        ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.Pnbr._endian = 'little'
+        self.Ts._endian = 'little'
+        # Raw data length automation
+        self.Data.Len = self.Length
+        self.Data.LenFunc = lambda l: l()-2 if self.FCSinc() else l()
+        # Corr / LQI selection
+        self.Corr.Trans = self.Corrinc
+        self.Corr.TransFunc = lambda c: False if c() else True
+        self.LQI.Trans = self.Corrinc
+        self.LQI.TransFunc = lambda c: True if c() else False
