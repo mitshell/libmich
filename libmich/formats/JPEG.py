@@ -52,7 +52,7 @@ Seg_dict = IANA_dict({
     0xC7 : ('Start Of Frame (Differential Lossless Sequential)', 'SOF7'),
     
     # non-differential arithmetic coding
-    0xC8 : ('Start Of Frame (Reserved for JPEG extensions', 'JPG'),
+    0xC8 : ('Start Of Frame (Reserved for JPEG extensions)', 'JPG'),
     0xC9 : ('Start Of Frame (Extended Sequential DCT)', 'S0F9'),
     0xCA : ('Start Of Frame (Progressive DCT)', 'SOF10'),
     0xCB : ('Start Of Frame (Lossless Sequential)', 'S0F11'),
@@ -149,7 +149,7 @@ class segment(Layer):
         self.len.PtFunc = lambda p: len(p)+2
 #
 # Start Of Frame specificities
-class SOF(Layer):
+class SOF(segment):
     constructorList = [
         Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
         Int('type', Pt=0xC0, Type='uint8', Repr='hum', Dict=Seg_dict),
@@ -191,7 +191,7 @@ class SOFComponent(Layer):
         ]
 #
 # Start Of Scan specificities
-class SOS(Layer):
+class SOS(segment):
     constructorList = [
         Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
         Int('type', Pt=0xDA, Type='uint8', Repr='hum', Dict=Seg_dict),
@@ -236,6 +236,100 @@ class SOSComponent(Layer):
             Pt=0, BitLen=4, Repr='hum'),
         ]
 
+class DQT(segment):
+    constructorList = [
+        Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
+        Int('type', Pt=0xDB, Type='uint8', Repr='hum', Dict=Seg_dict),
+        Int('len', Pt=0, Type='uint16'),
+        Bit('Pq', ReprName='Quantization table element precision', \
+            Pt=0, BitLen=4, Repr='hum'),
+        Bit('Tq', ReprName='Quantization table destination identifier', \
+            Pt=0, BitLen=4, Repr='hum')] + [ \
+        Bit('Q%i'%k, ReprName='Quantization table element %i'%k, \
+            Pt=1, Repr='hum') for k in range(64) ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        # length automation
+        self.len.Pt = self.Pq
+        self.len.PtFunc = lambda x: sum(map(len, self[5:]))+3
+        # Qk length automation: Pq = 0 -> 8 bits, 1 -> 16 bits
+        for k in range(64):
+            getattr(self, 'Q%i'%k).BitLen = self.Pq
+            getattr(self, 'Q%i'%k).BitLenFunc = self._Qlen
+    
+    def _Qlen(self, pq):
+        return 16 if pq() else 8
+
+class DHT(segment):
+    constructorList = [ 
+        Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
+        Int('type', Pt=0xC4, Type='uint8', Repr='hum', Dict=Seg_dict),
+        Int('len', Pt=0, Type='uint16'),
+        Bit('Tc', ReprName='Huffman table class', Pt=0, BitLen=4, Repr='hum'),
+        Bit('Th', ReprName='Huffman table destination identifier', Pt=0, \
+            BitLen=4, Repr='hum')] + [ \
+        Int('L%i'%i, ReprName='Number of huffman codes of length %i'%i, \
+            Pt=0, Type='uint8') for i in range(1, 17)] + \
+        [Str('V', ReprName='Values for huffman codes of given length', Pt='')]
+        # this is a shortcut for huffman Values
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        # length automation
+        self.len.Pt = self.L1
+        self.len.PtFunc = lambda x: sum(map(len, self[21:]))+19
+        # huffman values length automation
+        self.V.Len = self.L1
+        self.V.LenFunc = lambda x: sum(map(int, self[5:21]))
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        values, pos = self.V(), 0
+        self.remove(self[-1])
+        for i in self[5:21]:
+            for j in range(1, i()+1):
+                ith = int(i.CallName[1:])
+                self.append(\
+                Int('V%i%i'%(ith,j), \
+                    ReprName='Value %i for huffman code of length %i'%(j,ith), \
+                    Val=ord(values[pos]), Type='uint8'))
+                pos += 1
+
+class DAC(segment):
+    constructorList = [ 
+        Int('mark', Pt=0xFF, Type='uint8', Repr='hex'),
+        Int('type', Pt=0xCC, Type='uint8', Repr='hum', Dict=Seg_dict),
+        Int('len', Pt=0, Type='uint16'),
+        Str('pay', Pt='\0\0'),
+        ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        # length automation
+        self.pay.Len = self.len
+        self.pay.LenFunc = lambda l: l()-2
+        self.len.Pt = self.pay
+        self.len.PtFunc = lambda p: len(p)+2
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        if len(self.pay) % 2 == 0:
+            pay = str(self.pay)
+            self.remove(self[-1])
+            while len(pay) > 0:
+                self.append(DACComponent())
+                self[-1].map(pay)
+                pay = pay[2:]
+
+class DACComponent(Layer):
+    constructorList = [
+        Bit('Tc', ReprName='Table class', Pt=0, BitLen=4, Repr='hum'),
+        Bit('Tb', ReprName='Arithmetic coding conditioning table destination identifier', \
+            Pt=0, BitLen=4, Repr='hum'),
+        Int('CS', ReprName='Conditioning table value', Pt=0, Type='uint8'),
+        ]
+
 class data(Layer):
     constructorList = [ Str('data', Pt='') ]
 
@@ -248,7 +342,7 @@ class JPEG(Block):
         0xC0 : SOF, 
         0xC1 : SOF, 
         0xC2 : SOF, 
-        0xC3 : SOF, 
+        0xC3 : SOF,
         0xC5 : SOF, 
         0xC6 : SOF, 
         0xC7 : SOF,
@@ -261,6 +355,9 @@ class JPEG(Block):
         0xCF : SOF,
         # Start Of Scan
         0xDA : SOS,
+        # Tables
+        0xDB : DQT,
+        0xC4 : DHT,
         }
     
     def __init__(self, ):
