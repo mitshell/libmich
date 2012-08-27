@@ -29,7 +29,7 @@
 #!/usr/bin/env python
 
 __all__ = ['ASSIGNMENT_COMMAND', 'ASSIGNMENT_COMPLETE', 'ASSIGNMENT_FAILURE',
-           'CHANNEL_RELEASE', 'CHANNEL_REQUEST', 'MEASUREMENT_REPORT',
+           'CHANNEL_RELEASE', 'MEASUREMENT_REPORT',
            'CLASSMARK_ENQUIRY', 'CLASSMARK_CHANGE',
            'CIPHERING_MODE_COMMAND', 'CIPHERING_MODE_COMPLETE',
            'IMMEDIATE_ASSIGNMENT', 'PAGING_REQUEST_1', 'PAGING_REQUEST_2',
@@ -201,7 +201,7 @@ class ASSIGNMENT_COMMAND(Layer3):
     ... too much options ...
     '''
     constructorList = [ie for ie in Header(6, 46)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('ChanDesc', ReprName='Channel Description 2', Pt=ChanDesc(), \
@@ -254,7 +254,7 @@ class ASSIGNMENT_COMMAND(Layer3):
                       T=0x03, V='\0\0'),
             Type4_TLV('VGCSciph', ReprName='VGCS ciphering parameters', \
                       T=0x04, V='\0')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 # 44018, section 9.1.3
 class ASSIGNMENT_COMPLETE(Layer3):
@@ -264,8 +264,12 @@ class ASSIGNMENT_COMPLETE(Layer3):
     # content #
     RR Cause is 1 byte
     '''
-    constructorList = [ie for ie in Header(6, 41)] + \
-        [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')]
+    constructorList = [ie for ie in Header(6, 41)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([ \
+            Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')])
+        self._post_init(with_options, **kwargs)
  
 # 44018, section 9.1.4
 class ASSIGNMENT_FAILURE(Layer3):
@@ -275,8 +279,12 @@ class ASSIGNMENT_FAILURE(Layer3):
     # content #
     RR Cause is 1 byte
     '''
-    constructorList = [ie for ie in Header(6, 47)] + \
-        [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')]
+    constructorList = [ie for ie in Header(6, 47)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([ \
+            Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')])
+        self._post_init(with_options, **kwargs)
 
 # 44018, section 9.1.7
 class CHANNEL_RELEASE(Layer3):
@@ -284,9 +292,13 @@ class CHANNEL_RELEASE(Layer3):
     Net -> ME (in DCCH)
     Dual
     '''
-    constructorList = [ie for ie in Header(6, 13)] + \
-        [Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')]
+    constructorList = [ie for ie in Header(6, 13)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([ \
+            Int('Cause', Pt=0, Type='uint8', Dict=Cause_dict, Repr='hum')])
         # TODO: add optional IE during __init__()
+        self._post_init(with_options, **kwargs)
 
 # 44.018, section 9.1.12
 class CLASSMARK_ENQUIRY(Layer3):
@@ -295,12 +307,12 @@ class CLASSMARK_ENQUIRY(Layer3):
     Dual
     '''
     constructorList = [ie for ie in Header(6, 19)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Type4_TLV('CmEnq', ReprName='Classmark Enquiry mask', T=0x10, \
                        V=CmEnq())])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 # 44.018, section 9.1.
 class CLASSMARK_CHANGE(Layer3):
@@ -309,12 +321,12 @@ class CLASSMARK_CHANGE(Layer3):
     Dual
     '''
     constructorList = [ie for ie in Header(6, 22)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Type4_LV('MSCm2', V=MSCm2()), # in L3Mobile_IE.py
             Type4_TLV('MSCm3', T=0x20, V='\0\0\0\0\0\0\0')]) # in L3Mobile_IE.py, CSN1 field
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 # 44018, section 9.1.9
 AlgId_dict = {
@@ -340,15 +352,18 @@ class CIPHERING_MODE_COMMAND(Layer3):
     Net -> ME (in DCCH)
     Dual
     '''
-    constructorList = [ie for ie in Header(6, 53)] + [ \
-        Bit('spare', Pt=0, BitLen=3, Repr='hex'),
-        Bit('CMRes', ReprName='Cipher Mode Response', Pt=0, BitLen=1, \
-            Repr='hum', Dict=CiphRes_dict),
-        Bit('AlgId', ReprName='Algorithm Identifier', Pt=0, BitLen=3, \
-            Repr='hum', Dict=AlgId_dict),
-        Bit('SC', ReprName='Start Ciphering', Pt=0, BitLen=1, \
-            Repr='hum', Dict=StCiph_dict),
-        ]
+    constructorList = [ie for ie in Header(6, 53)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([ \
+            Bit('spare', Pt=0, BitLen=3, Repr='hex'),
+            Bit('CMRes', ReprName='Cipher Mode Response', Pt=0, BitLen=1, \
+                Repr='hum', Dict=CiphRes_dict),
+            Bit('AlgId', ReprName='Algorithm Identifier', Pt=0, BitLen=3, \
+                Repr='hum', Dict=AlgId_dict),
+            Bit('SC', ReprName='Start Ciphering', Pt=0, BitLen=1, \
+                Repr='hum', Dict=StCiph_dict)])
+        self._post_init(with_options, **kwargs)
 
 # 44018, section 9.1.10
 class CIPHERING_MODE_COMPLETE(Layer3):
@@ -357,11 +372,10 @@ class CIPHERING_MODE_COMPLETE(Layer3):
     Dual
     '''
     constructorList = [ie for ie in Header(6, 50)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_TLV('ID', T=0x17, V=ID())])
-        self._post_init(with_options)
-
+        self._post_init(with_options, **kwargs)
 
 # 44.018, section 9.1.8
 # establishment cause can be 3 to 6 bits length
@@ -392,18 +406,18 @@ class CIPHERING_MODE_COMPLETE(Layer3):
 #    0 : 'Location updating',
 #    #1: '',
 #    }
-class CHANNEL_REQUEST(Layer3):
-    '''
-    ME -> Net (in RACH)
-    '''
-    constructorList = [
-        Bit('estab', ReprName='Establishment cause', Pt=7, BitLen=3, \
-            Repr='hum'),
-        Bit('ra', ReprName='Random reference', BitLen=5, Repr='hum')
-        ]
-    # TODO: check how to deal with this mess of a bit-length...
-    # we need stateful (NECI from SI_3 or SI_4)
-    # anyway, we dont need to implement that crap into this lib !
+#class CHANNEL_REQUEST(Layer3):
+#    '''
+#    ME -> Net (in RACH)
+#    '''
+#    constructorList = [
+#        Bit('estab', ReprName='Establishment cause', Pt=7, BitLen=3, \
+#            Repr='hum'),
+#        Bit('ra', ReprName='Random reference', BitLen=5, Repr='hum')
+#        ]
+#    # TODO: check how to deal with this mess of a bit-length...
+#    # we need stateful (NECI from SI_3 or SI_4)
+#    # anyway, we dont need to implement that crap into this lib !
 
 # 44018, section 9.1.21
 class MEASUREMENT_REPORT(Layer3):
@@ -411,10 +425,13 @@ class MEASUREMENT_REPORT(Layer3):
     ME -> Net (in SACCH)
     Dual
     '''
-    constructorList = [ie for ie in Header(6, 21)] + \
-        [Str('MeasRes', ReprName='Measurement Results', \
-             Pt=MeasRes(build_auto=True), Len=16)]
-
+    constructorList = [ie for ie in Header(6, 21)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([Str('MeasRes', ReprName='Measurement Results',
+                     Pt=MeasRes(build_auto=True), Len=16)])
+        self._post_init(with_options, **kwargs)
+    
 # 44.018, section 10.5.2.26
 Page_dict = {
     0 : 'Normal paging',
@@ -448,7 +465,7 @@ class IMMEDIATE_ASSIGNMENT(Layer3):
     ... options ...
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 63)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Bit('Dedicated', ReprName='Dedicated mode or TBF', Pt=0, \
@@ -467,7 +484,7 @@ class IMMEDIATE_ASSIGNMENT(Layer3):
             Type3_TV('Start', ReprName='Starting time', T=0x7C, \
                      V='\0\0', Len=2), # 44018, 10.5.2.38
             StrRR('IARestOctets', Repr='hex')]) # 44018, 10.5.2.16
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
         # L2 pseudo header automation
         self.len.Pt = (self.ChanDesc, self.PChanDesc, self.MobAlloc, self.Start)
         self.len.PtFunc = lambda x: sum(map(len, x))+7
@@ -496,7 +513,7 @@ class PAGING_REQUEST_1(Layer3):
     ... options ...
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 33)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Bit('ChanNeedID2', ReprName='Channel needed', Pt=1, BitLen=2, \
@@ -508,7 +525,7 @@ class PAGING_REQUEST_1(Layer3):
             Type4_LV('ID', V=ID()), # never IMEI, in L3Mobile_IE.py
             Type4_TLV('ID_2', T=0x17, V=ID()), # never IMEI, in L3Mobile_IE.py
             StrRR('P1RestOctets', Repr='hex')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
         # L2 pseudo header automation
         self.len.Pt = (self.ID, self.ID_2)
         self.len.PtFunc = lambda x: sum(map(len, x))+3
@@ -522,7 +539,7 @@ class PAGING_REQUEST_2(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 34)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Bit('ChanNeedID2', ReprName='Channel needed', Pt=1, BitLen=2, \
@@ -536,7 +553,7 @@ class PAGING_REQUEST_2(Layer3):
             Str('TMSI_2', Pt='\0\0\0\0', Len=4, Repr='hex'),
             Type4_TLV('ID', T=0x17, V=ID()), # can be MBMS, but never IMEI
             StrRR('P2RestOctets', Repr='hex')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
         # Now, automatic fields
         # L2 pseudo header
         self.len.Pt = self.ID
@@ -551,7 +568,7 @@ class PAGING_REQUEST_3(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 36)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Bit('ChanNeedID2', ReprName='Channel needed', Pt=1, BitLen=2, \
@@ -566,6 +583,7 @@ class PAGING_REQUEST_3(Layer3):
             Str('TMSI_3', Pt='\0\0\0\0', Len=4, Repr='hex'),
             Str('TMSI_4', Pt='\0\0\0\0', Len=4, Repr='hex'),
             StrRR('P3RestOctets', Len=3, Repr='hex')]) # 10.5.2.25
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 19
 
 # 44018, section 9.1.25
@@ -575,7 +593,7 @@ class PAGING_RESPONSE(Layer3):
     Dual
     '''
     constructorList = [ie for ie in Header(6, 39)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Bit('spare', Pt=0, BitLen=4),
@@ -583,6 +601,7 @@ class PAGING_RESPONSE(Layer3):
                 Pt=0, BitLen=4, Dict=CKSN_dict), # 10.5.1.2, see L3Mobile_MM.py
             Type4_LV('MSCm2', V=MSCm2()), # in L3Mobile_IE.py
             Type4_LV('ID', V=ID())]) # in L3Mobile_IE.py
+        self._post_init(with_options, **kwargs)
 
 # 44018, section 9.1.31
 class SI_1(Layer3):
@@ -591,7 +610,7 @@ class SI_1(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 25)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('CellChan', ReprName='Cell Channel Description', \
@@ -600,6 +619,7 @@ class SI_1(Layer3):
                 Len=3), # 44018, 10.5.2.29, in L3Mobile_RR.py
             # rest octet is purely padding: 2b
             StrRR('SI1RestOctets', Len=1, Repr='hex')]) # 10.5.2.32
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 21
 
 # 44018, section 9.1.32
@@ -609,7 +629,7 @@ class SI_2(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 26)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('BCCHFreq', ReprName='Neighbour Cell Description', \
@@ -618,6 +638,7 @@ class SI_2(Layer3):
                 Repr='bin'), # 44018, 10.5.2.27
             Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
                 Len=3)]) # 44018, 10.5.2.29, in L3GSM_IE.py
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 22
 
 # 44018, section 9.1.33
@@ -628,7 +649,7 @@ class SI_2bis(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 2)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('ExtBCCHFreq', ReprName='Neighbour Cell Description', \
@@ -636,6 +657,7 @@ class SI_2bis(Layer3):
             Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
                 Len=3), # 44018, 10.5.2.29, in L3GSM_IE.py
             StrRR('SI2bisRestOctets', Len=1, Repr='hex')]) # 10.5.2.33
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 21
 
 # 44018, section 9.1.34
@@ -646,12 +668,13 @@ class SI_2ter(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 3)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('ExtBCCHFreq', ReprName='Neighbour Cell Description', \
                 Pt=ExtBCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
             StrRR('SI2terRestOctets', Len=4, Repr='hex')]) # 10.5.2.33a
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 18
 
 # 44018, section 9.1.34a
@@ -662,10 +685,11 @@ class SI_2quater(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 7)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             StrRR('SI2quaterRestOctets', Len=20, Repr='hex')]) # 10.5.2.33b
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 1
 
 # 44018, section 9.1.35
@@ -675,7 +699,7 @@ class SI_3(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 27)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('CellID', Pt='\0\0', ReprName='Cell identity', Len=2, \
@@ -691,8 +715,10 @@ class SI_3(Layer3):
             Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
                 Len=3), # 44018, 10.5.2.29
             StrRR('SI3RestOctets', Len=4, Repr='hex')]) # 44018, 10.5.2.33a
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 18
-        if hasattr(self.CellSel, 'ACS'): self.CellSel.ACS.Dict = ACS_SI3_dict
+        if hasattr(self.CellSel, 'ACS'):
+            self.CellSel.ACS.Dict = ACS_SI3_dict
             
 
 # 44018, section 9.1.36
@@ -702,7 +728,7 @@ class SI_4(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 28)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('LAI', ReprName='Location Area Identity', Pt=LAI(), Len=5, \
@@ -716,7 +742,7 @@ class SI_4(Layer3):
             Type4_TLV('MobAlloc', ReprName='CBCH Mobile Allocation', T=0x72, \
                 V=MobAlloc()), # 44018, 10.5.2.21, in L3GSM_IE.py
             StrRR('SI4RestOctets', Repr='hex')]) # 44018, 10.5.2.35
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
         if hasattr(self.CellSel, 'ACS'): self.CellSel.ACS.Dict = ACS_SI4_dict
         # L2 pseudo header automation
         self.len.Pt = self.MobAlloc
@@ -730,9 +756,13 @@ class SI_5(Layer3):
     Dual
     '''
     # no LengthRR as it will come from LAPDm (see L2GSM)
-    constructorList = [ie for ie in Header(6, 29)] + \
-        [Str('BCCHFreq', ReprName='Neighbour Cell Description', \
-             Pt=BCCHFreq(), Len=16)] # 44018, 10.5.2.22a, in L3GSM_IE.py
+    constructorList = [ie for ie in Header(6, 29)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('BCCHFreq', ReprName='Neighbour Cell Description', \
+                Pt=BCCHFreq(), Len=16)]) # 44018, 10.5.2.22a, in L3GSM_IE.py
+        self._post_init(with_options, **kwargs)
 
 class SI_5bis(Layer3):
     '''
@@ -740,9 +770,13 @@ class SI_5bis(Layer3):
     Dual
     '''
     # no LengthRR as it will come from LAPDm (see L2GSM)
-    constructorList = [ie for ie in Header(6, 5)] + \
-        [Str('BCCHFreq', ReprName='Neighbour Cell Description', \
-             Pt=BCCHFreq(), Len=16)] # 44018, 10.5.2.22, in L3GSM_IE.py
+    constructorList = [ie for ie in Header(6, 5)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([ \
+            Str('BCCHFreq', ReprName='Neighbour Cell Description', \
+                Pt=BCCHFreq(), Len=16)]) # 44018, 10.5.2.22, in L3GSM_IE.py
+        self._post_init(with_options, **kwargs)
 
 class SI_5ter(Layer3):
     '''
@@ -750,9 +784,13 @@ class SI_5ter(Layer3):
     Dual
     '''
     # no LengthRR as it will come from LAPDm (see L2GSM)
-    constructorList = [ie for ie in Header(6, 6)] + \
-        [Str('ExtBCCHFreq', ReprName='Extended Neighbour Cell Description', \
-             Pt=ExtBCCHFreq(), Len=16)] # 44018, 10.5.2.22a, in L3GSM_IE.py
+    constructorList = [ie for ie in Header(6, 6)]
+    def __init__(self, with_options=True, **kwargs):
+        Layer3.__init__(self)
+        self.extend([\
+            Str('ExtBCCHFreq', ReprName='Extended Neighbour Cell Description', \
+                Pt=ExtBCCHFreq(), Len=16)]) # 44018, 10.5.2.22a, in L3GSM_IE.py
+        self._post_init(with_options, **kwargs)
 
 class SI_6(Layer3): 
     '''
@@ -761,7 +799,7 @@ class SI_6(Layer3):
     '''
     # no LengthRR as it will come from LAPDm (see L2GSM)
     constructorList = [ie for ie in Header(6, 30)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             Str('CellID', Pt='\0\0', ReprName='Cell identity', Len=2, \
@@ -775,6 +813,7 @@ class SI_6(Layer3):
             StrRR('SI6RestOctets', Len=7, Repr='hex')]) # 44018, 10.5.2.35a
         #self.len.Pt = 11 # WTF ! RestOctets are 7 and length should be 11 ?
         # anyway, length is in LAPDm, not directly into L3...
+        self._post_init(with_options, **kwargs)
 
 class SI_13(Layer3):
     '''
@@ -782,9 +821,10 @@ class SI_13(Layer3):
     Dual
     '''
     constructorList = [ie for ie in LengthRR()] + [ie for ie in Header(6, 0)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
             StrRR('SI13RestOctets', Len=20, Repr='hex')]) # 44018, 10.5.2.33a
+        self._post_init(with_options, **kwargs)
         self.len.Pt = 0
 #
