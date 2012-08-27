@@ -138,16 +138,16 @@ class ALERTING(Layer3):
     Opt: SS version indicator (0 or 1 byte), only ME -> Net
     '''
     constructorList = [ie for ie in Header(3, 1)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_TLV('Facility', T=0x1C, V=''),
-             Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0'),
-             Type4_TLV('SS', ReprName='Supplementary Service version indicator',\
-                       T=0x7F, V='', Trans=True)])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_TLV('Facility', T=0x1C, V=''),
+            Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0'),
+            Type4_TLV('SS', ReprName='Supplementary Service version indicator',\
+                      T=0x7F, V='', Trans=True)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.3.2
 class CALL_CONFIRMED(Layer3):
@@ -164,18 +164,19 @@ class CALL_CONFIRMED(Layer3):
     Cond: Supported codecs (3 to max bytes), if UMTS supported
     '''
     constructorList = [ie for ie in Header(3, 8)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
-             Type4_TLV('Cause', T=0x8, V='\0\x80'),
-             Type4_TLV('CCCap', T=0x15, V=CCCap()),
-             Type4_TLV('StreamId', T=0x2D, V='\0'),
-             Type4_TLV('SuppCodecs', T=0x40, V='\0\0\0')])
-        self._post_init(with_options)
+        self.extend([ \
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
+            Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
+            Type4_TLV('Cause', T=0x8, V='\0\x80'),
+            Type4_TLV('CCCap', T=0x15, V=CCCap()),
+            Type4_TLV('StreamId', T=0x2D, V='\0'),
+            Type4_TLV('SuppCodecs', ReprName='Supported codecs list', \
+                      T=0x40, V='\0\0\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.3
 class CALL_PROCEEDING(Layer3):
@@ -192,18 +193,18 @@ class CALL_PROCEEDING(Layer3):
     Opt: Network CC capability (1 byte)
     '''
     constructorList = [ie for ie in Header(3, 2)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+        self.extend([ \
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
                       Trans=True),
-             Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
-             Type4_TLV('Facility', T=0x1C, V=''),
-             Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
-             Type1_TV('Priority', T=0x8, V=0),
-             Type4_TLV('NetCCCap', T=0x2F, V='\0')])
-        self._post_init(with_options)
+            Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
+            Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
+            Type4_TLV('Facility', T=0x1C, V=''),
+            Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
+            Type1_TV('Priority', T=0x8, V=0),
+            Type4_TLV('NetCCCap', T=0x2F, V='\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.4
 class CONGESTION_CONTROL(Layer3):
@@ -215,13 +216,13 @@ class CONGESTION_CONTROL(Layer3):
     Opt: Cause (2 to 30 bytes)
     '''
     constructorList = [ie for ie in Header(3, 57)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('Level', Pt=0, BitLen=4, Repr='hum'),
-             Bit('spare', Pt=0, BitLen=4),
-             Type4_TLV('Cause', T=0x8, V='\0\x80')])
-        self._post_init(with_options)
+        self.extend([ \
+            Bit('Level', Pt=0, BitLen=4, Repr='hum'),
+            Bit('spare', Pt=0, BitLen=4),
+            Type4_TLV('Cause', T=0x8, V='\0\x80')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.5
 class CONNECT(Layer3):
@@ -242,26 +243,26 @@ class CONNECT(Layer3):
     Opt: Stream identifier (1 byte)
     '''
     constructorList = [ie for ie in Header(3, 7)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         if self.initiator == 'Net':
-            self.extend( \
-            [Type4_TLV('Facility', T=0x1C, V=''),
-             Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
-             Type4_TLV('Number', T=0x4C, V='\0'),
-             Type4_TLV('Subaddr', T=0x4D, V=''),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+            self.extend([ \
+            Type4_TLV('Facility', T=0x1C, V=''),
+            Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
+            Type4_TLV('Number', T=0x4C, V='\0'),
+            Type4_TLV('Subaddr', T=0x4D, V=''),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                        V='\0')])
         else:
         #elif self.initiator == 'ME':
-            self.extend( \
-            [Type4_TLV('Facility', T=0x1C, V=''),
-             Type4_TLV('Subaddr', T=0x4D, V=''),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0'),
-             Type4_TLV('SSversion', T=0x7F, V=''),
-             Type4_TLV('StreamId', T=0x2D, V='\0')])
-        self._post_init(with_options)
+            self.extend([ \
+            Type4_TLV('Facility', T=0x1C, V=''),
+            Type4_TLV('Subaddr', T=0x4D, V=''),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0'),
+            Type4_TLV('SSversion', T=0x7F, V=''),
+            Type4_TLV('StreamId', T=0x2D, V='\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.6
 class CONNECT_ACKNOWLEDGE(Layer3):
@@ -289,21 +290,21 @@ class DISCONNECT(Layer3):
     Cond: SS version (0 or 1 byte), only if Facility
     '''
     constructorList = [ie for ie in Header(3, 37)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('Cause',V='\0\x80'),
-             Type4_TLV('Facility', T=0x1C, V='')])
+        self.extend([ \
+            Type4_LV('Cause',V='\0\x80'),
+            Type4_TLV('Facility', T=0x1C, V='')])
         if self.initiator == 'Net':
-            self.extend( \
-            [Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0'),
-             Type4_TLV('AA', ReprName='Allowed Actions (CCBS)', \
-                       T=0x7B, V='\0')])
+            self.extend([ \
+            Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0'),
+            Type4_TLV('AA', ReprName='Allowed Actions (CCBS)', \
+                      T=0x7B, V='\0')])
         else:
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.8
 class EMERGENCY_SETUP(Layer3):
@@ -317,15 +318,16 @@ class EMERGENCY_SETUP(Layer3):
     Opt: Emergency category (1 byte)
     '''
     constructorList = [ie for ie in Header(3, 14)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('StreamId', T=0x2D, V='\0'),
-             Type4_TLV('SuppCodecs', T=0x40, V='\0\0\0'),
-             Type4_TLV('EC', ReprName='Emergency Category', \
-                       T=0x2E, V='\0')])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
+            Type4_TLV('StreamId', T=0x2D, V='\0'),
+            Type4_TLV('SuppCodecs', ReprName='Supported codecs list', \
+                      T=0x40, V='\0\0\0'),
+            Type4_TLV('EC', ReprName='Emergency Category', \
+                      T=0x2E, V='\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.9
 class FACILITY(Layer3):
@@ -338,12 +340,12 @@ class FACILITY(Layer3):
     Opt: SS version (0 or 1 byte)
     '''
     constructorList = [ie for ie in Header(3, 58)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('Facility', T=0x1C, V='')])
         if self.initiator != 'Net':
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.10
 class HOLD(Layer3):
@@ -370,9 +372,11 @@ class HOLD_REJECT(Layer3):
     Cause is 1 to 29 bytes
     '''
     constructorList = [ie for ie in Header(3, 26)]
-    def __init__(self, with_options=True):
+    # actually, there is no option here...
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('Cause', V='\0\x80')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.13
 class MODIFY(Layer3):
@@ -387,15 +391,15 @@ class MODIFY(Layer3):
     Opt: Network initiated service upgrade indicator, Net -> ME
     '''
     constructorList = [ie for ie in Header(3, 23)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('BearerCap', V=BearerCap()),
-             Type4_TLV('LowLayerComp', T=0x7C, V=''),
-             Type4_TLV('HighLayerComp', T=0x7D, V=''),
-             Type2('Reverse', T=0xA3),
-             Type2('UpgradeInd', T=0xA4)])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_LV('BearerCap', V=BearerCap()),
+            Type4_TLV('LowLayerComp', T=0x7C, V=''),
+            Type4_TLV('HighLayerComp', T=0x7D, V=''),
+            Type2('Reverse', T=0xA3),
+            Type2('UpgradeInd', T=0xA4)])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.14
 class MODIFY_COMPLETE(Layer3):
@@ -409,14 +413,14 @@ class MODIFY_COMPLETE(Layer3):
     Opt: Reverse call setup direction
     '''
     constructorList = [ie for ie in Header(3, 31)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('BearerCap', V=BearerCap()),
-             Type4_TLV('LowLayerComp', T=0x7C, V=''),
-             Type4_TLV('HighLayerComp', T=0x7D, V=''),
-             Type2('Reverse', T=0xA3)])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_LV('BearerCap', V=BearerCap()),
+            Type4_TLV('LowLayerComp', T=0x7C, V=''),
+            Type4_TLV('HighLayerComp', T=0x7D, V=''),
+            Type2('Reverse', T=0xA3)])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.15
 class MODIFY_REJECT(Layer3):
@@ -430,14 +434,14 @@ class MODIFY_REJECT(Layer3):
     Opt: High layer compatibility (0 to 3 bytes)
     '''
     constructorList = [ie for ie in Header(3, 19)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('BearerCap', V=BearerCap()),
-             Type4_LV('Cause', V='\0\x80'),
-             Type4_TLV('LowLayerComp', T=0x7C, V=''),
-             Type4_TLV('HighLayerComp', T=0x7D, V='')])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_LV('BearerCap', V=BearerCap()),
+            Type4_LV('Cause', V='\0\x80'),
+            Type4_TLV('LowLayerComp', T=0x7C, V=''),
+            Type4_TLV('HighLayerComp', T=0x7D, V='')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.16
 class NOTIFY(Layer3):
@@ -448,11 +452,12 @@ class NOTIFY(Layer3):
     Notification indicator is 1 byte
     '''
     constructorList = [ie for ie in Header(3, 62)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend(\
-            [Str('NotifInd', ReprName='Notify Indication', \
-                 Pt='\0', Len=1, Repr='hex')])
+        self.extend([ \
+            Str('NotifInd', ReprName='Notify Indication', \
+                Pt='\0', Len=1, Repr='hex')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.17
 class PROGRESS(Layer3):
@@ -464,13 +469,12 @@ class PROGRESS(Layer3):
     Opt: User-user (1 to 129 bytes)
     '''
     constructorList = [ie for ie in Header(3, 3)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('ProgressInd', V='\x80\x80'),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0')])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_LV('ProgressInd', V='\x80\x80'),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, V='\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.17a
 class CC_ESTABLISHMENT(Layer3):
@@ -481,9 +485,10 @@ class CC_ESTABLISHMENT(Layer3):
     Setup container is 2 to max bytes
     '''
     constructorList = [ie for ie in Header(3, 4)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('SetupCont', V='\0\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.17b
 class CC_ESTABLISHMENT_CONFIRMED(Layer3):
@@ -498,16 +503,17 @@ class CC_ESTABLISHMENT_CONFIRMED(Layer3):
     Cond: Supported codecs (3 to max bytes), if UMTS supported
     '''
     constructorList = [ie for ie in Header(3, 6)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
-             Type4_TLV('Cause', T=0x8, V='\0\x80'),
-             Type4_TLV('SuppCodecs', T=0x40, V='\0\0\0')])
-        self._post_init(with_options)
+        self.extend([ \
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
+            Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
+            Type4_TLV('Cause', T=0x8, V='\0\x80'),
+            Type4_TLV('SuppCodecs', ReprName='Supported codecs list', \
+                      T=0x40, V='\0\0\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.18
 class RELEASE(Layer3):
@@ -527,18 +533,17 @@ class RELEASE(Layer3):
     Cond: SS version (0 or 1 byte), only if Facility
     '''
     constructorList = [ie for ie in Header(3, 1)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_TLV('Cause', T=0x08, V='\0\x80'),
-             Type4_TLV('Cause', T=0x08, V='\0\x80'),
-             Type4_TLV('Facility', T=0x1C, V=''),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0')])
+        self.extend([ \
+            Type4_TLV('Cause', T=0x08, V='\0\x80'),
+            Type4_TLV('Cause', T=0x08, V='\0\x80'),
+            Type4_TLV('Facility', T=0x1C, V=''),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0')])
         if self.initiator != 'Net':
-        #if self.initiator == 'ME':
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.18a
 class RECALL(Layer3):
@@ -550,11 +555,12 @@ class RECALL(Layer3):
     Facility is 1 to max bytes
     '''
     constructorList = [ie for ie in Header(3, 11)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Str('Recall', Pt='\0', Len=1, Repr='hex'),
-             Type4_LV('Facility', V='\0')])
+        self.extend([ \
+            Str('Recall', Pt='\0', Len=1, Repr='hex'),
+            Type4_LV('Facility', V='\0')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.19
 class RELEASE_COMPLETE(Layer3):
@@ -572,17 +578,16 @@ class RELEASE_COMPLETE(Layer3):
     Opt: SS version (0 or 1 byte)
     '''
     constructorList = [ie for ie in Header(3, 42)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_TLV('Cause', T=0x08, V='\0\x80'),
-             Type4_TLV('Facility', T=0x1C, V=''),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0')])
+        self.extend([ \
+            Type4_TLV('Cause', T=0x08, V='\0\x80'),
+            Type4_TLV('Facility', T=0x1C, V=''),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0')])
         if self.initiator != 'Net':
-        #if self.initiator == 'ME':
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.20
 class RETRIEVE(Layer3):
@@ -609,9 +614,10 @@ class RETRIEVE_REJECT(Layer3):
     Cause is 2 to 30 bytes
     '''
     constructorList = [ie for ie in Header(3, 30)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('Cause', V='\0\x80')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.23
 class SETUP(Layer3):
@@ -670,65 +676,65 @@ class SETUP(Layer3):
     '''
     
     constructorList = [ie for ie in Header(3, 5)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
-             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
-             Type4_TLV('Facility', T=0x1C, V='')])
+        self.extend([ \
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
+            Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
+            Type4_TLV('Facility', T=0x1C, V='')])
         if self.initiator == 'Net':
-            self.extend( \
-            [Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
-             Type3_TV('Signal', T=0x34, V='\0', Len=1),
-             Type4_TLV('CallingBCD', T=0x5C, V='\0'),
-             Type4_TLV('CallingSub', T=0x5D, V=''),
-             Type4_TLV('CalledBCD', T=0x5E, V='\0'),
-             Type4_TLV('CalledSub', T=0x6D, V=''),
-             Type4_TLV('RedirectingBCD', T=0x74, V='\0'),
-             Type4_TLV('RedirectingSub', T=0x75, V=''),
-             Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('LowLayerComp', T=0x7C, V='\0'),
-             Type4_TLV('LowLayerComp_2', T=0x7C, V='\0', Trans=True),
-             Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('HighLayerComp', T=0x7D, V='\0'),
-             Type4_TLV('HighLayerComp_2', T=0x7D, V='\0', Trans=True),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0'),
-             Type1_TV('Priority', T=0x8, V=0),
-             Type4_TLV('Alert', T=0x19, V='\0'),
-             Type4_TLV('NetCCCap', T=0x2F, V='\0'),
-             Type4_TLV('CauseNoCLI', T=0x3A, V='\0'),
-             Type4_TLV('BUBearerCap', T=0x41, V='\0')])
+            self.extend([ \
+            Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
+            Type3_TV('Signal', T=0x34, V='\0', Len=1),
+            Type4_TLV('CallingBCD', T=0x5C, V='\0'),
+            Type4_TLV('CallingSub', T=0x5D, V=''),
+            Type4_TLV('CalledBCD', T=0x5E, V='\0'),
+            Type4_TLV('CalledSub', T=0x6D, V=''),
+            Type4_TLV('RedirectingBCD', T=0x74, V='\0'),
+            Type4_TLV('RedirectingSub', T=0x75, V=''),
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('LowLayerComp', T=0x7C, V='\0'),
+            Type4_TLV('LowLayerComp_2', T=0x7C, V='\0', Trans=True),
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('HighLayerComp', T=0x7D, V='\0'),
+            Type4_TLV('HighLayerComp_2', T=0x7D, V='\0', Trans=True),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0'),
+            Type1_TV('Priority', T=0x8, V=0),
+            Type4_TLV('Alert', T=0x19, V='\0'),
+            Type4_TLV('NetCCCap', T=0x2F, V='\0'),
+            Type4_TLV('CauseNoCLI', T=0x3A, V='\0'),
+            Type4_TLV('BUBearerCap', T=0x41, V='\0')])
         else:
-        #elif self.initiator == 'ME':
-            self.extend( \
-            [Type4_TLV('CallingSub', T=0x5D, V=''),
-             Type4_TLV('CalledBCD', T=0x5E, V='\0'),
-             Type4_TLV('CalledSub', T=0x6D, V=''),
-             Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('LowLayerComp', T=0x7C, V='\0'),
-             Type4_TLV('LowLayerComp_2', T=0x7C, V='\0', Trans=True),
-             Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
-                      Trans=True),
-             Type4_TLV('HighLayerComp', T=0x7D, V='\0'),
-             Type4_TLV('HighLayerComp_2', T=0x7D, V='\0', Trans=True),
-             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
-                       V='\0'),
-             Type4_TLV('SSversion', T=0x7F, V=''),
-             Type2('CLIRsuppr', T=0x8),
-             Type2('CLIRinvoc', T=0x19),
-             Type4_TLV('CCCap', T=0x15, V=CCCap()),
-             Type4_TLV('FacilityAdvanced', T=0x1D, V=''),
-             Type4_TLV('FacilityNotEssential', T=0x1B, V=''),
-             Type4_TLV('StreamId', T=0x2D, V='\0\0'),
-             Type4_TLV('SuppCodecs', T=0x40, V='\0\0\0'),
-             Type2('Redial', T=0xA3)])
-        self._post_init(with_options)
+            self.extend([ \
+            Type4_TLV('CallingSub', T=0x5D, V=''),
+            Type4_TLV('CalledBCD', T=0x5E, V='\0'),
+            Type4_TLV('CalledSub', T=0x6D, V=''),
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('LowLayerComp', T=0x7C, V='\0'),
+            Type4_TLV('LowLayerComp_2', T=0x7C, V='\0', Trans=True),
+            Type1_TV('RepeatInd', T=0xD, V=1, Dict=Repeat_dict, \
+                     Trans=True),
+            Type4_TLV('HighLayerComp', T=0x7D, V='\0'),
+            Type4_TLV('HighLayerComp_2', T=0x7D, V='\0', Trans=True),
+            Type4_TLV('UU', ReprName='User-User', T=0x7E, \
+                      V='\0'),
+            Type4_TLV('SSversion', T=0x7F, V=''),
+            Type2('CLIRsuppr', T=0x8),
+            Type2('CLIRinvoc', T=0x19),
+            Type4_TLV('CCCap', T=0x15, V=CCCap()),
+            Type4_TLV('FacilityAdvanced', T=0x1D, V=''),
+            Type4_TLV('FacilityNotEssential', T=0x1B, V=''),
+            Type4_TLV('StreamId', T=0x2D, V='\0\0'),
+            Type4_TLV('SuppCodecs', ReprName='Supported codecs list', \
+                      T=0x40, V='\0\0\0'),
+            Type2('Redial', T=0xA3)])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.23a
 class START_CC(Layer3):
@@ -739,10 +745,10 @@ class START_CC(Layer3):
     Opt: CC capability (2 bytes)
     '''
     constructorList = [ie for ie in Header(3, 9)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_TLV('CCCap', T=0x15, V=CCCap())])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.24
 class START_DTMF(Layer3):
@@ -753,10 +759,10 @@ class START_DTMF(Layer3):
     Opt: Keypad facility (1 byte)
     '''
     constructorList = [ie for ie in Header(3, 53)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type3_TV('Keypad', T=0x2C, V='\0', Len=1)])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.25
 class START_DTMF_ACKNOWLEDGE(Layer3):
@@ -767,10 +773,10 @@ class START_DTMF_ACKNOWLEDGE(Layer3):
     Opt: Keypad facility (1 byte)
     '''
     constructorList = [ie for ie in Header(3, 54)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type3_TV('Keypad', T=0x2C, V='\0', Len=1)])
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.26
 class START_DTMF_REJECT(Layer3):
@@ -781,9 +787,10 @@ class START_DTMF_REJECT(Layer3):
     Cause is 2 to 30 bytes
     '''
     constructorList = [ie for ie in Header(3, 55)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('Cause', V='\0\x80')])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.27
 class STATUS(Layer3):
@@ -796,13 +803,13 @@ class STATUS(Layer3):
     Opt: Auxiliary states
     '''
     constructorList = [ie for ie in Header(3, 61)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('Cause', V='\0\x80'),
-             Str('CallState', Pt='\0', Len=1, Repr='hex'),
-             Type4_TLV('AuxState', V=AuxState())])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_LV('Cause', V='\0\x80'),
+            Str('CallState', Pt='\0', Len=1, Repr='hex'),
+            Type4_TLV('AuxState', V=AuxState())])
+        self._post_init(with_options, **kwargs)
 
 #section 9.3.28
 class STATUS_ENQUIRY(Layer3):
@@ -838,11 +845,10 @@ class USER_INFORMATION(Layer3):
     Opt: More data
     '''
     constructorList = [ie for ie in Header(3, 1)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_LV('UU', ReprName='User-User', V='\0'),
-             Type2('MoreData', T=0xA0)])
-        self._post_init(with_options)
-
+        self.extend([ \
+            Type4_LV('UU', ReprName='User-User', V='\0'),
+            Type2('MoreData', T=0xA0)])
+        self._post_init(with_options, **kwargs)
 #

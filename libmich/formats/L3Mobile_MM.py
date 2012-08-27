@@ -195,11 +195,12 @@ class IMSI_DETACH_INDICATION(Layer3):
     Identity is 1 to 8 bytes
     '''
     constructorList = [ie for ie in Header(5, 1)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Str('MSCm1', Pt=MSCm1(), Len=1),
-             Type4_LV('ID', V=ID())])
+        self.extend([ \
+            Str('MSCm1', Pt=MSCm1(), Len=1),
+            Type4_LV('ID', V=ID())])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.13
 class LOCATION_UPDATING_ACCEPT(Layer3):
@@ -215,15 +216,16 @@ class LOCATION_UPDATING_ACCEPT(Layer3):
     Opt: EC number (3 to 48 bytes)
     '''
     constructorList = [ie for ie in Header(5, 2)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Str('LAI', Pt=LAI(), Len=5),
-             Type4_TLV('ID', T=0x17, V=ID()),
-             Type2('FollowOnProceed', T=0xA1),
-             Type2('CTSperm', T=0xA2),
-             Type4_TLV('PLMNlist', T=0x4A, V=PLMNlist()),
-             Type4_TLV('EClist', T=0x34, V='\0\0\0')])
+        self.extend([ \
+            Str('LAI', Pt=LAI(), Len=5),
+            Type4_TLV('ID', T=0x17, V=ID()),
+            Type2('FollowOnProceed', T=0xA1),
+            Type2('CTSperm', T=0xA2),
+            Type4_TLV('PLMNlist', T=0x4A, V=PLMNlist()),
+            Type4_TLV('EClist', T=0x34, V='\0\0\0')])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.14
 class LOCATION_UPDATING_REJECT(Layer3):
@@ -234,10 +236,11 @@ class LOCATION_UPDATING_REJECT(Layer3):
     Cause is 1 byte
     '''
     constructorList = [ie for ie in Header(5, 4)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self.extend([ \
+            Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.15
 class LOCATION_UPDATING_REQUEST(Layer3):
@@ -253,18 +256,18 @@ class LOCATION_UPDATING_REQUEST(Layer3):
     Cond: MSClassmark2 (3 bytes) to be added only in Iu mode
     '''
     constructorList = [ie for ie in Header(5, 8)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                 Pt=0, BitLen=4, Dict=CKSN_dict),
-             Bit('LUType', ReprName='Location Update Type', \
-                 Pt=0, BitLen=4, Dict=LUType_dict),
-             Str('LAI', Pt=LAI(), Len=5),
-             Str('MSCm1', Pt=MSCm1(), Len=1),
-             Type4_LV('ID', V=ID()),
-             Type4_TLV('MSCm2', T=0x33, V=MSCm2())])
-        self._post_init(with_options)
+        self.extend([ \
+            Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
+                Pt=0, BitLen=4, Dict=CKSN_dict),
+            Bit('LUType', ReprName='Location Update Type', \
+                Pt=0, BitLen=4, Dict=LUType_dict),
+            Str('LAI', Pt=LAI(), Len=5),
+            Str('MSCm1', Pt=MSCm1(), Len=1),
+            Type4_LV('ID', V=ID()),
+            Type4_TLV('MSCm2', T=0x33, V=MSCm2())])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.1
 class AUTHENTICATION_REJECT(Layer3):
@@ -285,16 +288,16 @@ class AUTHENTICATION_REQUEST(Layer3):
     Cond: AUTN (16 bytes) only if 3G authentication requested
     '''
     constructorList = [ie for ie in Header(5, 18)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('spare', Pt=0, BitLen=4),
-             Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                 Pt=0, BitLen=4, Dict=CKSN_dict),
-             Str('RAND', Pt=16*'\0', Len=16, Repr='hex'),
-             Type4_TLV('AUTN', T=0x20, V=16*'\0')])
+        self.extend([ \
+            Bit('spare', Pt=0, BitLen=4),
+            Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
+                Pt=0, BitLen=4, Dict=CKSN_dict),
+            Str('RAND', Pt=16*'\0', Len=16, Repr='hex'),
+            Type4_TLV('AUTN', T=0x20, V=16*'\0')])
         self.AUTN.V.Repr = 'hex'
-        self._post_init(with_options)
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.3
 class AUTHENTICATION_RESPONSE(Layer3):
@@ -306,12 +309,12 @@ class AUTHENTICATION_RESPONSE(Layer3):
     Cond: RESext (1 to 12 bytes) only if USIM is used in the MS
     '''
     constructorList = [ie for ie in Header(5, 20)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Str('RES', Pt='\0\0\0\0', Len=4),
-             Type4_TLV('RESext', T=0x21, V='\0')])
-        self._post_init(with_options)
+        self.extend([ \
+            Str('RES', Pt='\0\0\0\0', Len=4),
+            Type4_TLV('RESext', T=0x21, V='\0\0\0\0')])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.3A
 class AUTHENTICATION_FAILURE(Layer3):
@@ -323,12 +326,12 @@ class AUTHENTICATION_FAILURE(Layer3):
     Cond: AUTS (16 bytes) only if USIM is used in the MS
     '''
     constructorList = [ie for ie in Header(5, 28)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict),
-             Type4_TLV('AUTS', T=0x22, V=16*'\0')]) 
-        self._post_init(with_options)
+        self.extend([ \
+            Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict),
+            Type4_TLV('AUTS', T=0x22, V=16*'\0')]) 
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.10
 class IDENTITY_REQUEST(Layer3):
@@ -339,11 +342,12 @@ class IDENTITY_REQUEST(Layer3):
     Identity type is 4 bits
     '''
     constructorList = [ie for ie in Header(5, 24)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('spare', Pt=0, BitLen=4),
-             Bit('IDtype', Pt=1, BitLen=4, Dict=IDType_dict, Repr='hum')])
+        self.extend([ \
+            Bit('spare', Pt=0, BitLen=4),
+            Bit('IDtype', Pt=1, BitLen=4, Dict=IDType_dict, Repr='hum')])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.11
 class IDENTITY_RESPONSE(Layer3):
@@ -354,9 +358,10 @@ class IDENTITY_RESPONSE(Layer3):
     Identity value is 1 to 8 bytes
     '''
     constructorList = [ie for ie in Header(5, 25)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('ID', V=ID())])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.17
 class TMSI_REALLOCATION_COMMAND(Layer3):
@@ -368,11 +373,12 @@ class TMSI_REALLOCATION_COMMAND(Layer3):
     Identity is 1 to 8 bytes
     '''
     constructorList = [ie for ie in Header(5, 26)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-        [Str('LAI', Pt=LAI(), Len=5),
-         Type4_LV('ID', V=ID())])
+        self.extend([ \
+            Str('LAI', Pt=LAI(), Len=5),
+            Type4_LV('ID', V=ID())])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.18
 class TMSI_REALLOCATION_COMPLETE(Layer3):
@@ -399,12 +405,13 @@ class CM_SERVICE_PROMPT(Layer3):
     SAPI is 1 byte (decomposed)
     '''
     constructorList = [ie for ie in Header(5, 37)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-        [Bit('spare', Pt=0, BitLen=2),
-         Bit('SAPI', Pt=0, BitLen=2),
-         Bit('SAPI_PD', Pt=6, BitLen=4, Dict=PD_dict)])
+        self.extend([ \
+            Bit('spare', Pt=0, BitLen=2),
+            Bit('SAPI', Pt=0, BitLen=2),
+            Bit('SAPI_PD', Pt=6, BitLen=4, Dict=PD_dict)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.6
 class CM_SERVICE_REJECT(Layer3):
@@ -415,10 +422,11 @@ class CM_SERVICE_REJECT(Layer3):
     Cause is 1 byte
     '''
     constructorList = [ie for ie in Header(5, 34)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self.extend([ \
+            Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.7
 class CM_SERVICE_ABORT(Layer3):
@@ -441,16 +449,16 @@ class CM_SERVICE_REQUEST(Layer3):
     Opt: Priority (3 bits)
     '''
     constructorList = [ie for ie in Header(5, 36)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                 Pt=0, BitLen=4, Dict=CKSN_dict),
-             Bit('Service', Pt=1, BitLen=4, Dict=CMService_dict),
-             Type4_LV('MSCm2', V=MSCm2()),
-             Type4_LV('ID', V=ID()),
-             Type1_TV('Priority', T=0x8, V=0)])
-        self._post_init(with_options)
+        self.extend([ \
+            Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
+                Pt=0, BitLen=4, Dict=CKSN_dict),
+            Bit('Service', Pt=1, BitLen=4, Dict=CMService_dict),
+            Type4_LV('MSCm2', V=MSCm2()),
+            Type4_LV('ID', V=ID()),
+            Type1_TV('Priority', T=0x8, V=0)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.4
 class CM_REESTABLISHMENT_REQUEST(Layer3):
@@ -464,16 +472,16 @@ class CM_REESTABLISHMENT_REQUEST(Layer3):
     Cond: Location Area Id (5 bytes), when TMSI is used
     '''
     constructorList = [ie for ie in Header(5, 40)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Bit('spare', Pt=0, BitLen=4),
-             Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                 Pt=0, BitLen=4, Dict=CKSN_dict),
-             Type4_LV('MSCm2', V=MSCm2()),
-             Type4_LV('ID', V=ID()),
-             Type3_TV('LAI', T=0x13, V=LAI(), Len=5)])
-        self._post_init(with_options)
+        self.extend([ \
+            Bit('spare', Pt=0, BitLen=4),
+            Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
+                Pt=0, BitLen=4, Dict=CKSN_dict),
+            Type4_LV('MSCm2', V=MSCm2()),
+            Type4_LV('ID', V=ID()),
+            Type3_TV('LAI', T=0x13, V=LAI(), Len=5)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.8
 class ABORT(Layer3):
@@ -484,10 +492,11 @@ class ABORT(Layer3):
     Cause is 1 byte
     '''
     constructorList = [ie for ie in Header(5, 41)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self.extend([ \
+            Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.15A
 class MM_INFORMATION(Layer3):
@@ -503,20 +512,20 @@ class MM_INFORMATION(Layer3):
     Opt: Network Daylight Saving Time (1 byte)
     '''
     constructorList = [ie for ie in Header(5, 50)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Type4_TLV('NetFullName', T=0x43, V='\0'),
-             Type4_TLV('NetShortName', T=0x45, V='\0'),
-             Type3_TV('TZ', ReprName='Local Time Zone', T=0x46, \
-                V='\0', Len=1),
-             Type3_TV('TZTime', ReprName='Time Zone and Time',\
-                      T=0x47, V='\0\0\0\0\0\0\0', Len=7),
-             Type4_TLV('LSAid', ReprName='Localised Service Area Identity', \
-                       T=0x48, V=''),
-             Type4_TLV('DTime', ReprName='Daylight Saving Time',\
-                       T=0x49, V='\0')])
-        self._post_init(with_options)
+        self.extend([ \
+            Type4_TLV('NetFullName', T=0x43, V='\0'),
+            Type4_TLV('NetShortName', T=0x45, V='\0'),
+            Type3_TV('TZ', ReprName='Local Time Zone', T=0x46, \
+               V='\0', Len=1),
+            Type3_TV('TZTime', ReprName='Time Zone and Time',\
+                     T=0x47, V='\0\0\0\0\0\0\0', Len=7),
+            Type4_TLV('LSAid', ReprName='Localised Service Area Identity', \
+                      T=0x48, V=''),
+            Type4_TLV('DTime', ReprName='Daylight Saving Time',\
+                      T=0x49, V='\0')])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.16
 class MM_STATUS(Layer3):
@@ -527,10 +536,11 @@ class MM_STATUS(Layer3):
     Cause is 1 byte
     '''
     constructorList = [ie for ie in Header(5, 49)]
-    def __init__(self, with_options=True):
+    def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend( \
-            [Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self.extend([ \
+            Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict)])
+        self._post_init(with_options, **kwargs)
 
 # section 9.2.19
 class MM_NULL(Layer3):
@@ -540,3 +550,4 @@ class MM_NULL(Layer3):
     -- must not ignored --
     '''
     constructorList = [ie for ie in Header(5, 48)]
+#

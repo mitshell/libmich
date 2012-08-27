@@ -337,10 +337,16 @@ class Layer3(Layer):
         Layer.__init__(self, CallName='', ReprName='', Trans=Trans)
     
     # handles optional tag (TLV) transparency at initialization
-    def _post_init(self, with_options=True):
+    def _post_init(self, with_options=True, **kwargs):
         for ie in self:
             if hasattr(ie, 'T') and ie.Trans is False:
                 ie.Trans = not with_options
+            if ie.CallName in kwargs:
+                if hasattr(ie, 'V'):
+                    ie.V.Pt = kwargs[ie.CallName]
+                else:
+                    ie.Pt = kwargs[ie.CallName]
+    
     
     # Patch L2 length for dummy GSM RR length computation !!!
     def _len_gsmrr(self, string=''):
@@ -598,33 +604,6 @@ class Layer3(Layer):
 # and still to be handled ... somewhere
 # ... actually should be elsewhere
 #######################################
-
-# Packet Service Mobility Management procedures dict
-#PS_MM = {
-#    1:"GPRS - Attach request",
-#    2:"GPRS - Attach accept",
-#    3:"GPRS - Attach complete",
-#    4:"GPRS - Attach reject",
-#    5:"GPRS - Detach request",
-#    6:"GPRS - Detach accept",
-#    8:"GPRS - Routing area update request",
-#    9:"GPRS - Routing area update accept",
-#    10:"GPRS - Routing area update complete",
-#    11:"GPRS - Routing area update reject",
-#    12:"GPRS - Service Request",
-#    13:"GPRS - Service Accept",
-#    14:"GPRS - Service Reject",
-#    16:"GPRS - P-TMSI reallocation command",
-#    17:"GPRS - P-TMSI reallocation complete",
-#    18:"GPRS - Authentication and ciphering request",
-#    19:"GPRS - Authentication and ciphering response",
-#    20:"GPRS - Authentication and ciphering reject",
-#    28:"GPRS - Authentication and ciphering failure",
-#    21:"GPRS - Identity request",
-#    22:"GPRS - Identity response",
-#    32:"GPRS - GMM status",
-#    33:"GPRS - GMM information",
-#    }
 
 # Packet Service Session Management procedures dict
 #PS_SM = {
