@@ -1195,7 +1195,7 @@ class ExtensionInformation(CSN1):
         ]
 class GPRSCellOptions(CSN1):
     csn1List = [
-        Bit('NMO', BitLen=2),
+        Bit('NMO', ReprName='GPRS cell options', BitLen=2),
         Bit('T3168', BitLen=3),
         Bit('T3192', BitLen=3),
         Bit('DRX_TIMER_MAX', BitLen=3),
@@ -1233,11 +1233,11 @@ class GPRSCellOptions(CSN1):
                 self.remove(self[-1])
                 self.append(w)
                 self.ExtensionLength.Pt = self[-1]
-                
+
 # TS 44.060, section 12.9a: GPRS power ctrl
 class GPRSPowerControlParameters(CSN1):
     csn1List = [
-        Bit('ALPHA', BitLen=4),
+        Bit('ALPHA', ReprName='GPRS power control parameters', BitLen=4),
         Bit('T_AVG_W', BitLen=5),
         Bit('T_AVG_T', BitLen=5),
         Bit('PC_MEAS_CHAN', BitLen=1),
@@ -1245,38 +1245,95 @@ class GPRSPowerControlParameters(CSN1):
         ]
 class PBCCHDescription(CSN1):
     csn1List = [
-        Bit('Pb', BitLen=4),
-        Bit('TSC', BitLen=3),
-        Bit('TN', BitLen=3),
+        Bit('Pb', ReprName='PBCCH global power control', BitLen=4),
+        Bit('TSC', ReprName='PBCCH TSC', BitLen=3, Repr='hum'),
+        Bit('TN', ReprName='PBCCH TN',BitLen=3, Repr='hum'),
         {'0':{'0':BREAK,
-              '1':Bit('ARFCN', BitLen=10, Repr='hum')},
-         '1':Bit('MAIO', BitLen=2)}
+              '1':Bit('PBCCH ARFCN', BitLen=10, Repr='hum')},
+         '1':Bit('PBCCH MAIO', BitLen=6, Repr='hum')}
         ]
+SIChange_dict = {
+    0 : 'Update of unspecified SI message or SI messages',
+    1 : 'Update of SI1 message',
+    2 : 'Update of SI2, SI2 bis or SI2 ter message or any instance of SI2quater messages',
+    3 : 'Update of SI3, SI4, SI7, SI8, SI16 or SI17 message',
+    4 : 'Update of SI9 message',
+    5 : 'Update of SI18 or SI20 message',
+    6 : 'Update of SI19 message',
+    7 : 'Update of SI15 message',
+    8 : 'Update of SI2n message',
+    }
+PrioAccThr_dict = {
+    0 : 'packet access is not allowed in the cell',
+    1 : 'spare, shall be interpreted as 000 (packet access not allowed)', 
+    2 : 'spare, shall be interpreted as 000 (packet access not allowed)',
+    3 : 'packet access is allowed for priority level 1',
+    4 : 'packet access is allowed for priority level 1 to 2',
+    5 : 'packet access is allowed for priority level 1 to 3',
+    6 : 'packet access is allowed for priority level 1 to 4',
+    7 : 'spare, shall be interpreted as 110 (packet access allowed)',
+    }
+NetCtrlOrd_dict = {
+    0 : 'NC0: MS controlled cell re-selection, no measurement reporting',
+    1 : 'NC1: MS controlled cell re-selection, MS sends measurement reports',
+    2 : 'NC2: Network controlled cell re-selection, MS sends measurement reports',
+    3 : 'Reserved for future use, interpreted as NC0 by mobile station',
+    }
+PSI1Rep_dict = {
+    0 : '1 multiframe',
+    1 : '2 multiframes',
+    2 : '3 multiframes',
+    3 : '4 multiframes',
+    4 : '5 multiframes',
+    5 : '6 multiframes',
+    6 : '7 multiframes',
+    7 : '8 multiframes',
+    8 : '9 multiframes',
+    9 : '10 multiframes',
+    10 : '11 multiframes',
+    11 : '12 multiframes',
+    12 : '13 multiframes',
+    13 : '14 multiframes',
+    14 : '15 multiframes',
+    15 : '16 multiframes',
+    }
+SI2nSup_dict = {
+    0 : 'SI2n is not supported',
+	1 : 'SI2n is supported on PACCH',
+	2 : 'SI2n is supported on PACCH and broadcast on BCCH',
+	3 : 'SI2n is supported on PACCH and broadcast on BCCH Ext',
+    }
 class SI13RestOctets(RestOctets):
     csn1List = [
         {'L':BREAK,
          'H':(Bit('BCCH_CHANGE_MARK', BitLen=3, Repr='hum'),
-              Bit('SI_CHANGE_FIELD', BitLen=4),
+              Bit('SI_CHANGE_FIELD', BitLen=4, Repr='hum', Dict=SIChange_dict),
               {'0':BREAK,
                '1':(Bit('SI13_CHANGE_MARK', BitLen=2, Repr='hum'),
                     GPRSMobileAllocation())},
-              {'0':(Bit('RAC', BitLen=8, Repr='hum'),
-                    Bit('SPGC_CCCH_SUP', BitLen=1),
-                    Bit('PRIORITY_ACCESS_THR', BitLen=3),
-                    Bit('NETWORK_CONTROL_ORDER', BitLen=2),
+              {'0':(Bit('RAC', ReprName='Routing Area Code', BitLen=8, Repr='hum'),
+                    Bit('SPGC_CCCH_SUP', ReprName='SPLIT_PG_CYCLE supportedon CCCH',\
+                        BitLen=1, Repr='hum'),
+                    Bit('PRIORITY_ACCESS_THR', BitLen=3, Repr='hum', \
+                        Dict=PrioAccThr_dict),
+                    Bit('NETWORK_CONTROL_ORDER', BitLen=2, Repr='hum', \
+                        Dict=NetCtrlOrd_dict),
                     GPRSCellOptions(),
                     GPRSPowerControlParameters()),
-               '1':(Bit('PSI1_REPEAT_PERIOD', BitLen=4),
+               '1':(Bit('PSI1_REPEAT_PERIOD', BitLen=4, Repr='hum', \
+                    Dict=PSI1Rep_dict),
                     PBCCHDescription())},
               {'L':BREAK, # Rel.99
                'H':(Bit('SGSNR', BitLen=1, Repr='hum', \
                         Dict={0:'R98 or older', 1:'R99 onwards'}),
                     {'L':BREAK, # Rel.4
-                     'H':(Bit('SI_STATUS_IND', BitLen=1),
+                     'H':(Bit('SI_STATUS_IND', ReprName='PACKET SI STATUS support',\
+                              BitLen=1, Repr='hum'),
                           {'L':BREAK, # Rel.6
                            'H':({'0':BREAK,
                                  '1':Bit('LB_MS_TXPWR_MAX_CCH', BitLen=5)},
-                                Bit('SI2n_SUPPORT', BitLen=2))})})})}
+                                Bit('SI2n_SUPPORT', BitLen=2, Repr='hum', \
+                                    Dict=SI2nSup_dict))})})})}
     ]
 
 
@@ -1322,6 +1379,6 @@ class SI6RestOctets(RestOctets):
         {'L':BREAK,
          'H':{'0':BREAK, '1':Bit('AMR_Config', BitLen=4)}}
         ]
-    # for SI6 rest octets, rest bits are random (not 2B, to avoid known plaintext
-    # when attacking A5 encryption
+    # for SI6 rest octets, rest bits are random 
+    # (not 2B, to avoid known plaintext when attacking A5 encryption)
 #
