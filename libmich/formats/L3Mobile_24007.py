@@ -49,6 +49,7 @@ from libmich.formats.L3GSM_rest import *
 # if a field has 1 of the following name (possibly with an _[0-9]{1,} suffix)
 # its content will be mapped onto the corresponding Information Element
 IE_lookup = {
+    'BCDnum' : BCDnum,
     'LAI' : LAI,
     'ID' : ID,
     'MSCm1' : MSCm1,
@@ -251,9 +252,9 @@ PD_dict = IANA_dict({
     5:("mobility management messages", "MM"),
     6:("radio resources management messages", "RR"),
     7:"EPS mobility management messages",
-    8:"GPRS mobility management messages",
+    8:("GPRS mobility management messages", "PS_MM"),
     9:("short messages service", "SMS"),
-    10:"GPRS session management messages",
+    10:("GPRS session management messages", "PS_SM"),
     11:"non call related SS messages",
     12:"Location services", # specified in 3GPP TS 44.071 [8a]
     13:"reserved for extension of the PD to one octet length",
@@ -599,42 +600,4 @@ class Layer3(Layer):
         str_lst.insert(0, '### %s[%s]%s ###\n' % (re, self.CallName, tr))
         # return full inline string without last CR
         return ''.join(str_lst)[:-1]
-    
-#######################################
-# and still to be handled ... somewhere
-# ... actually should be elsewhere
-#######################################
-
-# Packet Service Session Management procedures dict
-#PS_SM = {
-#    65:"GPRS - Activate PDP context request",
-#    66:"GPRS - Activate PDP context accept",
-#    67:"GPRS - Activate PDP context reject",
-#    68:"GPRS - Request PDP context activation",
-#    69:"GPRS - Request PDP context activation rejection",
-#    70:"GPRS - Deactivate PDP context request",
-#    71:"GPRS - Deactivate PDP context accept",
-#    72:"GPRS - Modify PDP context request(Network to MS direction)",
-#    73:"GPRS - Modify PDP context accept (MS to network direction)",
-#    74:"GPRS - Modify PDP context request(MS to network direction)",
-#    75:"GPRS - Modify PDP context accept (Network to MS direction)",
-#    76:"GPRS - Modify PDP context reject",
-#    77:"GPRS - Activate secondary PDP context request",
-#    78:"GPRS - Activate secondary PDP context accept",
-#    79:"GPRS - Activate secondary PDP context reject",
-#    80:"GPRS - Reserved",
-#    81:"GPRS - Reserved",
-#    82:"GPRS - Reserved",
-#    83:"GPRS - Reserved",
-#    84:"GPRS - Reserved",
-#    85:"GPRS - SM Status",
-#    86:"GPRS - Activate MBMS Context Request",
-#    87:"GPRS - Activate MBMS Context Accept",
-#    88:"GPRS - Activate MBMS Context Reject",
-#    89:"GPRS - Request MBMS Context Activation",
-#    90:"GPRS - Request MBMS Context Activation Reject",
-#    91:"GPRS - Request Secondary PDP Context Activation",
-#    92:"GPRS - Request Secondary PDP Context Activation Reject",
-#    93:"GPRS - Notification",
-#    }
-#'''
+#
