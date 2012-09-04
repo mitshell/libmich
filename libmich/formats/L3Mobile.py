@@ -34,6 +34,7 @@ from L3Mobile_MM import *
 from L3Mobile_CC import *
 from L3GSM_RR import *
 from L3Mobile_PS_MM import *
+from L3Mobile_PS_SM import *
 from L3Mobile_24007 import PD_dict
 
 # Handles commonly all defined L3Mobile_XYZ stacks
@@ -76,7 +77,6 @@ L3Call = {
     58:FACILITY,
     61:STATUS,
     62:NOTIFY,
-    #0x100:Header,
     },
 # L3Mobile_MM, PD=5
 5:{
@@ -102,7 +102,6 @@ L3Call = {
     48:MM_NULL,
     49:MM_STATUS,
     50:MM_INFORMATION,
-    #0x100:Header,
     },
 # L3GSM_RR, PD=6
 6:{
@@ -159,6 +158,33 @@ L3Call = {
     32:GMM_STATUS,
     33:GMM_INFORMATION,
     },
+# L3Mobile_PS_SM, PD=10
+10:{
+    65:ACTIVATE_PDP_CONTEXT_REQUEST,
+    66:ACTIVATE_PDP_CONTEXT_ACCEPT,
+    67:ACTIVATE_PDP_CONTEXT_REJECT,
+    68:REQUEST_PDP_CONTEXT_ACTIVATION,
+    69:REQUEST_PDP_CONTEXT_ACTIVATION_REJECT,
+    70:DEACTIVATE_PDP_CONTEXT_REQUEST,
+    71:DEACTIVATE_PDP_CONTEXT_ACCEPT,
+    72:MODIFY_PDP_CONTEXT_REQUEST_NETTOMS,
+    73:MODIFY_PDP_CONTEXT_ACCEPT_MSTONET,
+    74:MODIFY_PDP_CONTEXT_REQUEST_MSTONET,
+    75:MODIFY_PDP_CONTEXT_ACCEPT_NETTOMS,
+    76:MODIFY_PDP_CONTEXT_REJECT,
+    77:ACTIVATE_SECONDARY_PDP_CONTEXT_REQUEST,
+    78:ACTIVATE_SECONDARY_PDP_CONTEXT_ACCEPT,
+    79:ACTIVATE_SECONDARY_PDP_CONTEXT_REJECT,
+    85:SM_STATUS,
+    86:ACTIVATE_MBMS_CONTEXT_REQUEST,
+    87:ACTIVATE_MBMS_CONTEXT_ACCEPT,
+    88:ACTIVATE_MBMS_CONTEXT_REJECT,
+    89:REQUEST_MBMS_CONTEXT_ACTIVATION,
+    90:REQUEST_MBMS_CONTEXT_ACTIVATION_REJECT,
+    91:REQUEST_SECONDARY_PDP_CONTEXT_ACTIVATION,
+    92:REQUEST_SECONDARY_PDP_CONTEXT_ACTIVATION_REJECT,
+    93:GPRS_NOTIFICATION,
+    }
     # Nothing more yet...
 }
 
@@ -179,28 +205,34 @@ def parse_L3(buf):
         return RawLayer(buf)
     # protocol is 4 last bits of 1st byte
     # type is 6 last bits of 2nd byte
-    Prot, Type = ord(buf[0])&0x0F, ord(buf[1])&0x3F
+    Prot, Type = ord(buf[0])&0x0F, ord(buf[1])
+    # for MM, CC and GSM RR, only 6 bits for type
+    if Prot in (3, 5, 6):
+        Type = Type&0x3F
     # get the right protocol from PD
-    if Prot not in L3Call.keys():
-        if Prot not in PD_dict.keys():
+    #if Prot not in L3Call.keys():
+    if Prot not in L3Call:
+        #if Prot not in PD_dict.keys():
+        if Prot not in PD_dict:
             log(ERR, '(parse_L3) unknown L3 prot discr PD: %i' % Prot)
         else:
             log(WNG, '(parse_L3) L3 protocol %s not implemented' % PD_dict[Prot])
         l3 = RawL3()
         l3.map(buf)
     # get the right type from Type
-    elif Type not in L3Call[Prot].keys():
+    #elif Type not in L3Call[Prot].keys():
+    elif Type not in L3Call[Prot]:
         log(ERR, '(parse_L3) L3 message type %i undefined for protocol %s' \
               % (Type, PD_dict[Prot]))
         l3 = RawL3()
         l3.map(buf)
-        # for L3GSM_RR, still use the msg type dict
+        # for L3GSM_RR, still use the msg type dict:
+        # all GSM RR are not implemented
         if Prot == 6:
             l3.Type.Dict = GSM_RR_dict
     # select the correct L3 signalling message
     else:
         l3 = L3Call[Prot][Type]()
-        #l3.map(buf)
         try:
             l3.map(buf)
         except:
@@ -209,10 +241,9 @@ def parse_L3(buf):
             l3.map(buf)
     return l3
 
-
 #
 # OpenBTS typical sequence:
-bts = \
+_bts_test = \
 ['\x05$\x11\x033Y\x90\x05\xf4T\x01\x98\xcb',
  '\x05\x18\x01',
  '\x05Y\x08)\x80\x10\x13\x10w6R',
@@ -262,5 +293,4 @@ bts = \
  '\x06?\x00 @3\x17\xeb!\x01\x00',
  '\x06!\x10\x08)\x80\x10D\x02\x00B\x13',
  "\x06'\x07\x033Y\xa6\x08)\x80\x10D\x02\x00B\x13"]
-
-
+#
