@@ -71,14 +71,14 @@ import sys
 def __version_err():
     print('[ERR] only python 2.6 and 2.7 are supported (unfortunately)')
     raise(Exception)
-if sys.version_info.major == 2:
-    if sys.version_info.minor == 6:
+if sys.version_info[0] == 2:
+    if sys.version_info[1] == 6:
         import copy
         import types
         def _deepcopy_method(x, memo):
             return type(x)(x.im_func, deepcopy(x.im_self, memo), x.im_class)
         copy._deepcopy_dispatch[types.MethodType] = _deepcopy_method
-    elif sys.version_info.minor != 7:
+    elif sys.version_info[1] != 7:
         __version_err()
 else:
     __version_err()
