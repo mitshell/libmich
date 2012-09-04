@@ -172,7 +172,7 @@ IEType = IANA_dict({
 2 : 'GAN Release Indicator',
 3 : 'Radio Identity',
 4 : 'GERAN Cell Identity',
-5 : 'Location Area Identification',
+5 : ('Location Area Identification', 'LAI'),
 6 : 'GERAN/UTRAN coverage Indicator',
 7 : 'GAN Classmark',
 8 : 'Geographical Location',
@@ -183,18 +183,18 @@ IEType = IANA_dict({
 13 : 'GAN Cell Description',
 14 : 'GAN Control Channel Description',
 15 : 'Cell Identifier List',
-16 : 'TU3907 Timer',
+16 : ('TU3907 Timer', 'TU3907'),
 17 : 'GSM RR/UTRAN RRC State',
 18 : 'Routing Area Identification',
 19 : 'GAN Band',
 20 : 'GA-RC/GA-CSR/GA-PSR State',
 21 : 'Register Reject Cause',
-22 : 'TU3906 Timer',
-23 : 'TU3910 Timer',
-24 : 'TU3902 Timer',
+22 : ('TU3906 Timer', 'TU3906'),
+23 : ('TU3910 Timer', 'TU3910'),
+24 : ('TU3902 Timer', 'TU3902'),
 26 : 'L3 Message',
 27 : 'Channel Mode',
-28 : 'Mobile Station Classmark 2',
+28 : ('Mobile Station Classmark 2', 'MSCm2'),
 29 : 'RR Cause',
 30 : 'Cipher Mode Setting',
 31 : 'GPRS Resumption',
@@ -203,13 +203,13 @@ IEType = IANA_dict({
 34 : 'TLLI',
 35 : 'Packet Flow Identifier',
 36 : 'Suspension Cause',
-37 : 'TU3920 Timer',
+37 : ('TU3920 Timer', 'TU3920'),
 38 : 'QoS',
 39 : 'GA-PSR Cause',
 40 : 'User Data Rate',
 41 : 'Routing Area Code',
 42 : 'AP Location',
-43 : 'TU4001 Timer',
+43 : ('TU4001 Timer', 'TU4001'),
 44 : 'Location Status',
 45 : 'Cipher Response',
 46 : 'Ciphering Command RAND',
@@ -226,7 +226,7 @@ IEType = IANA_dict({
 57 : 'LLC-PDU',
 58 : 'Location Black List indicator',
 59 : 'Reset Indicator',
-60 : 'TU4003 Timer',
+60 : ('TU4003 Timer', 'TU4003'),
 61 : 'AP Service Name',
 62 : 'GAN Service Zone Information',
 63 : 'RTP Redundancy Configuration',
@@ -238,7 +238,7 @@ IEType = IANA_dict({
 69 : 'GAN PLMN List',
 71 : 'Required GAN Services',
 72 : 'Broadcast Container',
-73 : '3G Cell Identity',
+73 : ('3G Cell Identity', '3GCellID'),
 74 : '3G Security Capability',
 75 : 'NAS Synchronisation Indicator',
 76 : 'GANC TEID',
@@ -297,7 +297,12 @@ IEType = IANA_dict({
 
 
 class UMA(Block):
-    
+	# selector for type of IE to use
+	# 'new' supports extended Length and Tag
+	# not 'old'
+	#_IE_type = 'new'
+    _IE_type = 'old'
+	
     def __init__(self, mode='control', protocol='GA_RC', 
                        type=RCMsgType['GA-RC DISCOVERY REQUEST']):
         
@@ -326,8 +331,8 @@ class UMA(Block):
     
     def parse(self, s='', mode='control', process_L3=True):
         # map GA header, after checking the protocol discriminator value
-        self.remove(0)
         pd = ord(s[2]) & 0x0F
+        Block.__init__(self, Name='UMA')
         if pd in hdrCall.keys():
             # now easy way to distinguish CP from UP at the UMA layer
             # (may depend if its carried over TCP or UDP?)
@@ -339,7 +344,10 @@ class UMA(Block):
         
         # map iteratively the TLV Information Element
         while len(s) > 0:
-            self < UMA_IE()
+            if self._IE_type == 'old':
+                self < UMA_IE_old()
+            else:
+                self < UMA_IE()
             self[-1].map(s)
             s = s[ len(self[-1]) : ]
             # check if can also handle V with L3Mobile_IE:
