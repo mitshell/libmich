@@ -35,7 +35,7 @@ from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
     Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, \
     Layer3
 from libmich.formats.L3Mobile_MM import CKSN_dict, IDType_dict
-from libmich.formats.L3Mobile_IE import LAI, ID, MSCm1, MSCm2, PLMNlist, MSCm3
+from libmich.formats.L3Mobile_IE import ID, MSCm2, PLMNlist, MSCm3
 
 # TS 24.008 defines L3 signalling for mobile networks
 #
@@ -248,7 +248,7 @@ class GPRS_ATTACH_REQUEST(Layer3):
             Bit('AttachTypeFOR', ReprName='Attach follow-on request pending', \
                 Pt=0, BitLen=1, Repr='hum', Dict=AttachTypeFOR_dict),
             Bit('AttachType', Pt=1, BitLen=3, Repr='hum', Dict=AttachType_dict),
-            Str('DRXpara', ReprName='DRX parameter', Pt='\0\0', Len=2),
+            Str('DRXPara', ReprName='DRX parameter', Pt='\0\0', Len=2),
             Type4_LV('ID', V=ID()),
             Str('RAI', ReprName='Old routing area identification', Pt=6*'\0', \
                 Len=6),
@@ -539,7 +539,7 @@ class ROUTING_AREA_UPDATE_REQUEST(Layer3):
                      V=3*'\0', Len=3),
             Type3_TV('GPRSTimer', ReprName='Request READY timer', T=0x17, \
                      V='\0', Len=1),
-            Type3_TV('DRXpara', ReprName='DRX parameter', T=0x27, \
+            Type3_TV('DRXPara', ReprName='DRX parameter', T=0x27, \
                      V='\0\0', Len=2),
             Type1_TV('TMSIStat', ReprName='TMSI status', T=0x9, V=0, \
                      Dict=TMSIStatus_dict),
