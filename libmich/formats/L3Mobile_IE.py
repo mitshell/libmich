@@ -29,7 +29,8 @@
 #!/usr/bin/env python
 
 # exporting
-__all__ = ['LAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
+__all__ = ['StrBCD', 'BCDnum',
+           'LAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
            'PLMN', 'PLMNlist', 'AuxState',
            'BearerCap', 'CCCap', 'AccessTechnoType_dict']
 
@@ -37,7 +38,7 @@ __all__ = ['LAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
 from binascii import hexlify
 #
 from libmich.core.element import Bit, Int, Str, Layer, \
-    show, debug
+    show, debug, log, ERR, WNG, DBG
 from libmich.core.IANA_dict import IANA_dict
 from libmich.core.CSN1 import CSN1, BREAK, BREAK_LOOP
 from libmich.formats.MCCMNC import MCC_dict, MNC_dict
@@ -52,6 +53,73 @@ from libmich.formats.MCCMNC import MCC_dict, MNC_dict
 #
 # Take care with naming convention here
 # as it is used to pull automatically IEs into L3 messages when parsing them
+
+
+# generic BCR Str() element with encoding / decoding facilities
+class StrBCD(Str):
+    
+    def decode(self):
+        ret = ''
+        for c in self():
+            n1, n2 = ord(c)>>4, ord(c)&0xf
+            ret += hex(n2)[2:]
+            if n1 < 0xF:
+                ret += hex(n1)[2:]
+            else:
+                break
+        return ret
+        
+    def encode(self, num='12345'):
+        if len(num) % 2 == 1:
+            num += 'F'
+        ret = ''
+        for i in range(0, len(num), 2):
+            try:
+                ret += chr( (int(num[i+1], 16)<<4) + int(num[i], 16) )
+            except ValueError:
+                log(ERR, '(StrBCD) assigning invalid number')
+        self.map(ret)
+    
+    def __repr__(self):
+        if self.Repr == 'hum' \
+        and (self.Pt is not None or self.Val is not None):
+            return self.decode()
+        else:
+            return Str.__repr__(self)
+
+# section 10.5.4.7
+# BCD number
+BCDType_dict = {
+    0 : 'unknown',
+    1 : 'international number',
+    2 : 'national number',
+    3 : 'network specific number',
+    4 : 'dedicated access, short code',
+    }
+NumPlan_dict = {
+    0 : 'unknown',
+    1 : 'ISDN / telephony numbering plan (E.164 / E.163)',
+    3 : 'data numbering plan (X.121)',
+    4 : 'telex numbering plan (F.69)',
+    8 : 'national numbering plan',
+    9 : 'private numbering plan',
+    11 : 'reserved for CTS',
+    }
+
+class BCDnum(Layer):
+    constructorList = [
+        Bit('ext', Pt=1, BitLen=1),
+        Bit('Type', ReprName='Type of number', Pt=1, BitLen=3, \
+            Repr='hum', Dict=BCDType_dict),
+        Bit('NumPlan', ReprName='Numbering plan identification', Pt=1, \
+            BitLen=4, Repr='hum', Dict=NumPlan_dict),
+        StrBCD('Num', Pt='\x12')
+        ]
+    def __init__(self, number='', **kwargs):
+        Layer.__init__(self, **kwargs)
+        if number:
+            self.Num.encode(number)
+
 
 # section 10.5.1.3
 # Local Area Identifier, LAC is MNO-specific
