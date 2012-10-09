@@ -6,6 +6,6 @@ setup(name="libmich",
       url="http://michau.benoit.free.fr/codes/libmich/",
       description="A library to manipulate various data formats and network protocols",
       long_description=open("README.txt", "r").read(),
-      version="0.2.1",
+      version="0.2.2",
       license="GPLv2",
       packages=["libmich", "libmich.core", "libmich.formats", "libmich.utils"])
