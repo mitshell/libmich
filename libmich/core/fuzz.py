@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
 # * Copyright © 2011. Benoit Michau. France Telecom.
 # *
@@ -322,7 +322,6 @@ class Mutor:
         self.elmt.Val = self._orig_int + \
                         self.Bit_type_2_val[self.state[2][0]] 
         self.state[2][0] += 1
-    
 
 
 class Layor:
@@ -454,11 +453,10 @@ class Layor:
         pass
 
 
-class Blockor:
-    pass
+#class Blockor:
+#    pass
         #        
         # must handle relationship between Layers:
         # True when PtFunc, LenFunc, TransFunc are not None
         # when Pt, Len, Trans are pointing to other Layers: .get_payload(), 
         # .get_header(), .get_previous(), .get_next()
-

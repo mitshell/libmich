@@ -59,7 +59,13 @@ IE_lookup = {
     'PLMNlist' : PLMNlist,
     'AuxState' : AuxState,
     'BearerCap' : BearerCap,
-    'CCCap' : CCCap, # end of L3Mobile_IE
+    'CCCap' : CCCap,
+    'PDPAddr' : PDPAddr,
+    'QoS' : QoS,
+    'ProtConfig' : ProtConfig,
+    'PFlowID' : PacketFlowID,
+    'MSNetCap' : MSNetCap,
+    'MSRACap' : MSRACap, # end of L3Mobile_IE
     'CellChan' : CellChan,
     'BCCHFreq' : BCCHFreq,
     'ExtBCCHFreq' : ExtBCCHFreq,

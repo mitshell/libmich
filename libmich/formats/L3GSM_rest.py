@@ -75,8 +75,8 @@ class MobAlloc(CSN1):
         Bit('MA_RFchan', ReprName='Mobile Allocation RF channel mask', \
             Pt=0, Repr='bin')
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         #self.csn1List[0].Pt = self.csn1List[1]
         #self.csn1List[0].PtFunc = lambda m: len(m)
         self.csn1List[1].BitLen = self.csn1List[0]
@@ -110,8 +110,8 @@ class RFLNumberList(CSN1):
         Bit('RFL_NUMBER', BitLen=4),
         Bit('more', BitLen=1),
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    #def __init__(self, **kwargs):
+    #    CSN1.__init__(self, **kwargs)
     def map(self, string='', byte_offset=0):
         # work with shtr
         s, l = shtr(string), len(string)*8
@@ -134,8 +134,8 @@ class ARFCNIndexList(CSN1):
         Bit('ARFCN_INDEX', BitLen=6),
         Bit('more', BitLen=1),
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    #def __init__(self, **kwargs):
+    #    CSN1.__init__(self, **kwargs)
     def map(self, string='', byte_offset=0):
         # work with shtr
         s, l = shtr(string), len(string)*8
@@ -159,8 +159,8 @@ class GPRSMobileAllocation(CSN1):
         {'0':(Bit('MA_LENGTH', Pt=7, BitLen=6, Repr='hum'), Bit('MA_BITMAP')), \
          '1':{'0':BREAK, '1':ARFCNIndexList()}}
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         #self.csn1List[2]['0'][0].Pt = self.csn1List[2]['0'][1]
         #self.csn1List[2]['0'][0].PtFunc = lambda b: b.bit_len()-1
         self.csn1List[2]['0'][1].BitLen = self.csn1List[2]['0'][0]
@@ -186,8 +186,8 @@ class DirectEncoding2(CSN1):
         Bit('LengthOfMAFrequencyListContents', Pt=8, BitLen=4),
         Bit('MAFrequencyListContents')
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # MAFrequencyListContents length automation
         #self.csn1List[2].Pt = self.csn1List[3]
         #self.csn1List[2].PtFunc = lambda ma: ma.bit_len()
@@ -291,8 +291,8 @@ class ETWSPrimaryNotificationStatus(CSN1):
         Bit('LengthOfSegment', Pt=8, BitLen=7),
         Bit('ETWSPrimaryNotificationData')
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # ETWSPrimaryNotificationData length automation
         #self.csn1List[2].Pt = self.csn1List[3]
         #self.csn1List[2].PtFunc = lambda dat: dat.bit_len()
@@ -440,8 +440,8 @@ class EGPRSPacketUplinkAssignment(CSN1):
               {'L':BREAK,
                'H':{'0':BREAK, '1':Bit('PFI', BitLen=7)}})}
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # TODO
         #self.csn1List[AdditionalUSF].Trans = self.csn1List[RTTIUSFMode]
         self.csn1List[2]['1'][14]['H']['1'][2].Trans = \
@@ -561,8 +561,8 @@ class IARestOctets(RestOctets):
                     '1':PacketDownlinkAssignment()},
                '1':SecondPartPacketAssignment()}}
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # MA_RFchan length automation
         #self.csn1List[0]['HL'][0].Pt = self.csn1List[0]['HL'][3]
         #self.csn1List[0]['HL'][0].PtFunc = lambda m: m.bit_len()-1
@@ -698,8 +698,8 @@ class UTRANFDDNeighbourCells(CSN1):
         Bit('NR_OF_FDD_CELLS', BitLen=5, Repr='hum'),
         Bit('FDD_CELL_INFORMATION', Repr='hex')
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # FDD_CELL_INFO automation: see 9.1.51.4
         self.csn1List[3].BitLen = self.csn1List[2]
         self.csn1List[3].BitLenFunc = self._fddci_len
@@ -717,8 +717,8 @@ class UTRANTDDNeighbourCells(CSN1):
         Bit('NR_OF_TDD_CELLS', BitLen=5, Repr='hum'),
         Bit('TDD_CELL_INFORMATION', Repr='hex')
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # TDD_CELL_INFO automation: see 9.1.51.4
         self.csn1List[3].BitLen = self.csn1List[2]
         self.csn1List[3].BitLenFunc = self._tddci_len
@@ -819,8 +819,8 @@ class GPRS_REPORT_PRIORITY(CSN1):
         Bit('Number_Cells', Pt=8, BitLen=7),
         Bit('REP_PRIORITY')
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # TODO: confirm length is in bit
         #self.csn1List[0].Pt = self.csn1List[1]
         #self.csn1List[0].PtFunc = lambda rp: rp.bit_len()
@@ -1059,8 +1059,8 @@ class SI2quaterRestOctets(RestOctets):
                                       {'0':BREAK,
                                        '1':CSGCellsReporting()})})})})})}
     ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # TODO: confirm length is in bits
         #self.csn1List[11]['1'][0].Pt = self.csn1List[11]['1'][1]
         #self.csn1List[11]['1'][0].PtFunc = lambda ei: ei.bit_len()-1
@@ -1210,8 +1210,8 @@ class GPRSCellOptions(CSN1):
          '1':(Bit('ExtensionLength', Pt=7, BitLen=6, Repr='hum'),
               Bit('ExtensionInformation'))},
         ]
-    def __init__(self, **kwargs):
-        CSN1.__init__(self, **kwargs)
+    def __init__(self, *args, **kwargs):
+        CSN1.__init__(self, *args, **kwargs)
         # extension info automation: 
         #self.csn1List[8]['1'][0].Pt = self.csn1List[8]['1'][1]
         #self.csn1List[8]['1'][0].PtFunc = lambda ei: ei.bit_len()-1

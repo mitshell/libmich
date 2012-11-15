@@ -35,6 +35,7 @@ from L3Mobile_CC import *
 from L3GSM_RR import *
 from L3Mobile_PS_MM import *
 from L3Mobile_PS_SM import *
+from L3Mobile_IE import *
 from L3Mobile_24007 import PD_dict
 
 # Handles commonly all defined L3Mobile_XYZ stacks

@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.1 
+# * Version : 0.2.2
 # *
 # * Copyright © 2011. Benoit Michau. France Telecom.
 # *
@@ -144,7 +144,7 @@ class GTPv1(Layer):
             Dict=MsgTypeV1),
         Int(CallName='len', ReprName='total length', Type='uint16'),
         Int(CallName='teid', ReprName='tunnel end-point id', \
-            Pt=0, Type='uint32'),
+            Pt=0, Type='uint32', Repr='hex'),
         Int(CallName='seqn', ReprName='sequence number', Pt=0, Type='uint16'),
         Int(CallName='npdu', ReprName='N-PDU number', Pt=0, Type='uint8'),
         Int(CallName='nh', ReprName='next extension header', Pt=0, \

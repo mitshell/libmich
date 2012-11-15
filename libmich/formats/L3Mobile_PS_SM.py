@@ -32,10 +32,9 @@ from libmich.core.element import Bit, Int, Str, Layer, \
     show, debug
 from libmich.core.IANA_dict import IANA_dict
 from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
-    Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, \
-    Layer3
-#from libmich.formats.L3Mobile_MM import CKSN_dict, IDType_dict
-#from libmich.formats.L3Mobile_IE import LAI, ID, MSCm1, MSCm2, PLMNlist, MSCm3
+    Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, Layer3
+from libmich.formats.L3Mobile_IE import QoS, PDPAddr, ProtConfig 
+    #, LAI, ID, MSCm1, MSCm2, PLMNlist, MSCm3
 
 # TS 24.008 defines L3 signalling for mobile networks
 #
@@ -180,7 +179,7 @@ class ACTIVATE_PDP_CONTEXT_REQUEST(Layer3):
                 Pt=5, Type='uint8'),
             Int('LLC_SAPI', ReprName='Requested LLC service access point id', \
                 Pt=0, Type='uint8', Dict=LLCSAPI_dict),
-            Type4_LV('QoS', ReprName='Requested QoS', V=12*'\0'),
+            Type4_LV('QoS', ReprName='Requested QoS', V=QoS()),
             Type4_LV('PDPAddr', ReprName='Requested PDP address', V='\0\x01'),
             Type4_TLV('APN', ReprName='Access point name', T=0x28, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
@@ -202,14 +201,14 @@ class ACTIVATE_PDP_CONTEXT_ACCEPT(Layer3):
         self.extend([ \
             Int('LLC_SAPI', ReprName='Negociated LLC service access point id', \
                 Pt=0, Type='uint8', Dict=LLCSAPI_dict),
-            Type4_LV('QoS', ReprName='Negociated QoS', V=12*'\0'),
-            Bit('spare', Pt=1, BitLen=4),
+            Type4_LV('QoS', ReprName='Negociated QoS', V=QoS()),
+            Bit('spare', Pt=0, BitLen=4),
             Bit('RadioPrio', ReprName='Radio priority', Pt=1, BitLen=4),
             Type4_TLV('PDPAddr', ReprName='Requested PDP address', \
                       T=0x2B, V='\0\x01'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
                       T=0x27, V='\x80'),
-            Type4_TLV('PFlowId', ReprName='Packet flow id', T=0x34, V='\0'),
+            Type4_TLV('PFlowID', ReprName='Packet flow id', T=0x34, V='\0'),
             Type4_TLV('SMCause', T=0x39, V='\0'), 
             ])
         self._post_init(with_options, **kwargs)
@@ -244,7 +243,7 @@ class ACTIVATE_SECONDARY_PDP_CONTEXT_REQUEST(Layer3):
                 Pt=5, Type='uint8'),
             Int('LLC_SAPI', ReprName='Requested LLC service access point id', \
                 Pt=0, Type='uint8', Dict=LLCSAPI_dict),
-            Type4_LV('QoS', ReprName='Requested QoS', V=12*'\0'),
+            Type4_LV('QoS', ReprName='Requested QoS', V=QoS()),
             Type4_LV('LinkedTI', V='\0'),
             Type4_TLV('TFT', ReprName='Traffic flow template', T=0x36, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
@@ -264,10 +263,10 @@ class ACTIVATE_SECONDARY_PDP_CONTEXT_ACCEPT(Layer3):
         self.extend([ \
             Int('LLC_SAPI', ReprName='Negociated LLC service access point id', \
                 Pt=0, Type='uint8', Dict=LLCSAPI_dict),
-            Type4_LV('QoS', ReprName='Negociated QoS', V=12*'\0'),
-            Bit('spare', Pt=1, BitLen=4),
+            Type4_LV('QoS', ReprName='Negociated QoS', V=QoS()),
+            Bit('spare', Pt=0, BitLen=4),
             Bit('RadioPrio', ReprName='Radio priority', Pt=1, BitLen=4),
-            Type4_TLV('PFlowId', ReprName='Packet flow id', T=0x34, V='\0'),
+            Type4_TLV('PFlowID', ReprName='Packet flow id', T=0x34, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
                       T=0x27, V='\x80'),
             ])
@@ -332,13 +331,13 @@ class MODIFY_PDP_CONTEXT_REQUEST_NETTOMS(Layer3):
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
-            Bit('spare', Pt=1, BitLen=4),
+            Bit('spare', Pt=0, BitLen=4),
             Bit('RadioPrio', ReprName='Radio priority', Pt=1, BitLen=4),
             Int('LLC_SAPI', ReprName='Requested LLC service access point id', \
                 Pt=0, Type='uint8', Dict=LLCSAPI_dict),
-            Type4_LV('QoS', ReprName='New QoS', V=12*'\0'),
+            Type4_LV('QoS', ReprName='New QoS', V=QoS()),
             Type4_TLV('PDPAddr', ReprName='PDP address', T=0x2B, V='\0\x01'),
-            Type4_TLV('PFlowId', ReprName='Packet flow id', T=0x34, V='\0'),
+            Type4_TLV('PFlowID', ReprName='Packet flow id', T=0x34, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
                       T=0x27, V='\x80'),
             Type4_TLV('TFT', ReprName='Traffic flow template', T=0x36, V='\0'),
@@ -357,7 +356,7 @@ class MODIFY_PDP_CONTEXT_REQUEST_MSTONET(Layer3):
         self.extend([ \
             Type3_TV('LLC_SAPI', ReprName='Requested LLC service access point id', \
                      T=0x32, V='\0', Len=1),
-            Type4_TLV('QoS', ReprName='New QoS', T=0x30, V=12*'\0'),
+            Type4_TLV('QoS', ReprName='New QoS', T=0x30, V=QoS()),
             Type4_TLV('TFT', ReprName='New traffic flow template', T=0x31, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
                       T=0x27, V='\x80'),
@@ -389,11 +388,11 @@ class MODIFY_PDP_CONTEXT_ACCEPT_NETTOMS(Layer3):
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
-            Type4_TLV('QoS', ReprName='Negociated QoS', T=0x30, V=12*'\0'),
+            Type4_TLV('QoS', ReprName='Negociated QoS', T=0x30, V=QoS()),
             Type3_TV('LLC_SAPI', ReprName='Negociated LLC service access point id', \
                      T=0x32, V='\0', Len=1),
             Type1_TV('RadioPrio', ReprName='New padio priority', T=0x8, V=1),
-            Type4_TLV('PFlowId', ReprName='Packet flow id', T=0x34, V='\0'),
+            Type4_TLV('PFlowID', ReprName='Packet flow id', T=0x34, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \
                       T=0x27, V='\x80'),
             ])
@@ -462,7 +461,7 @@ class REQUEST_SECONDARY_PDP_CONTEXT_ACTIVATION(Layer3):
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
-            Type4_LV('QoS', ReprName='Requested QoS', V=12*'\0'),
+            Type4_LV('QoS', ReprName='Requested QoS', V=QoS()),
             Type4_LV('LinkedTI', V='\0'),
             Type4_TLV('TFT', ReprName='Traffic flow template', T=0x36, V='\0'),
             Type4_TLV('ProtConfig', ReprName='Protocol configuration options', \

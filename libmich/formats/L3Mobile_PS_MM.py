@@ -435,7 +435,7 @@ class AUTHENTICATION_CIPHERING_REQUEST(Layer3):
             Bit('IMEISV', ReprName='IMEISV requested', Pt=0, BitLen=4),
             Bit('CiphAlg', ReprName='Ciphering algorithm', Pt=0, BitLen=4, \
                 Repr='hum', Dict=CiphAlg_dict),
-            Bit('ACRef', ReprName='A&C reference numver', Pt=0, BitLen=4, \
+            Bit('ACRef', ReprName='A&C reference number', Pt=0, BitLen=4, \
                 Repr='hex'),
             Bit('ForceStdby', ReprName='Force to standby', Pt=0, BitLen=4, \
                 Repr='hum', Dict=ForceStdby_dict),
@@ -500,7 +500,7 @@ class GPRS_IDENTITY_REQUEST(Layer3):
         self.extend([ \
             Bit('ForceStdby', ReprName='Force to standby', Pt=0, BitLen=4, \
                 Repr='hum', Dict=ForceStdby_dict),
-            Bit('IDType', Pt=0, BitLen=4, Repr='hum', Dict=IDType_dict)
+            Bit('IDType', Pt=1, BitLen=4, Repr='hum', Dict=IDType_dict)
             ])
         self._post_init(with_options, **kwargs)
 #

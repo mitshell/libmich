@@ -83,8 +83,7 @@ if sys.version_info[0] == 2:
 else:
     __version_err()
 #
-
-# exporting
+# export filter
 __all__ = ['Element', 'Str', 'Int', 'Bit', 'Layer', 'Block',
            'type_funcs', 'debug_level', 'debug', 'ERR', 'WNG', 'DBG', 'log',
            'show', 'showattr',
@@ -412,7 +411,9 @@ class Str(Element):
         if self.Pt is None and self.Val is None: 
             return repr(None)
         if self.Repr == "ipv4":
-            if self.safe: assert( len(self) == 4 )
+            #if self.safe: assert( len(self) == 4 )
+            if len(self) != 4:
+                return "0x%s" % hex(self)
             return inet_ntoa( str(self) )
         elif self.Repr == "hex": 
             ret = "0x%s" % hex(self)
@@ -645,16 +646,17 @@ class Int(Element):
         if self.Repr == "hex": return "0x%s" % hex(self)
         elif self.Repr == "bin": return "0b%s" % self.__bin__()
         elif self.Repr == "hum":
+            value = self()
             if self.DictFunc:
                 if self.safe:
                     assert(hasattr(self.DictFunc(self.Dict), '__getitem__'))
-                try: val = self.DictFunc(self.Dict)[self()]
-                except KeyError: val = self()
+                try: val = '%i : %s' % (value, self.DictFunc(self.Dict)[value])
+                except KeyError: val = value
             elif self.Dict:
-                try: val = self.Dict[self()]
-                except KeyError: val = self()
+                try: val = '%i : %s' % (value, self.Dict[value])
+                except KeyError: val = value
             else:
-                val = self()
+                val = value
             #return repr(val)
             rep = repr(val)
             if rep[-1] == 'L':
@@ -894,16 +896,17 @@ class Bit(Element):
         if self.Repr == "hex": return "0x%s" % self.__hex__()
         elif self.Repr == "bin": return "0b%s" % self.__bin__()
         elif self.Repr == "hum":
+            value = self()
             if self.DictFunc:
                 if self.safe:
                     assert(hasattr(self.DictFunc(self.Dict), '__getitem__'))
-                try: val = self.DictFunc(self.Dict)[self()]
-                except KeyError: val = self()
+                try: val = '%i : %s' % (value, self.DictFunc(self.Dict)[value])
+                except KeyError: val = value
             elif self.Dict:
-                try: val = self.Dict[self()]
-                except KeyError: val = self()
-            else: 
-                val = self()
+                try: val = '%i : %s' % (value, self.Dict[value])
+                except KeyError: val = value
+            else:
+                val = value
             #return repr(val)
             rep = repr(val)
             if rep[-1] == 'L':
@@ -1821,4 +1824,4 @@ class testB(Layer):
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
         self.L.PtFunc = lambda X: self[4].bit_len() + self[5].bit_len()
-
+#
