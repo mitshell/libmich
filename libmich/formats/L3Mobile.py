@@ -198,16 +198,44 @@ class RawL3(Layer3):
         Int('Type', Pt=0, Type='uint8'),
         Str('Msg', Pt='', Len=None, Repr='hex')]
 #
-
-def parse_L3(buf):
+# this is specific to parse L3GSM_RR signalling sent over BCCH and CCCH
+# we need to remove the L2 pseudo-header (what comes from LengthRR())
+# before we parse the string buffer
+L3GSM_RRwL2 = [
+    0, # SI_13
+    2, # SI_2bis
+    3, # SI_2ter
+    7, # SI_2quater
+    25, # SI_1
+    26, # SI_2
+    27, # SI_3
+    28, # SI_4
+    33, # PAGING_REQUEST_1
+    34, # PAGING_REQUEST_2
+    36, # PAGING_REQUEST_3
+    63, # IMMEDIATE_ASSIGNMENT
+    ]
+#
+def parse_L3(buf, L2_length_incl=0):
+    '''
+    This is a global parser for mobile layer 3 signalling.
+    It works fine as is with MM, CC, GMM and SM protocols.
+    For GSM RR signalling, the length of the L2 pseudo-length header (1 byte)
+    needs to be passed as parameter "L2_length_incl" to retrieve correctly 
+    the protocol discriminator and message type.
+    E.g. for messages passed over GSM BCCH or CCCH: L2_length_incl=1
+    
+    parse_L3(string_buffer, L2_length_incl=0) -> L3Mobile_instance
+    '''
     # select message from PD and Type
     if len(buf) < 2:
         log(ERR, '(parse_L3) message too short for L3 mobile')
         return RawLayer(buf)
+    #
     # protocol is 4 last bits of 1st byte
     # type is 6 last bits of 2nd byte
-    Prot, Type = ord(buf[0])&0x0F, ord(buf[1])
-    # for MM, CC and GSM RR, only 6 bits for type
+    Prot, Type = ord(buf[L2_length_incl])&0x0F, ord(buf[L2_length_incl+1])
+    # for MM, CC and GSM RR, only 6 1st bits for type
     if Prot in (3, 5, 6):
         Type = Type&0x3F
     # get the right protocol from PD
@@ -228,7 +256,7 @@ def parse_L3(buf):
         l3 = RawL3()
         l3.map(buf)
         # for L3GSM_RR, still use the msg type dict:
-        # all GSM RR are not implemented
+        # because GSM RR are not all implemented
         if Prot == 6:
             l3.Type.Dict = GSM_RR_dict
     # select the correct L3 signalling message
