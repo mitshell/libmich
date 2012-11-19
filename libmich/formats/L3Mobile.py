@@ -198,23 +198,6 @@ class RawL3(Layer3):
         Int('Type', Pt=0, Type='uint8'),
         Str('Msg', Pt='', Len=None, Repr='hex')]
 #
-# this is specific to parse L3GSM_RR signalling sent over BCCH and CCCH
-# we need to remove the L2 pseudo-header (what comes from LengthRR())
-# before we parse the string buffer
-L3GSM_RRwL2 = [
-    0, # SI_13
-    2, # SI_2bis
-    3, # SI_2ter
-    7, # SI_2quater
-    25, # SI_1
-    26, # SI_2
-    27, # SI_3
-    28, # SI_4
-    33, # PAGING_REQUEST_1
-    34, # PAGING_REQUEST_2
-    36, # PAGING_REQUEST_3
-    63, # IMMEDIATE_ASSIGNMENT
-    ]
 #
 def parse_L3(buf, L2_length_incl=0):
     '''
