@@ -33,7 +33,6 @@ provides "formats" repo with:
 - PPP: few Point-to-Point Protocol headers format
 - RTP: headers format
 - UMA: messages format
-- UMA_femto: proprietary extension of UMA developped by Kineto and Ubiquisys for femtocells
 - SIGTRAN: very basic header format implementation
 - GTP: GTPv1 and GTPv2 messages and headers format
 - L2GSM, L3GSM_*: layer 2 and 3 signalling messages format
@@ -45,15 +44,7 @@ provides "formats" repo with:
 - PNG: image container format
 - BMP: image container format
 - JPEG: image container format
-
-provides "machines" repo with:
-- EAPAKA library with helpful EAP-AKA/SIM key manager functions and a not too uncomplete EAP-AKA/SIM client implementation
-- IKEv2 library with helpful key manager functions, and an attempt to bring some commodity for making an IKEv2 client
-- UMA very basic library with "discover" and "register" methods only
-- pyosmo library to make kung-fu with GSM networks on top of an osmocom-bb phone
-- UMA_femto library to handle an ubiquisys femtocell and run your own 3G core network
-- GTPU library for running a micro GGSN / GTP tunnel handler
 '''
 
-__all__ = ['core', 'utils', 'formats', 'machines', 'tools']
+__all__ = ['core', 'utils', 'formats']
 __version__ = '0.2.2'
