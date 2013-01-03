@@ -260,9 +260,9 @@ class LOCATION_UPDATING_REQUEST(Layer3):
         Layer3.__init__(self)
         self.extend([ \
             Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                Pt=0, BitLen=4, Dict=CKSN_dict),
+                Pt=0, BitLen=4, Dict=CKSN_dict, Repr='hum'),
             Bit('LUType', ReprName='Location Update Type', \
-                Pt=0, BitLen=4, Dict=LUType_dict),
+                Pt=0, BitLen=4, Dict=LUType_dict, Repr='hum'),
             Str('LAI', Pt=LAI(), Len=5),
             Str('MSCm1', Pt=MSCm1(), Len=1),
             Type4_LV('ID', V=ID()),
@@ -293,7 +293,7 @@ class AUTHENTICATION_REQUEST(Layer3):
         self.extend([ \
             Bit('spare', Pt=0, BitLen=4),
             Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                Pt=0, BitLen=4, Dict=CKSN_dict),
+                Pt=0, BitLen=4, Dict=CKSN_dict, Repr='hum'),
             Str('RAND', Pt=16*'\0', Len=16, Repr='hex'),
             Type4_TLV('AUTN', T=0x20, V=16*'\0')])
         self.AUTN.V.Repr = 'hex'
@@ -410,7 +410,7 @@ class CM_SERVICE_PROMPT(Layer3):
         self.extend([ \
             Bit('spare', Pt=0, BitLen=2),
             Bit('SAPI', Pt=0, BitLen=2),
-            Bit('SAPI_PD', Pt=6, BitLen=4, Dict=PD_dict)])
+            Bit('SAPI_PD', Pt=6, BitLen=4, Dict=PD_dict, Repr='hum')])
         self._post_init(with_options, **kwargs)
 
 # section 9.2.6
@@ -453,8 +453,8 @@ class CM_SERVICE_REQUEST(Layer3):
         Layer3.__init__(self)
         self.extend([ \
             Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                Pt=0, BitLen=4, Dict=CKSN_dict),
-            Bit('Service', Pt=1, BitLen=4, Dict=CMService_dict),
+                Pt=0, BitLen=4, Dict=CKSN_dict, Repr='hum'),
+            Bit('Service', Pt=1, BitLen=4, Dict=CMService_dict, Repr='hum'),
             Type4_LV('MSCm2', V=MSCm2()),
             Type4_LV('ID', V=ID()),
             Type1_TV('Priority', T=0x8, V=0)])
@@ -477,7 +477,7 @@ class CM_REESTABLISHMENT_REQUEST(Layer3):
         self.extend([ \
             Bit('spare', Pt=0, BitLen=4),
             Bit('CKSN', ReprName='Ciphering Key Sequence Number', \
-                Pt=0, BitLen=4, Dict=CKSN_dict),
+                Pt=0, BitLen=4, Dict=CKSN_dict, Repr='hum'),
             Type4_LV('MSCm2', V=MSCm2()),
             Type4_LV('ID', V=ID()),
             Type3_TV('LAI', T=0x13, V=LAI(), Len=5)])
