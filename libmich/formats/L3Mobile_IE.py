@@ -29,8 +29,8 @@
 #!/usr/bin/env python
 
 # exporting
-__all__ = ['StrBCD', 'BCDnum',
-           'LAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
+__all__ = ['StrBCD', 'BCDNumber', 'BCDType_dict', 'NumPlan_dict',
+           'LAI', 'RAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
            'PLMN', 'PLMNlist', 'AuxState',
            'BearerCap', 'CCCap', 'AccessTechnoType_dict', 'MSNetCap', 'MSRACap',
            'PDPAddr', 'QoS', 'ProtID', 'ProtConfig', 'PacketFlowID',
@@ -62,26 +62,27 @@ from libmich.formats.MCCMNC import MCC_dict, MNC_dict
 class StrBCD(Str):
     
     def decode(self):
-        ret = ''
+        ret = []
         for c in self():
+            # get 4 MSB, 4 LSB
             n1, n2 = ord(c)>>4, ord(c)&0xf
-            ret += hex(n2)[2:]
-            if n1 < 0xF:
-                ret += hex(n1)[2:]
-            else:
-                break
-        return ret
-        
+            if n2 < 0xA: ret.append( hex(n2)[2:] )
+            else: break
+            if n1 < 0xA: ret.append( hex(n1)[2:] )
+            else: break
+        return ''.join(ret)
+    
     def encode(self, num='12345'):
         if len(num) % 2 == 1:
             num += 'F'
-        ret = ''
+        ret = []
         for i in range(0, len(num), 2):
             try:
-                ret += chr( (int(num[i+1], 16)<<4) + int(num[i], 16) )
+                ret.append( chr((int(num[i+1], 16)<<4) + int(num[i], 16)) )
             except ValueError:
                 log(ERR, '(StrBCD) assigning invalid number')
-        self.map(ret)
+        self < None
+        self > ''.join(ret)
     
     def __repr__(self):
         if self.Repr == 'hum' \
@@ -109,19 +110,19 @@ NumPlan_dict = {
     11 : 'reserved for CTS',
     }
 
-class BCDnum(Layer):
+class BCDNumber(Layer):
     constructorList = [
-        Bit('ext', Pt=1, BitLen=1),
+        Bit('Ext', ReprName='Extension', Pt=1, BitLen=1, Repr='hum'),
         Bit('Type', ReprName='Type of number', Pt=1, BitLen=3, \
             Repr='hum', Dict=BCDType_dict),
         Bit('NumPlan', ReprName='Numbering plan identification', Pt=1, \
             BitLen=4, Repr='hum', Dict=NumPlan_dict),
         StrBCD('Num', Pt='\x12')
         ]
-    def __init__(self, number='', **kwargs):
+    def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
-        if number:
-            self.Num.encode(number)
+        if 'Num' in kwargs:
+            self.Num.encode(kwargs['Num'])
 
 
 # section 10.5.1.3
@@ -134,11 +135,11 @@ class LAI(Layer):
         Bit('MCC3', Pt=0, BitLen=4, Repr='hum'),
         Bit('MNC2', Pt=0, BitLen=4, Repr='hum'),
         Bit('MNC1', Pt=0, BitLen=4, Repr='hum'),
-        Str('LAC', Pt='\0\0', Len=2, Repr='hex')]
+        Int('LAC', Pt=0, Type='uint16', Repr='hex')]
     
-    def __init__(self, mccmnc='001001', lac='\0\0'):
+    def __init__(self, mccmnc='001001', lac=0x0000):
         Layer.__init__(self)
-        self.LAC > lac[:2]
+        self.LAC > lac
         if len(mccmnc) not in (5, 6):
             return
         self.MCC1 > int(mccmnc[0])
@@ -153,7 +154,7 @@ class LAI(Layer):
         
     def __repr__(self):
         return '<[LAI]: MCC: %s / MNC: %s / LAC: %s>' \
-               % (self.MCC(), self.MNC(), hexlify(self.LAC()))
+               % (self.MCC(), self.MNC(), hex(self.LAC()))
     
     def MCC(self):
         return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
@@ -164,7 +165,46 @@ class LAI(Layer):
         else:
             return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
     
-#
+class RAI(Layer):
+    constructorList = [
+        Bit('MCC2', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MCC1', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MNC3', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MCC3', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MNC2', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MNC1', Pt=0, BitLen=4, Repr='hum'),
+        Int('LAC', Pt=0, Type='uint16', Repr='hex'),
+        Int('RAC', Pt=0, Type='uint8', Repr='hex'),
+        ]
+    
+    def __init__(self, mccmnc='001001', lac=0, rac=0):
+        Layer.__init__(self)
+        self.LAC > lac
+        self.RAC > rac
+        if len(mccmnc) not in (5, 6):
+            return
+        self.MCC1 > int(mccmnc[0])
+        self.MCC2 > int(mccmnc[1])
+        self.MCC3 > int(mccmnc[2])
+        self.MNC1 > int(mccmnc[3])
+        self.MNC2 > int(mccmnc[4])
+        if len(mccmnc) == 5:
+            self.MNC3 > 0b1111
+            return
+        self.MNC3 > int(mccmnc[5])
+        
+    def __repr__(self):
+        return '<[RAI]: MCC: %s / MNC: %s / LAC: %s / RAC: %s>' \
+               % (self.MCC(), self.MNC(), hex(self.LAC()), hex(self.RAC()))
+    
+    def MCC(self):
+        return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
+    
+    def MNC(self):
+        if self.MNC3() == 0b1111:
+            return '%i%i' % (self.MNC1(), self.MNC2())
+        else:
+            return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
 
 # section 10.5.1.4
 # Mobile Identity
@@ -216,7 +256,7 @@ class ID(Layer):
         try:
             self.digit1 > int(digits[0])
         except ValueError:
-                debug(self.dbg, 2, '(ID) non digit character: %s' % digits[0])
+            debug(self.dbg, 2, '(ID) non digit character: %s' % digits[0])
         ext, i = [], 2
         for d in digits[1:]:
             try:
