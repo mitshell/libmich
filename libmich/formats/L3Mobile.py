@@ -32,6 +32,7 @@ from libmich.core.element import RawLayer, Block, show, debug, \
     log, ERR, WNG, DBG
 from L3Mobile_MM import *
 from L3Mobile_CC import *
+from L3Mobile_SMS import *
 from L3GSM_RR import *
 from L3Mobile_PS_MM import *
 from L3Mobile_PS_SM import *
@@ -158,6 +159,12 @@ L3Call = {
     22:GPRS_IDENTITY_RESPONSE,
     32:GMM_STATUS,
     33:GMM_INFORMATION,
+    },
+# L3Mobile_SMS, PD=9
+9:{
+    1:CP_DATA,
+    4:CP_ACK,
+    16:CP_ERROR,
     },
 # L3Mobile_PS_SM, PD=10
 10:{
