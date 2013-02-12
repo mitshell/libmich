@@ -1121,9 +1121,15 @@ class Layer(object):
             if e == element:
                 self.elementList.remove(element)
     
-    #def replace(self, current_element, new_element):    
-    #    self.remove(current_element)
-    #    self.letitforfutureimplementation()
+    def replace(self, current_element, new_element):
+        # check index of the element ro replace
+        index = 0
+        for elt in self.elementList:
+            if elt == current_element:
+                self.remove(current_element)
+                self.insert(index, new_element)
+            else:
+                index += 1
     
     # define some attribute facilities for managing elements 
     # by their CallName into the Layer
