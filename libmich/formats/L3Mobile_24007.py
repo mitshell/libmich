@@ -32,7 +32,7 @@
 __all__ = ['Type1_V', 'Type1_TV', 'Type2', 'Type3_V', 'Type3_TV', \
            'Type4_LV', 'Type4_TLV', 'Type6_LVE', 'Type6_TLVE', \
            'PD_dict', 'IE_lookup', \
-           'StrRR', 'Layer3']
+           'RR_in_CCCH', 'StrRR', 'Layer3']
 
 from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
      Block, show, log, ERR, WNG, DBG
@@ -49,8 +49,12 @@ from libmich.formats.L3GSM_rest import *
 # if a field has 1 of the following name (possibly with an _[0-9]{1,} suffix)
 # its content will be mapped onto the corresponding Information Element
 IE_lookup = {
-    'BCDnum' : BCDnum,
+    'BCDnumber' : BCDNumber,
+    'CallingBCD' : BCDNumber,
+    'CalledBCD' : BCDNumber,
+    'RedirectingBCD' : BCDNumber,
     'LAI' : LAI,
+    'RAI' : RAI,
     'ID' : ID,
     'MSCm1' : MSCm1,
     'MSCm2' : MSCm2,
@@ -305,18 +309,9 @@ class StrRR(Str):
 
 RR_in_CCCH = [
 'IMMEDIATE_ASSIGNMENT', 'PAGING_REQUEST_1', 'PAGING_REQUEST_2', \
-'PAGING_REQUEST_3', 'SI_1', 'SI_2', 'SI_2bis', 'SI_2ter', 'SI_2quater', \
+'PAGING_REQUEST_3', 'SI_1', 'SI_2', 'SI_2bis', 'SI_2ter', \ 'SI_2quater', \
 'SI_3', 'SI_4', 'SI_13']
 
-'''
-__all__ = ['ASSIGNMENT_COMMAND', 'ASSIGNMENT_COMPLETE', 'ASSIGNMENT_FAILURE',\
-           'CHANNEL_RELEASE', 'CHANNEL_REQUEST', 'MEASUREMENT_REPORT', \
-           'CLASSMARK_ENQUIRY', 'CLASSMARK_CHANGE', \
-           'IMMEDIATE_ASSIGNMENT', 'PAGING_REQUEST_1', 'PAGING_REQUEST_2', \
-           'PAGING_REQUEST_3', 'PAGING_RESPONSE', \
-           'SI_1', 'SI_2', 'SI_2bis', 'SI_2ter', 'SI_2quater', 'SI_3', \
-           'SI_4', 'SI_5', 'SI_5bis', 'SI_5ter', 'SI_6', 'SI_13',
-            'RestOctets', 'GSM_RR_dict']'''
            
 ######
 # Now is for any mobile L3 messages (including GSM RR)

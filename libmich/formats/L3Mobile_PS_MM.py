@@ -357,7 +357,8 @@ class GPRS_DETACH_REQUEST(Layer3):
     constructorList = [ie for ie in Header(8, 5)]
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        if self.initiator == 'Net':
+        if self._initiator == 'Net':
+            # Mobile terminated detach procedure
             self.extend([ \
             Bit('ForceStdby', ReprName='Force to standby', Pt=0, BitLen=4, \
                 Repr='hum', Dict=ForceStdby_dict),
@@ -366,6 +367,7 @@ class GPRS_DETACH_REQUEST(Layer3):
             Type3_TV('GMMCause', T=0x25, V='\x01', Len=1), # see GMMCause_dict
             ])
         else:
+            # Mobile originating detach procedure
             self.extend([ \
             Bit('spare', Pt=0, BitLen=4, Repr='hex'),
             Bit('DetachType', Pt=1, BitLen=4, Repr='hum', \
@@ -385,7 +387,8 @@ class GPRS_DETACH_ACCEPT(Layer3):
     constructorList = [ie for ie in Header(8, 6)]
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        if self.initiator == 'Net':
+        if self._initiator != 'Net':
+            # Mobile originating detach procedure
             self.extend([ \
             Bit('spare', Pt=0, BitLen=4, Repr='hex'),
             Bit('ForceStdby', ReprName='Force to standby', Pt=0, BitLen=4, \

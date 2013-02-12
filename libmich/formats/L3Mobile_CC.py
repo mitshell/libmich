@@ -245,7 +245,8 @@ class CONNECT(Layer3):
     constructorList = [ie for ie in Header(3, 7)]
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        if self.initiator == 'Net':
+        if self._initiator == 'Net':
+            # network to MS direction
             self.extend([ \
             Type4_TLV('Facility', T=0x1C, V=''),
             Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
@@ -254,7 +255,7 @@ class CONNECT(Layer3):
             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                        V='\0')])
         else:
-        #elif self.initiator == 'ME':
+            # MS to network direction
             self.extend([ \
             Type4_TLV('Facility', T=0x1C, V=''),
             Type4_TLV('Subaddr', T=0x4D, V=''),
@@ -295,7 +296,8 @@ class DISCONNECT(Layer3):
         self.extend([ \
             Type4_LV('Cause',V='\0\x80'),
             Type4_TLV('Facility', T=0x1C, V='')])
-        if self.initiator == 'Net':
+        if self._initiator == 'Net':
+            # network to MS direction
             self.extend([ \
             Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
@@ -303,6 +305,7 @@ class DISCONNECT(Layer3):
             Type4_TLV('AA', ReprName='Allowed Actions (CCBS)', \
                       T=0x7B, V='\0')])
         else:
+            # MS to network direction
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
         self._post_init(with_options, **kwargs)
 
@@ -343,7 +346,8 @@ class FACILITY(Layer3):
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([Type4_LV('Facility', T=0x1C, V='')])
-        if self.initiator != 'Net':
+        if self._initiator != 'Net':
+            # MS to network direction
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
         self._post_init(with_options, **kwargs)
 
@@ -541,7 +545,8 @@ class RELEASE(Layer3):
             Type4_TLV('Facility', T=0x1C, V=''),
             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                       V='\0')])
-        if self.initiator != 'Net':
+        if self._initiator != 'Net':
+            # MS to network direction
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
         self._post_init(with_options, **kwargs)
 
@@ -585,7 +590,8 @@ class RELEASE_COMPLETE(Layer3):
             Type4_TLV('Facility', T=0x1C, V=''),
             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                       V='\0')])
-        if self.initiator != 'Net':
+        if self._initiator != 'Net':
+            # MS to network direction
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
         self._post_init(with_options, **kwargs)
 
@@ -684,7 +690,8 @@ class SETUP(Layer3):
             Type4_TLV('BearerCap', T=0x4, V=BearerCap()),
             Type4_TLV('BearerCap_2', T=0x4, V=BearerCap(), Trans=True),
             Type4_TLV('Facility', T=0x1C, V='')])
-        if self.initiator == 'Net':
+        if self._initiator == 'Net':
+            # network to MS direction
             self.extend([ \
             Type4_TLV('ProgressInd', T=0x1E, V='\x80\x80'),
             Type3_TV('Signal', T=0x34, V='\0', Len=1),
@@ -710,6 +717,7 @@ class SETUP(Layer3):
             Type4_TLV('CauseNoCLI', T=0x3A, V='\0'),
             Type4_TLV('BUBearerCap', T=0x41, V='\0')])
         else:
+            # MS to network direction
             self.extend([ \
             Type4_TLV('CallingSub', T=0x5D, V=''),
             Type4_TLV('CalledBCD', T=0x5E, V='\0'),
