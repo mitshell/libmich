@@ -309,7 +309,7 @@ class StrRR(Str):
 
 RR_in_CCCH = [
 'IMMEDIATE_ASSIGNMENT', 'PAGING_REQUEST_1', 'PAGING_REQUEST_2', \
-'PAGING_REQUEST_3', 'SI_1', 'SI_2', 'SI_2bis', 'SI_2ter', \ 'SI_2quater', \
+'PAGING_REQUEST_3', 'SI_1', 'SI_2', 'SI_2bis', 'SI_2ter', 'SI_2quater', \
 'SI_3', 'SI_4', 'SI_13']
 
            
@@ -326,7 +326,7 @@ class Layer3(Layer):
     # message format dependancy: Net / ME
     # needed for some messages in L3Mobile_CC
     #initiator = 'Net'
-    initiator = 'ME'
+    _initiator = 'ME'
     
     # for a complete decoding
     _interpret_IE = True
