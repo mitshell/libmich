@@ -324,8 +324,8 @@ class Layer3(Layer):
     dbg = 1
     
     # message format dependancy: Net / ME
-    # needed for some messages in L3Mobile_CC
-    #initiator = 'Net'
+    # needed for some messages in L3Mobile_CC, L3Mobile_PS_MM
+    #_initiator = 'Net'
     _initiator = 'ME'
     
     # for a complete decoding
