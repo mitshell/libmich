@@ -894,11 +894,11 @@ class Str7b(Str):
 # 23.040, section 9.2.2.1
 class SMS_DELIVER(Layer):
     constructorList = [
-        Bit('TP_RP', ReprName='TP Reply Path', Pt=0, BitLen=1, Repr='hum', \
-            Dict=TP_RP_dict),
-        Bit('TP_UDHI', ReprName='TP User Data Header Indicator', Pt=0, BitLen=1),
         Bit('TP_SRI', ReprName='TP Status Report Indication', Pt=0, BitLen=1, \
             Repr='hum', Dict=TP_SRI_dict),
+        Bit('TP_UDHI', ReprName='TP User Data Header Indicator', Pt=0, BitLen=1),
+        Bit('TP_RP', ReprName='TP Reply Path', Pt=0, BitLen=1, Repr='hum', \
+            Dict=TP_RP_dict),
         Bit('TP_LP', ReprName='TP Loop Prevention', Pt=0, BitLen=1),
         Bit('spare', Pt=0, BitLen=1),
         Bit('TP_MMS', ReprName='TP More Messages to Send', Pt=0, BitLen=1, \
@@ -1002,16 +1002,17 @@ class SMS_DELIVER_REPORT_RP_ACK(Layer):
 # 23.040, section 9.2.2.2
 class SMS_SUBMIT(Layer):
     constructorList = [
-        Bit('TP_RP', ReprName='TP Reply Path', Pt=0, BitLen=1, Repr='hum', \
-            Dict=TP_RP_dict),
-        Bit('TP_UDHI', ReprName='TP User Data Header Indicator', Pt=0, BitLen=1),
         Bit('TP_SRR', ReprName='TP Status Report Request', Pt=0, BitLen=1, \
             Repr='hum', Dict=TP_SRR_dict),
+        Bit('TP_UDHI', ReprName='TP User Data Header Indicator', Pt=0, BitLen=1),
+        Bit('TP_RP', ReprName='TP Reply Path', Pt=0, BitLen=1, Repr='hum', \
+            Dict=TP_RP_dict),
         Bit('TP_VPF', ReprName='TP Validity Period Format', Pt=0, BitLen=2, \
             Repr='hum', Dict=TP_VPF_dict),
         Bit('TP_RD', ReprName='TP Reject Duplicates', Pt=0, BitLen=1),
         Bit('TP_MTI', ReprName='TP Message Type Indicator', Pt=1, BitLen=2, \
             Repr='hum', Dict=TP_MTI_MStoSC_dict),
+        Int('TP_MR', ReprName='TP Message Reference', Pt=0, Type='uint8'),
         TP_Destination_Address(), # length 2-12
         TP_PID(),
         TP_DCS(),
