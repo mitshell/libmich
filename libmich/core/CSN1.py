@@ -149,8 +149,8 @@ class CSN1(Layer):
         # recursive automatic loading of CSN.1 fields
         for f in csn1iter:
             if self.dbg >= DBG:
-                log(DBG, '(build - %s) iterating over: %s' \
-                    % repr(f))
+                log(DBG, '(build_auto - %s) iterating over: %s' \
+                    % (self.__class__, repr(f)))
             if isinstance(f, CSN1FIELDS):
                 self._append_csn1_field(f)
             elif isinstance(f, tuple):

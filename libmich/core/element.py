@@ -84,7 +84,7 @@ else:
     __version_err()
 #
 # export filter
-__all__ = ['Element', 'Str', 'Int', 'Bit', 'Layer', 'Block',
+__all__ = ['Element', 'Str', 'Int', 'Bit', 'Layer', 'RawLayer', 'Block',
            'type_funcs', 'debug_level', 'debug', 'ERR', 'WNG', 'DBG', 'log',
            'show', 'showattr',
            'testTLV', 'testA', 'testB']
@@ -185,6 +185,13 @@ class Element(object):
             return True
         else:
             return False
+    
+    # an Element can point to another Element or Layer
+    def getobj(self):
+        if isinstance(self.Pt, (Element, Layer, tuple, list)) and not self.Val:
+            return self.Pt
+        else:
+            return self()
     
     # this is to get a nice object representation:
     # can possibly be called with `show(element)`
