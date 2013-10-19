@@ -824,7 +824,7 @@ class Bit(Element):
             if self.safe:
                 assert( type(self.PtFunc(self.Pt)) is int )
             return self.__confine(self.PtFunc(self.Pt))
-        else: return self.__confine(self.Pt)
+        else: return self.__confine(int(self.Pt))
     
     def __confine(self, value):
         # makes sure value provided does not overflow bit length
@@ -1083,6 +1083,19 @@ class Layer(object):
     def __getitem__(self, num):
         return self.elementList[num]
     
+    def __getslice__(self, i, j):
+        l = Layer('_slice_')
+        if not i or i < 0:
+            i=0
+        #maxj = len(self.elementList)-1
+        maxj = len(self.elementList)
+        if not j or j > maxj:
+            j = maxj
+        #
+        for k in range(i, j):
+            l.append( self[k] )
+        return l
+    
     def __setitem__(self, num, value):
         # special handling here: 
         # use to override the element value 
@@ -1135,6 +1148,7 @@ class Layer(object):
             if elt == current_element:
                 self.remove(current_element)
                 self.insert(index, new_element)
+                return
             else:
                 index += 1
     
@@ -1315,7 +1329,7 @@ class Layer(object):
         return len( str(self) )
     
     def bit_len(self):
-        # just go over all internal element t track their own bit length
+        # just go over all internal elements to track their own bit length
         # updated attributes initialized when Layer was constructed
         self.BitLen = 0
         for e in self:
@@ -1327,9 +1341,19 @@ class Layer(object):
                    else (self.BitLen // 8)
         return self.BitLen
     
-    def __int__(self):
+    # I never used this crappy definition of __int__()
+    # (or I do not remember uf such a mess),
+    def __int__old(self):
         # really silly... still can be convinient: how knows?
         return len( str(self) )
+    
+    # but now (03/10/2013), I need a correct one
+    def __int__(self):
+        # big endian integer representation of the string buffer
+        if self._byte_aligned:
+            return shtr(self).left_val(len(self)*8)
+        else:
+            return shtr(self).left_val(self.bit_len())
     
     def __repr__(self):
         t = ''
@@ -1733,11 +1757,25 @@ class Block(object):
                 s += str(l)
         return s
     
+    def shtr(self):
+        return shtr(str(self))
+    
     def __len__(self):
         return len( str(self) )
     
-    def __int__(self):
+    # I never used this crappy definition of __int__()
+    # (or I do not remember uf such a mess),
+    # but now (03/10/2013), I need a correct one
+    def __int__old(self):
+        # really silly... still can be convinient: how knows?
         return len( str(self) )
+    
+    def __int__(self):
+        # big endian integer representation of the string buffer
+        if self._byte_aligned:
+            return shtr(self).left_val(len(self)*8)
+        else:
+            return shtr(self).left_val(self.bit_len())
     
     def __repr__(self):
         s = '[[%s] ' % self.CallName

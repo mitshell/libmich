@@ -108,8 +108,12 @@ class CSN1(Layer):
     # to enforce a maximum bit length, especially during map()
     max_bitlen = None
     # IE not to appear when using .show()
+    #_show_all = True
     _show_all = False
     _IE_no_show = ['CSN1_padding', 'CSN1_condition']
+    #
+    #dbg = DBG
+    dbg = 0
     
     def __init__(self, build_auto=False, build_path=None, name=''):
         # ensure L is binary only
@@ -123,15 +127,10 @@ class CSN1(Layer):
         # eg when using only .map()
         self.elementList = []
         #
-        # if we want to build a valid layer with the easiest path possible
-        # through the csn1List
-        if build_auto:
-            self.build(self.csn1List, offset=0, build_path=None)
-        elif build_path is not None:
-            self.build(self.csn1List, offset=0, build_path=build_path)
+        if build_auto or build_path:
+            self.build(self.csn1List, 0, build_path)
+        #self.build(self.csn1List, 0, build_path)
     
-    # TODO: this needs to be enhanced with specific build_path, 
-    # when we want to build more complex CSN1 messages
     def build(self, csn1iter, offset=0, build_path=None):
         self.elementList = []
         # create ._offset to handle LH values
@@ -140,16 +139,21 @@ class CSN1(Layer):
         if build_path is None:
             self._build_auto(csn1iter)
         else:
-            log(ERR, '(CSN1 build() with build_path not yet implemented')
-            # TODO
-        # clean the temporary ._offset attribute
+            # we need a temporary "current path" variable 
+            # to keep track of path consumption accross recursion
+            self._cur_path = build_path
+            self._build_path(csn1iter)
+        # clean the temporary ._offset and ._build_path attributes
         del self._offset
+        if hasattr(self, '_cur_path'):
+            del self._cur_path
     
     def _build_auto(self, csn1iter):
+        #print self.CallName
         # recursive automatic loading of CSN.1 fields
         for f in csn1iter:
             if self.dbg >= DBG:
-                log(DBG, '(build_auto - %s) iterating over: %s' \
+                log(DBG, '(_build_auto - %s) iterating over: %s' \
                     % (self.__class__, repr(f)))
             if isinstance(f, CSN1FIELDS):
                 self._append_csn1_field(f)
@@ -160,7 +164,7 @@ class CSN1(Layer):
                 # or the shortest value
                 values = f.values()
                 # easiest path is to get straight out of the dict
-                if (BREAK or BREAK_LOOP) in values:
+                if BREAK in values or BREAK_LOOP in values:
                     for i in f.items():
                         if i[1] in (BREAK, BREAK_LOOP):
                             self._append_path(i[0])
@@ -192,6 +196,59 @@ class CSN1(Layer):
                             self._build_auto(i[1])
                             break
     
+    def _build_path(self, csn1iter):
+        # WNG : there is probably an issue as the ._offset attribute
+        # is not changed during the several recursive calls...
+        #
+        cnt=0
+        # recursive loading of CSN.1 fields, following the path of conditions
+        for f in csn1iter:
+            if self.dbg >= DBG:
+                log(DBG, '(_build_path - %s) iterating over: %s' \
+                    % (self.__class__, repr(f)))
+            if isinstance(f, CSN1FIELDS):
+                #print('<<<<<<<<<<<<<<<<<<<<<< %s' % f.CallName)
+                self._append_csn1_field(f)
+            elif isinstance(f, tuple):
+                self._build_path(f)
+            #
+            elif isinstance(f, dict):
+                # in case there is no more conditions privided
+                if not self._cur_path:
+                    self._build_auto(csn1iter[cnt:])
+                    return
+                # this is the case were we need to consume the _cur_path
+                # and append the values as of the provided conditions
+                #
+                self._build_from_dict(f)
+            #
+            cnt += 1
+    
+    def _build_from_dict(self, d):
+        # TODO: if BREAK_LOOP in the dict, 
+        # we should iterate as much time as provided in the path list
+        #
+        conds = d.keys()
+        #vals = d.values()
+        #
+        # select the value corresponding to the condition in _cur_path
+        if self.dbg >= DBG:
+            log(DBG, '(_build_path) _cur_path to process: %s' % self._cur_path)
+        cond_from_path = self._cur_path.pop(0)
+        if cond_from_path not in conds:
+            raise(Exception('path %s does not correspond to any condition'\
+                  ' for building %s' % (cond_from_path, self.__class__)))
+        #
+        self._append_path(cond_from_path)
+        field = d[cond_from_path]
+        if field not in (BREAK, BREAK_LOOP):
+            if isinstance(field, CSN1FIELDS):
+                #print('<<<<<<<<<<<<<<<<<<<<<< %s' % field.CallName)
+                self._append_csn1_field(field)
+            else:
+                # for tuple or dict, go the recursive way
+                self._build_path(field)
+    
     def _append_path(self, path):
         if self.dbg >= DBG:
             log(DBG, '(build - %s) going path: %s' \
@@ -211,16 +268,25 @@ class CSN1(Layer):
     
     def _append_csn1_field(self, field):
         if isinstance(field, LHFlag):
-            print self._offset
+            #print self._offset
             if self.L[self._offset%8] == 1:
                 field.LHdict = iad({1:'L', 0:'H'})
         if isinstance(field, CSN1):
-            # TODO: this is a shortcut, will need changes for implementing
-            # build_path
-            self.append(field.__class__(build_auto=True))
+            # initialize the field without building it any specific way
+            f = field.__class__(False, None)
+            # and then call build() in order to pass the _offset attribute
+            path = self._cur_path if hasattr(self, '_cur_path') else None
+            f.build(f.csn1List, self._offset, path)
+            #
+            if self.dbg >= DBG:
+                log(DBG, '(_append_csn1_field) field %s with path %s'\
+                    % (f.CallName, path))
+            self.append(f)
+            self._offset += f.bit_len()
+            #
         else:
             self.append(field)
-        self._offset += field.bit_len()
+            self._offset += field.bit_len()
     
     def map(self, string='', byte_offset=0):
         # pop each member of the initial csn1List
@@ -339,8 +405,10 @@ class CSN1(Layer):
         self._cond_error(conds_ori)
     
     def _cond_error(self, condset):
-        if self.dbg >= ERR:
-            log(ERR, '(CSN1._get_cond - %s) undefined CSN1 condition set: %s' \
+        #if self.dbg >= ERR:
+        #    log(ERR, '(CSN1._get_cond - %s) undefined CSN1 condition set: %s' \
+        #             % (condset, self.__class__))
+        log(ERR, '(CSN1._get_cond - %s) undefined CSN1 condition set: %s' \
                      % (condset, self.__class__))
         if self.safe:
             assert()
