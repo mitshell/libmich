@@ -29,7 +29,7 @@
 #!/usr/bin/env python
 
 # exporting
-__all__ = ['CellChan', 'BCCHFreq', 'ExtBCCHFreq', 'RACHctrl', 'CChanDesc', \
+__all__ = ['CellChan', 'BCCHFreq', 'ExtBCCHFreq', 'RACHCtrl', 'CChanDesc', \
            'CellOpt', 'CellSel', 'ChanDesc', 'MobAlloc', 'PChanDesc', 'ReqRef', \
            'MeasRes', 'CmEnq', 'ACS_SI3_dict', 'ACS_SI4_dict']
 
@@ -325,7 +325,7 @@ CellAccess_dict = {
 CallReestab_dict = {
     0 : 'allowed',
     1 : 'not allowed'}
-class RACHctrl(Layer):
+class RACHCtrl(Layer):
     constructorList = [
         Bit('max_retrans', Pt=0, BitLen=2, Repr='hum', Dict=MaxRetrans_dict),
         Bit('Tx_integer', ReprName='Tx slots to spread transmission', Pt=0, \

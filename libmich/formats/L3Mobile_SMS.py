@@ -40,11 +40,12 @@ from libmich.formats.L3Mobile_IE import BCDNumber, StrBCD, BCDType_dict, \
 #
 from math import ceil
 from binascii import unhexlify as unh
+from re import split
 
 
 # export filter
 __all__ = ['CP_DATA', 'CP_ACK', 'CP_ERROR', \
-           'RP_DATA_MSToNET', 'RP_DATA_NETToMS', 'RP_SMMA', 'RP_ACK', \
+           'RP_DATA_MSToNET', 'RP_DATA_NETToMS', 'RP_SMMA', 'RP_ACK_MSToNET', 'RP_ACK_NETToMS', \
            'RP_ERROR', 'RP_Originator_Address', 'RP_Destination_Address', \
            'TP_Address', 'TP_Originating_Address', 'TP_Destination_Address', \
            'TP_Recipient_Address', 'TP_PID', 'TP_DCS', 'TP_SCTS', 'TP_VP_rel', \
@@ -95,45 +96,6 @@ CPCause_dict = {
     111 : 'Protocol error, unspecified',
     }
 
-# section 8.2.2
-RPType_dict = {
-    0 : 'MS -> Net : RP-DATA',
-    1 : 'Net -> MS : RP-DATA',
-    2 : 'MS -> Net : RP-ACK',
-    3 : 'Net -> MS : RP-ACK',
-    4 : 'MS -> Net : RP-ERROR',
-    5 : 'Net -> MS : RP-ERROR',
-    6 : 'MS -> Net : RP-SMMA',
-    }
-
-# section 8.2.5.4
-RPCause_dict = {
-    1 : 'Unassigned (unallocated) number',
-    8 : 'Operator determined barring',
-    10 : 'Call barred',
-    11 : 'Reserved',
-    21 : 'Short message transfer rejected',
-    22 : 'Memory capacity exceeded',
-    27 : 'Destination out of order',
-    28 : 'Unidentified subscriber',
-    29 : 'Facility rejected',
-    30 : 'Unknown subscriber',
-    38 : 'Network out of order',
-    41 : 'Temporary failure',
-    42 : 'Congestion',
-    47 : 'Resources unavailable, unspecified',
-    50 : 'Requested facility not subscribed',
-    69 : 'Requested facility not implemented',
-    81 : 'Invalid short message transfer reference value',
-    95 : 'Semantically incorrect message',
-    96 : 'Invalid mandatory information',
-    97 : 'Message type non existent or not implemented',
-    98 : 'Message not compatible with short message protocol state',
-    99 : 'Information element non existent or not implemented',
-    111 : 'Protocol error, unspecified',
-    127 : 'Interworking, unspecified',
-    }
-
 ###################
 # message formats #
 ###################
@@ -162,15 +124,26 @@ class CP_DATA(Layer3):
     
     def map(self, s=''):
         Layer.map(self, s)
+        self._map_rp()
+    
+    def _map_rp(self):
         data = self.Data.V()
-        if data:
-            mti = ord(data[0])&0b111
-            if mti in RP_selector:
-                rp = RP_selector[mti]()
-                rp.map(data)
-                self.Data.L > rp
-                self.Data.V > rp
-                self.Data.V < None
+        if not data:
+            return
+        mti = ord(data[0])&0b111
+        if mti not in RP_selector:
+            return
+        rp = RP_selector[mti]()
+        try:
+            rp.map(data)
+        except:
+            return
+        if str(rp) != data:
+            return
+        self.Data.L > rp
+        self.Data.V > rp
+        self.Data.V < None
+    
 
 # 24011, 7.2.2
 class CP_ACK(Layer3):
@@ -218,6 +191,46 @@ class RP_Destination_Address(BCDNumber):
         self.Num.Len = self.Length
         self.Num.LenFunc = lambda l: int(l)-1
 
+# section 8.2.2
+RPType_dict = {
+    0 : 'MS -> Net : RP-DATA',
+    1 : 'Net -> MS : RP-DATA',
+    2 : 'MS -> Net : RP-ACK',
+    3 : 'Net -> MS : RP-ACK',
+    4 : 'MS -> Net : RP-ERROR',
+    5 : 'Net -> MS : RP-ERROR',
+    6 : 'MS -> Net : RP-SMMA',
+    }
+
+# section 8.2.5.4
+RPCause_dict = {
+    1 : 'Unassigned (unallocated) number',
+    8 : 'Operator determined barring',
+    10 : 'Call barred',
+    11 : 'Reserved',
+    21 : 'Short message transfer rejected',
+    22 : 'Memory capacity exceeded',
+    27 : 'Destination out of order',
+    28 : 'Unidentified subscriber',
+    29 : 'Facility rejected',
+    30 : 'Unknown subscriber',
+    38 : 'Network out of order',
+    41 : 'Temporary failure',
+    42 : 'Congestion',
+    47 : 'Resources unavailable, unspecified',
+    50 : 'Requested facility not subscribed',
+    69 : 'Requested facility not implemented',
+    81 : 'Invalid short message transfer reference value',
+    95 : 'Semantically incorrect message',
+    96 : 'Invalid mandatory information',
+    97 : 'Message type non existent or not implemented',
+    98 : 'Message not compatible with short message protocol state',
+    99 : 'Information element non existent or not implemented',
+    111 : 'Protocol error, unspecified',
+    127 : 'Interworking, unspecified',
+    }
+
+# section
 class RP_DATA_MSToNET(Layer):
     '''
     MS -> Net
@@ -233,13 +246,29 @@ class RP_DATA_MSToNET(Layer):
     
     def map(self, s=''):
         Layer.map(self, s)
-        addr = self.DestAddr.V()
-        if self.DestAddr.L():
-            da = RP_Destination_Address()
-            da.map(addr)
-            self.DestAddr.L > da
-            self.DestAddr.V > da
-            self.DestAddr.V < None
+        self._map_tp()
+                
+    def _map_tp(self):
+        data = self.Data.V()
+        if not data:
+            return
+        mti = ord(data[0])&0b11
+        if mti not in (1, 2):
+            return
+        elif mti == 1:
+            tp = SMS_SUBMIT()
+        else:
+            # mti == 2
+            tp = SMS_COMMAND()
+        try:
+            tp.map(data)
+        except:
+            return
+        if str(tp) != data:
+            return
+        self.Data.L > tp
+        self.Data.V > tp
+        self.Data.V < None
 
 class RP_DATA_NETToMS(Layer):
     '''
@@ -253,6 +282,28 @@ class RP_DATA_NETToMS(Layer):
         Type4_LV('DestAddrNull', V=''), # null address
         Type4_LV('Data', V=''), # length <= 233
         ]
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        self._map_tp()
+                
+    def _map_tp(self):
+        data = self.Data.V()
+        if not data:
+            return
+        mti = ord(data[0])&0b11
+        if mti != 0:
+            return
+        tp = SMS_DELIVER()
+        try:
+            tp.map(data)
+        except:
+            return
+        if str(tp) != data:
+            return
+        self.Data.L > tp
+        self.Data.V > tp
+        self.Data.V < None    
 
 # 24011, 7.3.2 and 8.2.2-3
 class RP_SMMA(Layer):
@@ -265,16 +316,35 @@ class RP_SMMA(Layer):
         Int('Ref', Type='uint8'),
         ]
 
-class RP_ACK(Layer):
+class RP_ACK_MSToNET(Layer):
     '''
-    Net -> MS
+    Net <-> MS
     '''
     constructorList = [
         Bit('spare', Pt=0, BitLen=5, Repr='hex'),
-        Bit('Type', BitLen=3, Repr='hum', Dict=RPType_dict), # Pt = 2 or 3
+        Bit('Type', Pt=2, BitLen=3, Repr='hum', Dict=RPType_dict),
         Int('Ref', Type='uint8'),
         Type4_TLV('Data', T=0x41, V=''), # length <= 234
         ]
+    def map(self, s=''):
+        if len(s) == 2:
+            self[-1].Trans = True
+        Layer.map(self, s)
+
+class RP_ACK_NETToMS(Layer):
+    '''
+    Net <-> MS
+    '''
+    constructorList = [
+        Bit('spare', Pt=0, BitLen=5, Repr='hex'),
+        Bit('Type', Pt=3, BitLen=3, Repr='hum', Dict=RPType_dict),
+        Int('Ref', Type='uint8'),
+        Type4_TLV('Data', T=0x41, V=''), # length <= 234
+        ]
+    def map(self, s=''):
+        if len(s) == 2:
+            self[-1].Trans = True
+        Layer.map(self, s)
 
 class RP_ERROR(Layer):
     '''
@@ -285,7 +355,7 @@ class RP_ERROR(Layer):
         Bit('Type', BitLen=3, Repr='hum', Dict=RPType_dict), # Pt = 4 or 5
         Int('Ref', Type='uint8'),
         Int('L', Type='uint8'),
-        Int('RPCause', Pt=111, Type='uint8'),
+        Int('RPCause', Pt=111, Type='uint8', Dict=RPCause_dict),
         Str('RPDiag', Pt='', Repr='hex'),
         Type4_TLV('Data', T=0x41, V=''), # length <= 234
         ]
@@ -295,13 +365,18 @@ class RP_ERROR(Layer):
         self.L.PtFunc = lambda d: len(d)+1
         self.RPDiag.Len = self.L
         self.RPDiag.LenFunc = lambda l: int(l)-1
-
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        if len(s) <= self.L()+3:
+            self[-1].Trans = True
+    
 # to map RP struct directly onto CP_DATA struct
 RP_selector = {
     0 : RP_DATA_MSToNET,
     1 : RP_DATA_NETToMS,
-    2 : RP_ACK,
-    3 : RP_ACK,
+    2 : RP_ACK_MSToNET,
+    3 : RP_ACK_NETToMS,
     4 : RP_ERROR,
     5 : RP_ERROR,
     6 : RP_SMMA,
@@ -312,7 +387,7 @@ RP_selector = {
 # SMS-DELIVER (Net -> MS), SMS-DELIVER-REPORT (MS -> Net)
 # SMS-SUBMIT (MS -> Net), SMS-SUBMIT-REPORT (Net -> MS)
 # SMS-STATUS-REPORT (Net -> MS)
-# SMS-COMMAND (MS > Net)
+# SMS-COMMAND (MS -> Net)
 
 # 23.040, 9.2.3.1
 TP_MTI_SCtoMS_dict = {
@@ -338,8 +413,8 @@ TP_MMS_dict = {
 # linked to TP_VP (Validity Period)
 TP_VPF_dict = {
     0 : 'TP VP field not present',
-    1 : 'TP VP field present - relative format',
-    2 : 'TP-VP field present - enhanced format',
+    1 : 'TP-VP field present - enhanced format',
+    2 : 'TP VP field present - relative format',
     3 : 'TP VP field present - absolute format',
     }
 
@@ -447,7 +522,7 @@ class TP_PID(Layer):
         self.Telematic.Trans = self.Format
         self.Telematic.TransFunc = lambda f: True if f() else False
         self.Protocol.BitLen = self.Format
-        self.Protocol.BitLenFunc = lambda f: 5 if f() else 4
+        self.Protocol.BitLenFunc = lambda f: 6 if f() else 5
         # dictionnary selection
         self.Protocol.Dict = self.Format
         self.Protocol.DictFunc = self._get_dict
@@ -608,6 +683,11 @@ class TP_SCTS(Layer):
 
 # 23.040, 9.2.3.12.1
 class TP_VP_rel(Int):
+    
+    def __init__(self, **kwargs):
+        Int.__init__(self, CallName=split('\.', str(self.__class__))[-1][:-2], \
+                     Type='uint8', **kwargs)
+    
     def __repr__(self):
         if self.Repr == 'hum' \
         and (self.Pt is not None or self.Val is not None):
@@ -618,13 +698,13 @@ class TP_VP_rel(Int):
     def interpret(self):
         val = self()
         if 0 <= val <= 143:
-            return '%i minutes' % (val+1)*5
+            return '%i minutes' % ((val+1)*5)
         elif 144 <= val <= 167:
-            return '%.1f hours' % 12+((val-143)*0.5)
+            return '%.1f hours' % (12+((val-143)*0.5))
         elif 168 <= val <= 196:
-            return '%i days' % val-166
+            return '%i days' % (val-166)
         else:
-            return '%i weeks' % val-192
+            return '%i weeks' % (val-192)
 
 # 23.040, 9.2.3.12.2
 class TP_VP_abs(TP_SCTS):
@@ -1035,16 +1115,19 @@ class SMS_SUBMIT(Layer):
         val = vpf()
         if not val:
             return 0
-        elif val == 1:
+        #elif val == 1:
+        elif val == 2:
             return 1
-        elif val in (2, 3):
+        #elif val in (2, 3):
+        elif val in (1, 3):
             return 7
     
     def map(self, s=''):
         Layer.map(self, s)
         # additional VP interpretation
         val = self.TP_VPF()
-        if val == 1:
+        #if val == 1:
+        if val == 2:
             vp = TP_VP_rel()
             vp.map( self.TP_VP() )
             self.replace( self.TP_VP, vp )
@@ -1213,3 +1296,4 @@ class SMS_COMMAND(Layer):
         self.TP_CDL.PtFunc = lambda d: len(d)
         self.TP_CD.Len = self.TP_CDL
         self.TP_CD.LenFunc = lambda l: l()
+#

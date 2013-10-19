@@ -34,7 +34,7 @@ from libmich.core.IANA_dict import IANA_dict
 from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
     Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, \
     Layer3
-from libmich.formats.L3Mobile_IE import LAI, ID, MSCm1, MSCm2, PLMNlist
+from libmich.formats.L3Mobile_IE import LAI, ID, MSCm1, MSCm2, PLMNList
 
 # TS 24.008 defines L3 signalling for mobile networks
 #
@@ -223,8 +223,9 @@ class LOCATION_UPDATING_ACCEPT(Layer3):
             Type4_TLV('ID', T=0x17, V=ID()),
             Type2('FollowOnProceed', T=0xA1),
             Type2('CTSperm', T=0xA2),
-            Type4_TLV('PLMNlist', T=0x4A, V=PLMNlist()),
-            Type4_TLV('EClist', T=0x34, V='\0\0\0')])
+            Type4_TLV('PLMNList', T=0x4A, V=PLMNList()),
+            Type4_TLV('ECNList', ReprName='Emergency Number List', T=0x34, \
+                      V='\0\0\0')])
         self._post_init(with_options, **kwargs)
 
 # section 9.2.14
@@ -312,8 +313,9 @@ class AUTHENTICATION_RESPONSE(Layer3):
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
         self.extend([ \
-            Str('RES', Pt='\0\0\0\0', Len=4),
+            Str('RES', Pt='\0\0\0\0', Len=4, Repr='hex'),
             Type4_TLV('RESext', T=0x21, V='\0\0\0\0')])
+        self.RESext.V.Repr = 'hex'
         self._post_init(with_options, **kwargs)
 
 # section 9.2.3A
@@ -330,7 +332,8 @@ class AUTHENTICATION_FAILURE(Layer3):
         Layer3.__init__(self)
         self.extend([ \
             Int('Cause', Pt=2, Type='uint8', Dict=Reject_dict),
-            Type4_TLV('AUTS', T=0x22, V=16*'\0')]) 
+            Type4_TLV('AUTS', T=0x22, V=16*'\0')])
+        self.AUTS.V.Repr = 'hex'
         self._post_init(with_options, **kwargs)
 
 # section 9.2.10

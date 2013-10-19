@@ -297,13 +297,17 @@ IEType = IANA_dict({
 
 
 class UMA(Block):
-	# selector for type of IE to use
-	# 'new' supports extended Length and Tag
-	# not 'old'
-	#_IE_type = 'new'
-    _IE_type = 'old'
-	
-    def __init__(self, mode='control', protocol='GA_RC', 
+    # selector for type of IE to use
+    # 'new' supports extended Length and Tag
+    # not 'old'
+    _IE_type = 'new'
+    #_IE_type = 'old'
+    #
+    # tell if we process L3 message
+    #process_L3 = False
+    process_L3 = True
+       
+    def __init__(self, mode='control', protocol='GA_RC',
                        type=RCMsgType['GA-RC DISCOVERY REQUEST']):
         
         Block.__init__(self, Name='UMA')
@@ -329,7 +333,7 @@ class UMA(Block):
         self.append(newLayer)
         self[-1].hierarchy = self[0].hierarchy + 1
     
-    def parse(self, s='', mode='control', process_L3=True):
+    def parse(self, s='', mode='control'):
         # map GA header, after checking the protocol discriminator value
         pd = ord(s[2]) & 0x0F
         Block.__init__(self, Name='UMA')
@@ -358,8 +362,8 @@ class UMA(Block):
             elif self[-1].T() == IEType['Mobile Station Classmark 2']:
                 self.map_last_to_IE(MSCm2)
             elif self[-1].T() == IEType['GAN PLMN List']:
-                self.map_last_to_IE(PLMNlist)
-            elif process_L3 and self[-1].T() == IEType['L3 Message']:
+                self.map_last_to_IE(PLMNList)
+            elif self.process_L3 and self[-1].T() == IEType['L3 Message']:
                 l3 = parse_L3(self[-1].V())
                 if isinstance(l3, Layer3):
                 # otherwise, cill get a RawLayer()

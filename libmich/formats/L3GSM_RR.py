@@ -231,7 +231,7 @@ class ASSIGNMENT_COMMAND(Layer3):
                      V='\0', Len=1),
             Type3_TV('ChanDesc_2', ReprName='2nd channel description, ' \
                      'after time', T=0x64, V=ChanDesc(), Len=3),
-            Type3_TV('ChanMod2', ReprName='Channel Mode 2', T=0x64, \
+            Type3_TV('ChanMod2', ReprName='Channel Mode 2', T=0x66, \
                      V='\0', Len=1),
             Type4_TLV('MobAlloc', ReprName='Mobile allocation', T=0x72, \
                       V=MobAlloc()),
@@ -615,12 +615,20 @@ class SI_1(Layer3):
         self.extend([ \
             Str('CellChan', ReprName='Cell Channel Description', \
                 Pt=CellChan(), Len=16), # 44018, 10.5.2.1b, in L3Mobile_RR.py
-            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+            Str('RACHCtrl', ReprName='RACH Control Parameters', Pt=RACHCtrl(),\
                 Len=3), # 44018, 10.5.2.29, in L3Mobile_RR.py
             # rest octet is purely padding: 2b
-            StrRR('SI1RestOctets', Len=1, Repr='hex')]) # 10.5.2.32
+            StrRR('SI1RestOctets', Repr='hex')])
+            #StrRR('SI1RestOctets', Len=1, Repr='hex')]) # 10.5.2.32
         self._post_init(with_options, **kwargs)
-        self.len.Pt = 21
+        #self.len.Pt = 21
+        # standard rest octet is 1 byte for SI1
+        # L2 pseudo header automation
+        self.len.Pt = (self.CellChan, self.RACHCtrl)
+        self.len.PtFunc = lambda (c, r): len(c)+len(r)+2
+        self.SI1RestOctets.Len = self.len
+        self.SI1RestOctets.LenFunc = lambda l: 22-l()
+        
 
 # 44018, section 9.1.32
 class SI_2(Layer3):
@@ -636,7 +644,7 @@ class SI_2(Layer3):
                 Pt=BCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
             Bit('NCCPerm', ReprName='NCC Permitted', Pt=255, BitLen=8, \
                 Repr='bin'), # 44018, 10.5.2.27
-            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+            Str('RACHCtrl', ReprName='RACH Control Parameters', Pt=RACHCtrl(),\
                 Len=3)]) # 44018, 10.5.2.29, in L3GSM_IE.py
         self._post_init(with_options, **kwargs)
         self.len.Pt = 22
@@ -654,11 +662,17 @@ class SI_2bis(Layer3):
         self.extend([ \
             Str('ExtBCCHFreq', ReprName='Neighbour Cell Description', \
                 Pt=ExtBCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
-            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+            Str('RACHCtrl', ReprName='RACH Control Parameters', Pt=RACHCtrl(),\
                 Len=3), # 44018, 10.5.2.29, in L3GSM_IE.py
             StrRR('SI2bisRestOctets', Len=1, Repr='hex')]) # 10.5.2.33
         self._post_init(with_options, **kwargs)
-        self.len.Pt = 21
+        #self.len.Pt = 21
+        # standard rest octet is 1 byte for SI2bis
+        # L2 pseudo header automation
+        self.len.Pt = (self.ExtBCCHFreq, self.RACHCtrl)
+        self.len.PtFunc = lambda (e, r): len(e)+len(r)+2
+        self.SI2bisRestOctets.Len = self.len
+        self.SI2bisRestOctets.LenFunc = lambda l: 22-l()
 
 # 44018, section 9.1.34
 # message to be ignored by P-GSM 900 band or DCS 1800 band only mobiles
@@ -673,9 +687,16 @@ class SI_2ter(Layer3):
         self.extend([ \
             Str('ExtBCCHFreq', ReprName='Neighbour Cell Description', \
                 Pt=ExtBCCHFreq(), Len=16), # 44018, 10.5.2.22, in L3GSM_IE.py
-            StrRR('SI2terRestOctets', Len=4, Repr='hex')]) # 10.5.2.33a
+            #StrRR('SI2terRestOctets', Len=4, Repr='hex')]) # 10.5.2.33a
+            StrRR('SI2terRestOctets', Repr='hex')])
         self._post_init(with_options, **kwargs)
-        self.len.Pt = 18
+        #self.len.Pt = 18
+        # standard rest octet is 4 bytes for SI2ter
+        # L2 pseudo header automation
+        self.len.Pt = self.ExtBCCHFreq
+        self.len.PtFunc = lambda e: len(e)+2
+        self.SI2terRestOctets.Len = self.len
+        self.SI2terRestOctets.LenFunc = lambda l: 22-l()
 
 # 44018, section 9.1.34a
 # info on UTRAN, E-UTRAN and 3G/4G CSG cells
@@ -712,7 +733,7 @@ class SI_3(Layer3):
                 Len=1), # 44018, 10.5.2.3, in L3GSM_IE.py
             Str('CellSel', ReprName='Cell Selection Parameters', \
                 Pt=CellSel(), Len=2), # 44018, 10.5.2.4
-            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+            Str('RACHCtrl', ReprName='RACH Control Parameters', Pt=RACHCtrl(),\
                 Len=3), # 44018, 10.5.2.29
             StrRR('SI3RestOctets', Len=4, Repr='hex')]) # 44018, 10.5.2.33a
         self._post_init(with_options, **kwargs)
@@ -735,7 +756,7 @@ class SI_4(Layer3):
                 Repr='hex'), # 44018, 10.5.1.3, in L3Mobile_IE.py
             Str('CellSel', ReprName='Cell Selection Parameters', \
                 Pt=CellSel(), Len=2), # 44018, 10.5.2.4
-            Str('RACHctrl', ReprName='RACH Control Parameters', Pt=RACHctrl(),\
+            Str('RACHCtrl', ReprName='RACH Control Parameters', Pt=RACHCtrl(),\
                 Len=3), # 44018, 10.5.2.29, in L3GSM_IE.py
             Type3_TV('ChanDesc', ReprName='CBCH Channel Description', T=0x7C, \
                 V=ChanDesc(), Len=3), # 44018, 10.5.2.5, in L3GSM_IE.py

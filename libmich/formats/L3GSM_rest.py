@@ -56,6 +56,12 @@ class RestOctets(CSN1):
     # default has empty CSN1
     csn1List = []
     #
+    def __init__(self, build_auto=False, build_path=None, name=''):
+        # build according to the CSN1 struct
+        CSN1.__init__(self, build_auto, build_path, name)
+        # check how many bits already built, how many remaining
+        # TODO
+        
     def map(self, string='', byte_offset=0):
         # map according to the CSN1 struct
         CSN1.map(self, string, byte_offset)
@@ -1012,7 +1018,7 @@ class CSGCellsReporting(CSN1):
 class SI2quaterRestOctets(RestOctets):
     csn1List = [
         Bit('BA_IND', BitLen=1, Repr='hum'),
-        Bit('3G_BA_IND', BitLen=1, Repr='hum'),
+        Bit('BA_IND_3G', BitLen=1, Repr='hum'),
         Bit('MP_CHANGE_MARK', BitLen=1, Repr='hum'),
         Bit('SI2quater_INDEX', BitLen=4, Repr='hum'),
         Bit('SI2quater_COUNT', BitLen=4, Repr='hum'),
@@ -1312,7 +1318,7 @@ class SI13RestOctets(RestOctets):
                '1':(Bit('SI13_CHANGE_MARK', BitLen=2, Repr='hum'),
                     GPRSMobileAllocation())},
               {'0':(Bit('RAC', ReprName='Routing Area Code', BitLen=8, Repr='hum'),
-                    Bit('SPGC_CCCH_SUP', ReprName='SPLIT_PG_CYCLE supportedon CCCH',\
+                    Bit('SPGC_CCCH_SUP', ReprName='SPLIT_PG_CYCLE supported on CCCH',\
                         BitLen=1, Repr='hum'),
                     Bit('PRIORITY_ACCESS_THR', BitLen=3, Repr='hum', \
                         Dict=PrioAccThr_dict),

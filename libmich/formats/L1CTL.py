@@ -203,6 +203,7 @@ class L1CTL(Block):
             self << RawLayer()
             self[-1].map(string)
             return
+        #
         l = LengthRR()
         l.map(string[0:1])
         h = Header()
@@ -210,29 +211,30 @@ class L1CTL(Block):
         # should check length (l) coherence here (including with M bit)
         # ...
         # check for non-RR protocol, or truncated string
-        if h.PD() != 6 or len(string) < 23:
+        #print('L1CTL decoding ; h.PD %s, string length %s' % (h.PD(), len(string)))
+        if h.PD() != 6 or len(string) < 22:
             self << l
             self | RawL3()
             self[-1].map(string[1:])
             return
+        #
         # if we have the complete RR decoder
         if h.Type() in L3Call[6].keys():
             rr = L3Call[6][h.Type()]()
+            try:
+                rr.map(string)
+                self << rr
+                return
+            except:
+                pass
+        #
         # otherwise, it's the generic RR decoder
         # what is not very smart... however !
-        else:
-            rr = RR_gene()
-        # we can still have corrupted data
-        try:
-            rr.map(string)
-            # if RR is correctly decoded
-            self << rr
-        except:
-            if self.dbg >= DBG:
-                log(DBG, '(L1CTL - L3GSM_RR) message parsing failed with:\n%s' \
-                    % hexlify(string))
-            self << RR_gene()
-            self[-1].map(string)
+        if self.dbg >= DBG:
+            log(DBG, '(L1CTL - L3GSM_RR) message parsing failed with:\n%s' \
+                      % hexlify(string))
+        self << RR_gene()
+        self[-1].map(string)
     
     def _get_dch(self, string=''):
         # this is to decode reliably GSM dedicated channel
