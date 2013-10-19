@@ -31,11 +31,17 @@
 # exporting
 __all__ = ['StrBCD', 'BCDNumber', 'BCDType_dict', 'NumPlan_dict',
            'LAI', 'RAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
-           'PLMN', 'PLMNlist', 'AuxState',
+           'PLMN', 'PLMNList', 'AuxState',
            'BearerCap', 'CCCap', 'AccessTechnoType_dict', 'MSNetCap', 'MSRACap',
            'PDPAddr', 'QoS', 'ProtID', 'ProtConfig', 'PacketFlowID',
+           # LTE / EPC specifics:
+           'IntegAlg_dict', 'CiphAlg_dict', 'NASKSI_dict', 'NASSecToEUTRA',
+           'GUTI', 'EPSFeatSup', 'TAI', 'PartialTAIList', 'PartialTAIList0',
+           'PartialTAIList1', 'PartialTAIList2', 'TAIList', 'UENetCap',
+           'UESecCap', 'APN_AMBR'
            ]
 
+from struct import unpack
 # for convinience
 from binascii import hexlify
 #
@@ -44,7 +50,9 @@ from libmich.core.element import Bit, Int, Str, Layer, \
 from libmich.core.shtr import shtr
 from libmich.core.IANA_dict import IANA_dict
 from libmich.core.CSN1 import CSN1, BREAK, BREAK_LOOP
+#
 from libmich.formats.MCCMNC import MCC_dict, MNC_dict
+from libmich.formats.PPP import *
 
 
 # TS 24.008 defines L3 signalling for mobile networks
@@ -117,7 +125,7 @@ class BCDNumber(Layer):
             Repr='hum', Dict=BCDType_dict),
         Bit('NumPlan', ReprName='Numbering plan identification', Pt=1, \
             BitLen=4, Repr='hum', Dict=NumPlan_dict),
-        StrBCD('Num', Pt='\x12')
+        StrBCD('Num', Pt='\x21\x43\x65')
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
@@ -125,89 +133,139 @@ class BCDNumber(Layer):
             self.Num.encode(kwargs['Num'])
 
 
+# section 10.5.1.13
+# PLMN list
+class PLMN(Layer):
+    constructorList = [
+        Bit('MCC2', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MCC1', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MNC3', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MCC3', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MNC2', Pt=0, BitLen=4, Repr='hum'),
+        Bit('MNC1', Pt=0, BitLen=4, Repr='hum')]
+    
+    def __init__(self, MCCMNC='00101'):
+        Layer.__init__(self)
+        self.set_mcc(MCCMNC[:3])
+        self.set_mnc(MCCMNC[3:])
+    
+    def get_mcc(self):
+        return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
+    
+    def get_mnc(self):
+        if self.MNC3() == 0b1111:
+            return '%i%i' % (self.MNC1(), self.MNC2())
+        else:
+            return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
+    
+    def set_mcc(self, MCC='001'):
+        if not MCC.isdigit() or len(MCC) != 3:
+            if self.dbg >= WNG:
+                log(WNG, '(L3Mobile_IE - PLMN) trying to set invalid MCC: %s' \
+                         % MCC)
+            return
+        self.MCC1 > int(MCC[0])
+        self.MCC2 > int(MCC[1])
+        self.MCC3 > int(MCC[2])
+    
+    def set_mnc(self, MNC='01'):
+        if not MNC.isdigit() or len(MNC) not in (2, 3):
+            if self.dbg >= WNG:
+                log(WNG, '(L3Mobile_IE - PLMN) trying to set invalid MNC: %s' \
+                         % MNC)
+            return
+        self.MNC1 > int(MNC[0])
+        self.MNC2 > int(MNC[1])
+        if len(MNC) == 2:
+            self.MNC3 > 0b1111
+        else:
+            self.MNC3 > int(MNC[2])
+    
+    def __repr__(self):
+        return '<[PLMN]: MCC: %s / MNC: %s>' % (self.get_mcc(), self.get_mnc())
+    
+    def interpret(self):
+        # this makes use of large dictionnaries will many countries and MNO
+        MCC, MNC = int(self.get_mcc()), int(self.get_mnc())
+        MNC_str = MNC_dict[(MCC, MNC)][1] if (MCC, MNC) in MNC_dict.keys() else MNC
+        MCC_str = MCC_dict[MCC][0] if MCC in MCC_dict.keys() else MCC
+        return '<[PLMN]: %i:%s / %i:%s>' % (MCC, MCC_str, MNC, MNC_str)
+
+class PLMNList(Layer):
+    constructorList = [ ]
+    
+    def __init__(self, *args, **kwargs):
+        Layer.__init__(self)
+        self.add_plmn(args)
+    
+    def add_plmn(self, *args):
+        for arg in args:
+            if arg.isdigit() and len(arg) in (5, 6):
+                self.append( PLMN(arg) )
+            elif isinstance(arg, PLMN):
+                self.append( arg )
+            elif isinstance(arg, (list, tuple)):
+                # this is truly recursive :)
+                for e in arg:
+                    self.add_plmn(e)
+    
+    def add_PLMN(self, plmn=PLMN()):
+        # this was the old method
+        if isinstance(plmn, PLMN):
+            self.append(plmn)
+    
+    def map(self, s=''):
+        Layer.map(self, s)
+        s = s[3:]
+        while len(s) > 0:
+            self.append( PLMN() )
+            self[-1].map(s)
+            s = s[3:]
+    
+    def interpret(self):
+        return ''.join([str(plmn.interpret()) for plmn in self])
+
 # section 10.5.1.3
 # Local Area Identifier, LAC is MNO-specific
 class LAI(Layer):
     constructorList = [
-        Bit('MCC2', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MCC1', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC3', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MCC3', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC2', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC1', Pt=0, BitLen=4, Repr='hum'),
-        Int('LAC', Pt=0, Type='uint16', Repr='hex')]
-    
-    def __init__(self, mccmnc='001001', lac=0x0000):
-        Layer.__init__(self)
-        self.LAC > lac
-        if len(mccmnc) not in (5, 6):
-            return
-        self.MCC1 > int(mccmnc[0])
-        self.MCC2 > int(mccmnc[1])
-        self.MCC3 > int(mccmnc[2])
-        self.MNC1 > int(mccmnc[3])
-        self.MNC2 > int(mccmnc[4])
-        if len(mccmnc) == 5:
-            self.MNC3 > 0b1111
-            return
-        self.MNC3 > int(mccmnc[5])
-        
-    def __repr__(self):
-        return '<[LAI]: MCC: %s / MNC: %s / LAC: %s>' \
-               % (self.MCC(), self.MNC(), hex(self.LAC()))
-    
-    def MCC(self):
-        return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
-    
-    def MNC(self):
-        if self.MNC3() == 0b1111:
-            return '%i%i' % (self.MNC1(), self.MNC2())
-        else:
-            return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
-    
-class RAI(Layer):
-    constructorList = [
-        Bit('MCC2', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MCC1', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC3', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MCC3', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC2', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC1', Pt=0, BitLen=4, Repr='hum'),
-        Int('LAC', Pt=0, Type='uint16', Repr='hex'),
-        Int('RAC', Pt=0, Type='uint8', Repr='hex'),
+        PLMN(),
+        Int('LAC', Pt=0, Type='uint16', Repr='hex')
         ]
     
-    def __init__(self, mccmnc='001001', lac=0, rac=0):
+    def __init__(self, MCCMNC='00101', LAC=0x0000):
         Layer.__init__(self)
-        self.LAC > lac
-        self.RAC > rac
-        if len(mccmnc) not in (5, 6):
-            return
-        self.MCC1 > int(mccmnc[0])
-        self.MCC2 > int(mccmnc[1])
-        self.MCC3 > int(mccmnc[2])
-        self.MNC1 > int(mccmnc[3])
-        self.MNC2 > int(mccmnc[4])
-        if len(mccmnc) == 5:
-            self.MNC3 > 0b1111
-            return
-        self.MNC3 > int(mccmnc[5])
-        
+        self.PLMN.set_mcc(MCCMNC[:3])
+        self.PLMN.set_mnc(MCCMNC[3:])
+        self.LAC > LAC
+    
     def __repr__(self):
-        return '<[RAI]: MCC: %s / MNC: %s / LAC: %s / RAC: %s>' \
-               % (self.MCC(), self.MNC(), hex(self.LAC()), hex(self.RAC()))
+        return '<[LAI]: %s / LAC: 0x%.4x>' % (self.PLMN.__repr__(), self.LAC())
+
+# section 10.5.5.15
+# Routing Area Identifier (LAI + RAC)
+class RAI(Layer):
+    constructorList = [
+        PLMN(),
+        Int('LAC', Pt=0, Type='uint16', Repr='hex'),
+        Int('RAC', Pt=0, Type='uint8', Repr='hex')
+        ]
     
-    def MCC(self):
-        return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
+    def __init__(self, MCCMNC='00101', LAC=0x0000, RAC=0x00):
+        Layer.__init__(self)
+        self.PLMN.set_mcc(MCCMNC[:3])
+        self.PLMN.set_mnc(MCCMNC[3:])
+        self.LAC > LAC
+        self.RAC > RAC
     
-    def MNC(self):
-        if self.MNC3() == 0b1111:
-            return '%i%i' % (self.MNC1(), self.MNC2())
-        else:
-            return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
+    def __repr__(self):
+        return '<[RAI]: %s / LAC: 0x%.4x / RAC: 0x%.2x>' \
+                % (self.PLMN.__repr__(), self.LAC(), self.RAC())
+
 
 # section 10.5.1.4
 # Mobile Identity
+# + 23.401, 9.9.3.12: GUTI...
 # TODO: handling of TMGI / MBMS identities
 IDtype_dict = IANA_dict({
     0:'No Identity',
@@ -299,7 +357,6 @@ class ID(Layer):
                             for i in range(1, len(self)*2+self.odd()-1)])
         else:
             return ''
-#
 
 # section 10.5.1.5
 # Mobile Station Classmark 1
@@ -307,15 +364,15 @@ Revision_level = {
     0:'Reserved for GSM phase 1',
     1:'GSM phase 2 MS',
     2:'MS supporting R99 or later',
-    3:'FFU'}
-
+    3:'FFU'
+    }
 RFclass_dict = {
     0:'class 1',
     1:'class 2',
     2:'class 3',
     3:'class 4',
-    4:'class 5'}
-
+    4:'class 5'
+    }
 class MSCm1(Layer):
     constructorList = [
         Bit('spare', Pt=0, BitLen=1),
@@ -487,75 +544,7 @@ class MSCm3(CSN1):
         Bit('EUTRAMeasurementAndReportingSupport', Pt=0, BitLen=1),
         Bit('PriorityBasedReselectionSupport', Pt=0, BitLen=1),
         Bit('spare', Pt=0, BitLen=1),
-        ]
-
-
-# section 10.5.1.13
-# PLMN list
-class PLMN(Layer):
-    constructorList = [
-        Bit('MCC2', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MCC1', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC3', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MCC3', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC2', Pt=0, BitLen=4, Repr='hum'),
-        Bit('MNC1', Pt=0, BitLen=4, Repr='hum')]
-    
-    def __init__(self, mccmnc='00101'):
-        Layer.__init__(self)
-        if len(mccmnc) not in (5, 6):
-            return
-        self.MCC1 > int(mccmnc[0])
-        self.MCC2 > int(mccmnc[1])
-        self.MCC3 > int(mccmnc[2])
-        self.MNC1 > int(mccmnc[3])
-        self.MNC2 > int(mccmnc[4])
-        if len(mccmnc) == 5:
-            self.MNC3 > 0b1111
-            return
-        self.MNC3 > int(mccmnc[5])
-        
-    def __repr__(self):
-        MCC = '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
-        if self.MNC3() == 0b1111:
-            MNC = '%i%i' % (self.MNC1(), self.MNC2())
-        else:
-            MNC = '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
-        return '<[PLMN]: MCC: %s / MNC: %s>' % (MCC, MNC)
-    
-    def interpret(self):
-        MCC = int('%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3()))
-        MCC = MCC_dict[MCC] if MCC in MCC_dict.keys() else MCC
-        if self.MNC3() == 0b1111:
-            MNC = int('%i%i' % (self.MNC1(), self.MNC2()))
-        else:
-            MNC = int('%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3()))
-        MNC = MNC_dict[MNC] if MNC in MNC_dict.keys() else MNC
-        return '<[PLMN]: %s / %s>' % (MCC, MNC)
-
-class PLMNlist(Layer):
-    constructorList = [ ]
-    
-    def __init__(self, mccmnc='00101'):
-        Layer.__init__(self)
-        self.append( PLMN(mccmnc) )
-    
-    def map(self, s=''):
-        Layer.map(self, s)
-        s = s[self.map_len():]
-        while len(s) > 0:
-            self.append( PLMN() )
-            self[-1].map(s)
-            s = s[self[-1].map_len():]
-    
-    def add_PLMN(self, plmn=PLMN()):
-        if isinstance(plmn, PLMN):
-            self.append(plmn)
-    
-    def interpret(self):
-        return ''.join([str(plmn.interpret()) for plmn in self])
-
-#       
+        ]       
 
 # section 10.5.4.4
 # Auxiliary states
@@ -689,41 +678,64 @@ class QoS(Layer):
     constructorList = [
         Bit('spare', Pt=0, BitLen=2, Repr='hex'),
         Bit('DelayClass', Pt=0, BitLen=3, Dict=DelayClass_dict, Repr='hum'),
-        Bit('ReliabilityClass', Pt=0, BitLen=3, Dict=ReliabClass_dict, Repr='hum'),
+        Bit('ReliabilityClass', Pt=0, BitLen=3, Dict=ReliabClass_dict, Repr='hum'), # 1
         Bit('PeakThroughput', Pt=0, BitLen=4, Dict=PeakTP_dict, Repr='hum'),
         Bit('spare', Pt=0, BitLen=1, Repr='hex'),
-        Bit('PrecedenceClass', Pt=0, BitLen=3, Dict=PrecedClass_dict, Repr='hum'),
+        Bit('PrecedenceClass', Pt=0, BitLen=3, Dict=PrecedClass_dict, Repr='hum'), # 2
         Bit('spare', Pt=0, BitLen=3, Repr='hex'),
-        Bit('MeanThroughput', Pt=0, BitLen=5),
+        Bit('MeanThroughput', Pt=0, BitLen=5), # 3
         Bit('TrafficClass', Pt=0, BitLen=3),
         Bit('DeliveryOrder', Pt=0, BitLen=2),
-        Bit('DeliveryOfErrSDU', Pt=0, BitLen=3),
+        Bit('DeliveryOfErrSDU', Pt=0, BitLen=3), # 4
         Int('MaxSDUSize', Pt=0, Type='uint8'),
         Int('MaxULBitRate', Pt=0, Type='uint8'),
-        Int('MaxDLBitRate', Pt=0, Type='uint8'),
+        Int('MaxDLBitRate', Pt=0, Type='uint8'), # 7
         Bit('ResidualBitErrRate', Pt=0, BitLen=4),
-        Bit('SDUErrRatio', Pt=0, BitLen=4),
+        Bit('SDUErrRatio', Pt=0, BitLen=4), # 8
         Bit('TransferDelay', Pt=0, BitLen=6),
-        Bit('TrafficHandlingPrio', Pt=0, BitLen=2),
+        Bit('TrafficHandlingPrio', Pt=0, BitLen=2), # 9
         Int('GuarantULBitRate', Pt=0, Type='uint8'),
-        Int('GuarantDLBitRate', Pt=0, Type='uint8'),
+        Int('GuarantDLBitRate', Pt=0, Type='uint8'), # 11
         Bit('spare', Pt=0, BitLen=3, Repr='hex'),
         Bit('SignallingInd', Pt=0, BitLen=1),
-        Bit('SourceStatDesc', Pt=0, BitLen=4),
+        Bit('SourceStatDesc', Pt=0, BitLen=4), # 12
         Int('MaxDLBitRateExt', Pt=0, Type='uint8'),
         Int('GuarantDLBitRateExt', Pt=0, Type='uint8'),
         Int('MaxULBitRateExt', Pt=0, Type='uint8'),
-        Int('GuarantULBitRateExt', Pt=0, Type='uint8'),
+        Int('GuarantULBitRateExt', Pt=0, Type='uint8'), # 16
         ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        # for the last 4 integer values: if not explicitly provided,
+        # make them transparent
+        if 'MaxDLBitRateExt' not in kwargs \
+        and 'GuarantDLBitRateExt' not in kwargs:
+            for i in range(-4, 0):
+                self[i].Trans = True
+        if 'MaxULBitRateExt' not in kwargs \
+        and 'GuarantULBitRateExt' not in kwargs:
+            for i in range(-2, 0):
+                self[i].Trans = True
+    
     # rewrite map() in order to remove up to the 4 last Int() fields,
     # which are sometimes not provided... sometimes...
-    def map(self, buf=''):
-        Layer.map(self, buf)
-        diff = len(self) - len(buf)
-        if 0 < diff <= 4:
-            for i in range(diff):
-                self[-i-1].Trans = True
-    
+    def map(self, s=''):
+        s_len = len(s)
+        if s_len < 16:
+            self[-1].Trans = True
+        if s_len < 15:
+            self[-2].Trans = True
+        if s_len < 14:
+            self[-3].Trans = True
+        if s_len < 13:
+            self[-4].Trans = True
+        if s_len < 12:
+            self[-5].Trans = True
+            self[-6].Trans = True
+            self[-7].Trans = True
+        Layer.map(self, s)
+
 #
 # PDP address and type: 24.008, 10.5.6.4
 PDPTypeOrga_dict = {
@@ -765,7 +777,7 @@ class ProtID(Layer):
     constructorList = [
         Int('ID', Pt=0, Type='uint16', Dict=ProtID_dict, Repr='hum'),
         Int('length', Pt=0, Type='uint8'),
-        Str('content', Pt='', Repr='hex'),
+        Str('content', Pt=''), #, Repr='hex'),
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
@@ -773,6 +785,17 @@ class ProtID(Layer):
         self.length.PtFunc = lambda c: len(c)
         self.content.Len = self.length
         self.content.LenFunc = lambda l: l()
+    
+    def map(self, s=''):
+        if s:
+            Layer.map(self, s)
+            c = self.content()
+            if c:
+                ncp = NCP()
+                ncp.map(c)
+                self.content.Val = None
+                self.content.Pt = ncp
+        
 #
 class ProtConfig(Layer):
     constructorList = [
@@ -781,16 +804,16 @@ class ProtConfig(Layer):
         Bit('ConfigProt', Pt=0, BitLen=3, Dict={0:'PPP with IP PDP'}, Repr='hum'),
         ]
     # when mapping a buffer, append much ProtID() as needed 
-    def map(self, buf=''):
-        if buf:
-            Layer.map(self, buf)
-            buf = buf[1:]
-            while len(buf) >= 3:
-                length = ord(buf[2:3])
-                if len(buf) >= 3+length:
+    def map(self, s=''):
+        if s:
+            Layer.map(self, s)
+            s = s[1:]
+            while len(s) >= 3:
+                length = ord(s[2:3])
+                if len(s) >= 3+length:
                     self.append(ProtID())
-                    self[-1].map(buf)
-                    buf = buf[len(self[-1]):]
+                    self[-1].map(s)
+                    s = s[len(self[-1]):]
                 else:
                     break
 #
@@ -915,7 +938,7 @@ class MSRAContent(CSN1):
         Bit('CDMA2000RATCap', Pt=0, BitLen=1),
         Bit('UMTS1.28McpsTDDRATCap', Pt=0, BitLen=1),
         Bit('GERANFeatPkg1', Pt=0, BitLen=1),
-        {'0':BREAK, '1':(Bit('ExtDTMGPRSMultislotClass', Pt=0, BitLen=2), \
+        {'0':BREAK, '1':(Bit('ExtDTMGPRSMultislotClass', Pt=0, BitLen=2),
                          Bit('ExtDTMEGPRSMultislotClass', Pt=0, BitLen=2))},
         Bit('ModlationBasedMultislotClass', Pt=0, BitLen=1),
         {'0':BREAK, '1':Bit('HighMultislotCap', Pt=0, BitLen=2)},
@@ -927,7 +950,8 @@ class MSRAContent(CSN1):
         Bit('ExtRLCMACCtrlMsgSegmentCap', Pt=0, BitLen=1),
         Bit('DTMEnhancementsCap', Pt=0, BitLen=1),
         {'0':BREAK, '1':(Bit('DTMGPRSHighMultislotClass', Pt=0, BitLen=3),
-                         {'0':BREAK, '1':Bit('DTMEGPRSHighMultislotClass', Pt=0, BitLen=3)})},
+                         {'0':BREAK, '1':Bit('DTMEGPRSHighMultislotClass', Pt=0, 
+                                             BitLen=3)})},
         Bit('PSHOCap', Pt=0, BitLen=1),
         Bit('DTMHOCap', Pt=0, BitLen=1),
         {'0':BREAK, '1':(Bit('MultislotCapReducDLDualCarrier', Pt=0, BitLen=3),
@@ -959,10 +983,10 @@ class MSRAAccessCap(CSN1):
         self.csn1List[0].Pt = self.csn1List[1]
         self.csn1List[0].PtFunc = lambda c: c.bit_len()
     #
-    def map(self, string='', byte_offset=0):
+    def map(self, s='', byte_offset=0):
         # WNG: it is clear from this crappy structure that 
         # some network-side CSN1 parser will be buggy right here !
-        CSN1.map(self, string, byte_offset)
+        CSN1.map(self, s, byte_offset)
         total_len, cont_len = self[0](), self[1].bit_len()
         if total_len < cont_len:
             # in case the AccessCap is too long, remove IE 1 per 1
@@ -979,7 +1003,7 @@ class MSRAAccessCap(CSN1):
 #
 class MSRAAddTech(CSN1):
     csn1List = [
-        Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum', \
+        Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum',
             Dict=AccessTechnoType_dict),
         Bit('GMSKPowerClass', Pt=0, BitLen=3),
         Bit('8PSKPowerClass', Pt=0, BitLen=2),
@@ -988,10 +1012,10 @@ class MSRAAdd(CSN1):
     csn1List = [
         Bit('Length', Pt=0, BitLen=7, Repr='hum'),
         ]
-    def map(self, string='', byte_offset=0):
-        CSN1.map(self, string, byte_offset)
+    def map(self, s='', byte_offset=0):
+        CSN1.map(self, s, byte_offset)
         l = self[0]()
-        bufsh = shtr(string)<<7
+        bufsh = shtr(s)<<7
         while l >= 10:
             # add as much as RAT to fill in the indicated length
             # and possibly 1 to 4 spare bits...
@@ -1018,7 +1042,7 @@ class MSRAAdd(CSN1):
 # however, with such a CSN1 syntax, hard to do better
 class MSRACap(CSN1):
     csn1List = [
-        Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum', \
+        Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum',
             Dict=AccessTechnoType_dict),
         MSRAAccessCap(),
         Bit('spare', Pt=0, BitLen=0),
@@ -1028,7 +1052,7 @@ class MSRACap(CSN1):
         bufsh = shtr(s)
         self.elementList = []
         # check if we have a single RAT or multiple one
-        self.append(Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum', \
+        self.append(Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum',
                         Dict=AccessTechnoType_dict))
         self[-1].map(bufsh)
         mapped_len = 4
@@ -1061,7 +1085,7 @@ class MSRACap(CSN1):
                 bufsh = bufsh<<1
             if self[-1]() == 1:
                 #print 'appending RAT'
-                self.append(Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum', \
+                self.append(Bit('AccessTechnoType', Pt=0, BitLen=4, Repr='hum',
                                 Dict=AccessTechnoType_dict))
                 self[-1].map(bufsh)
                 mapped_len += 4
@@ -1071,4 +1095,413 @@ class MSRACap(CSN1):
             #print 'appending spare bits'
             self.append(Bit(self.pad_name, BitLen=buflen-mapped_len))
             self[-1].map(bufsh)
+
+###
+# TS 24.301: LTE / EPC Information Element
+# section 9
+###
+
+# section 9.9.3.23, Ciphering & Integrity Protection Algorithms
+IntegAlg_dict = {
+    0 : 'EIA0',
+    1 : '128-EIA1',
+    2 : '128-EIA2',
+    3 : '128-EIA3',
+    4 : 'EIA4',
+    5 : 'EIA5',
+    6 : 'EIA6',
+    7 : 'EIA7' \
+    }
+CiphAlg_dict = {
+    0 : 'EEA0',
+    1 : '128-EEA1',
+    2 : '128-EEA2',
+    3 : '128-EEA3',
+    4 : 'EEA4',
+    5 : 'EEA5',
+    6 : 'EEA6',
+    7 : 'EEA7'
+    }
+
+# section 9.9.3.21, NAS Key Set Identifier
+NASKSI_dict = { \
+    0 : 'Native security context (for KSI_asme): KSI 0',
+    1 : 'Native security context (for KSI_asme): KSI 1',
+    2 : 'Native security context (for KSI_asme): KSI 2',
+    3 : 'Native security context (for KSI_asme): KSI 3',
+    4 : 'Native security context (for KSI_asme): KSI 4',
+    5 : 'Native security context (for KSI_asme): KSI 5',
+    6 : 'Native security context (for KSI_asme): KSI 6',
+    7 : 'Native security context: no key is available (from MS) ' \
+        '/ reserved (from network)',
+    8 : 'Mapped security context (for KSI_sgsn): KSI 0',
+    9 : 'Mapped security context (for KSI_sgsn): KSI 1',
+    10 : 'Mapped security context (for KSI_sgsn): KSI 2',
+    11 : 'Mapped security context (for KSI_sgsn): KSI 3',
+    12 : 'Mapped security context (for KSI_sgsn): KSI 4',
+    13 : 'Mapped security context (for KSI_sgsn): KSI 5',
+    14 : 'Mapped security context (for KSI_sgsn): KSI 6',
+    15 : 'Mapped security context: no key is available (from MS) ' \
+        '/ reserved (from network)'
+    }
+
+# section 9.9.2.7
+class NASSecToEUTRA(Layer):
+    constructorList = [
+        Str('NonceMME', Pt=3*'\0', Len=3, Repr='hex'),
+        Bit('spare', Pt=0, BitLen=1),
+        Bit('CiphAlg', Pt=0, BitLen=3, Repr='hum', Dict=CiphAlg_dict),
+        Bit('spare', Pt=0, BitLen=1),
+        Bit('IntegAlg', Pt=0, BitLen=3, Repr='hum', Dict=IntegAlg_dict),
+        Bit('spare', Pt=0, BitLen=4),
+        Bit('NASKSI', Pt=0, BitLen=4, Repr='hum', Dict=NASKSI_dict)
+        ]
+        
+# section 9.9.3.12, EPS ID
+# IMSI is same as ID(type='IMSI')
+# IMEI is same as ID(type='IMEISV')
+EPSIDType_dict = IANA_dict({
+    1:'IMSI',
+    2:'reserved',
+    3:'IMEI',
+    4:'reserved',
+    6:'GUTI',
+    7:'reserved'
+    })
+class GUTI(Layer):
+    constructorList = [
+        Bit('spare', Pt=0b1111, BitLen=4),
+        Bit('odd', Pt=0, BitLen=1, Repr='hum'),
+        Bit('type', BitLen=3, Pt=6, Dict=EPSIDType_dict, Repr='hum'),
+        PLMN(),
+        Int('MMEGroupID', Pt=0, Type='uint16', Repr='hex'),
+        Int('MMECode', Pt=0, Type='uint8', Repr='hex'),
+        Str('MTMSI', Pt=4*'\0', Len=4, Repr='hex')
+        ]
+
+# section 9.9.3.12A
+CSLCS_dict = {
+    0:'No info available',
+    1:'Location services via CS supported',
+    2:'Location services via CS not supported',
+    3:'reserved'
+    }
+class EPSFeatSup(Layer):
+    constructorList = [
+        Bit('spare', Pt=0, BitLen=2),
+        Bit('ESR_PS', ReprName='Extended Service Request for Packet Services',
+            Pt=0, BitLen=1, Repr='hum'),
+        Bit('CS_LCS', ReprName='Location Services Indicator in CS', Pt=0,
+            BitLen=2, Repr='hum', Dict=CSLCS_dict),
+        Bit('EPC_LCS', ReprName='Location Services Indicator in EPC', Pt=0,
+            BitLen=1, Repr='hum'),
+        Bit('EMC_BS', ReprName='Emergency Bearer Services Indicator', Pt=0,
+            BitLen=1, Repr='hum'),
+        Bit('IMS_VoPS', ReprName='IMS Voice over PS Session un S1 mode', Pt=0,
+            BitLen=1, Repr='hum')
+        ]
+
+# section 9.9.3.32
+class TAI(Layer):
+    constructorList = [
+        PLMN(),
+        Int('TAC', Pt=0, Type='uint16')
+        ]
+    def __init__(self, MCCMNC='00101', TAC=0x0000):
+        Layer.__init__(self)
+        self.PLMN.set_mcc(MCCMNC[:3])
+        self.PLMN.set_mnc(MCCMNC[3:])
+        self.TAC > TAC
+
+# section 9.9.3.33
+PartialTAI_dict = {
+    0 : 'Non-consecutive TAC belonging to one PLMN',
+    1 : 'Consecutive TAC belonging to one PLMN',
+    2 : 'TAIs belonging to different PLMNs',
+    3 : 'reserved'
+    }
+
+class PartialTAIList(Layer):
+    constructorList = [
+        Bit('spare', Pt=0, BitLen=1),
+        Bit('Type', Pt=0, BitLen=2, Repr='hum', Dict=PartialTAI_dict),
+        Bit('Num', Pt=1, BitLen=5, Repr='hum'),
+        PLMN(),
+        Int('TAC', Pt=0, Type='uint16')
+        ]
+    
+    def __init__(self, *args, **kwargs):
+        Layer.__init__(self, **kwargs)
+        if 'PLMN' in kwargs:
+            self._set_plmn( kwargs['PLMN'] )
+        for arg in args:
+            if isinstance(arg, PLMN):
+                sell._set_plmn( arg )
+    
+    def _set_plmn(self, plmn):
+        if isinstance(plmn, PLMN):
+            self.PLMN.set_mcc( arg.get_mcc() )
+            self.PLMN.set_mnc( arg.get_mnc() )
+    
+    def add_tac(self, *args):
+        for arg in args:
+            if isinstance(arg, int):
+                self.append( Int('TAC', Pt=arg, Type='uint16') )
+            elif isinstance(arg, (list, tuple)):
+                # the recursive way
+                for e in arg:
+                    self.add_tac(e)
+    
+    def add_tai(self, *args):
+        for arg in args:
+            if isinstance(arg, TAI):
+                self.append( arg[0] ) # append PLMN
+                self.append( arg[1] ) # append TAC
+            elif isinstance(arg, (list, tuple)):
+                for e in arg:
+                    self.add_tai(e)
+    
+    def map(self, s):
+        Layer.map(self, s)
+        s = s[5:]
+        # depending of .Type(), stack the correct structure
+        if self.Type() == 0:
+            # stacking only TAC uint16 values, .Num() number of time
+            max_tacs = min(len(s)//2, self.Num())
+            self.add_tac( unpack('!'+'H'*max_tacs, s) )
+        elif self.Type() == 2:
+            # stacking complete TAI (PLMN + TAC) struct, .Num() number of time
+            max_tais = min(len(s)//5, self.Num())
+            for i in range(max_tais):
+                tai = TAI()
+                tai.map(s)
+                self.add_tai( tai )
+                s = s[5:]
+
+class PartialTAIList0(PartialTAIList):
+    constructorList = [
+        Bit('spare', Pt=0, BitLen=1),
+        Bit('Type', Pt=0, BitLen=2, Repr='hum', Dict=PartialTAI_dict),
+        Bit('Num', ReprName='Number of TAC', Pt=1, BitLen=5, Repr='hum'),
+        PLMN()
+        ]
+    def __init__(self, *args, **kwargs):
+        PartialTAIList.__init__(self, *args, **kwargs)
+        self.Type > 0
+        # add (possibly multiple) TAC(s)
+        for arg in args:
+            if isinstance(arg, (int, list, tuple)):
+                self.add_tac(arg)
+        if 'TAC' in kwargs and isinstance(kwargs['TAC'], (int, list, tuple)):
+            self.add_tac( kwargs['TAC'] )
+        # automate Num(), corresponding to the number of stacked TACs
+        self.Num.Pt = self
+        self.Num.PtFunc = lambda s: len([t for t in self[3:] \
+                                          if t.CallName=='TAC'])
+
+class PartialTAIList1(PartialTAIList):
+    # constructorList is the same as partialTAIList
+    def __init__(self, *args, **kwargs):
+        PartialTAIList.__init__(self, *args, **kwargs)
+        self.Type > 1
+
+class PartialTAIList2(PartialTAIList):
+    # constructorList is the same as partialTAIList
+    def __init__(self, *args, **kwargs):
+        Layer.__init__(self, *args **kwargs)
+        self.Type > 2
+        # add (possibly multiple) TAI(s)
+        for arg in args:
+            if isinstance(arg, (TAI, list, tuple)):
+                self.add_tai(arg)
+        if 'TAI' in kwargs and isinstance(kwargs['TAI'], (TAI, list, tuple)):
+            self.add_tai( kwargs['TAI'] )
+
+class TAIList(Layer):
+    constructorList = [ ]
+    
+    def __init__(self, *args):
+        Layer.__init__(self)
+        for arg in args:
+            if isinstance(arg, PartialTAIList):
+                self.append(arg)
+    
+    def map(self, s=''):
+        while len(s) >= 6:
+            self.append( PartialTAIList() )
+            self[-1].map(s)
+            s = s[len(self[-1]):]
+
+# section 9.9.3.34
+class UENetCap(Layer):
+    constructorList = [
+        Bit('EEA0', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA7', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA0', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA7', Pt=0, BitLen=1, Repr='hum'),
+        # from here: optional infos
+        Bit('UEA0', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA7', Pt=0, BitLen=1, Repr='hum'), # 1 byte
+        Bit('UCS2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA7', Pt=0, BitLen=1, Repr='hum'), # 2 bytes
+        Bit('spare', Pt=0, BitLen=2),
+        Bit('H245_ASH', Pt=0, BitLen=1, Repr='hum'),
+        Bit('ACC_CSFB', Pt=0, BitLen=1, Repr='hum'),
+        Bit('LPP', Pt=0, BitLen=1, Repr='hum'), 
+        Bit('LCS', Pt=0, BitLen=1, Repr='hum'), 
+        Bit('SRVCC_CDMA', Pt=0, BitLen=1, Repr='hum'), 
+        Bit('NF', Pt=0, BitLen=1, Repr='hum'), # 3 bytes
+        Str('spare', Pt=8*'\0', Len=8, Repr='hex', Trans=True)
+        ]
+    def map(self, s=2*'\0'):
+        s_len = len(s)
+        if s_len == 2:
+            for ie in self[16:]:
+                ie.Trans = True
+        elif s_len == 3:
+            for ie in self[24:]:
+                ie.Trans = True
+        elif s_len == 4:
+            for ie in self[32:]:
+                ie.Trans = True
+        elif s_len > 4:
+            self[-1].Trans = False
+            self.spare.Len = max(s_len-5, 8)
+        Layer.map(self, s)
+
+class UESecCap(Layer):
+    constructorList = [
+        Bit('EEA0', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EEA7', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA0', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('EIA7', Pt=0, BitLen=1, Repr='hum'), # 2 bytes
+        Bit('UEA0', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UEA7', Pt=0, BitLen=1, Repr='hum'),
+        Bit('spare', Pt=0, BitLen=1),
+        Bit('UIA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UIA7', Pt=0, BitLen=1, Repr='hum'), # 4 bytes
+        Bit('spare', Pt=0, BitLen=1),
+        Bit('GEA1', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GEA2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GEA3', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GEA4', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GEA5', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GEA6', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GEA7', Pt=0, BitLen=1, Repr='hum'),
+        ]
+
+APN_AMBR_dict = {}
+APN_AMBR_EXT_dict = {}
+APN_AMBR_EXT2_dict = {}
+
+class APN_AMBR(Layer):
+    constructorList = [
+        Int('APN_AMBR_DL', Pt=0, Type='uint8', Dict=APN_AMBR_dict),
+        Int('APN_AMBR_UL', Pt=0, Type='uint8', Dict=APN_AMBR_dict),
+        Int('APN_AMBR_DL_ext', Pt=0, Type='uint8', Dict=APN_AMBR_EXT_dict),
+        Int('APN_AMBR_UL_ext', Pt=0, Type='uint8', Dict=APN_AMBR_EXT_dict),
+        Int('APN_AMBR_DL_ext2', Pt=0, Type='uint8', Dict=APN_AMBR_EXT2_dict),
+        Int('APN_AMBR_UL_ext2', Pt=0, Type='uint8', Dict=APN_AMBR_EXT2_dict),
+        ]
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        # generate Dict for those bitrates
+        self.APN_AMBR_DL.DictFunc = self._gen_dict
+        self.APN_AMBR_UL.DictFunc = self._gen_dict
+        self.APN_AMBR_DL_ext.DictFunc = self._gen_ext_dict
+        self.APN_AMBR_UL_ext.DictFunc = self._gen_ext_dict
+        self.APN_AMBR_DL_ext2.DictFunc = self._gen_ext2_dict
+        self.APN_AMBR_UL_ext2.DictFunc = self._gen_ext2_dict
+    
+    def _gen_dict(self, d={}):
+        if d == {}:
+            d[0] = 'reserved'
+            for v in range(1, 64):
+                d[v] = '%i kbps' % v
+            for v in range(64, 127):
+                d[v] = '%i kbps' % ((v-0b01000000)*8)
+            for v in range(128, 255):
+                d[v] = '%i kbps' % ((v-0b10000000)*64)
+            d[255] = '0 kbps'
+        return d
+    
+    def _gen_ext_dict(self, d={}):
+        if d == {}:
+            d[0] = 'see APN_AMBR'
+            for v in range(1, 75):
+                d[v] = '%i kbps' % ((v*100)+8600)
+            for v in range(75, 187):
+                d[v] = '%i Mbps' % ((v-0b01001010)+16)
+            for v in range(187, 251):
+                d[v] = '%i Mbps' % (((v-0b10111010)*2)+128)
+            for v in range(251, 256):
+                d[v] = '256 Mbps'
+        return d
+    
+    def _gen_ext2_dict(self, d={}):
+        if d == {}:
+            d[0] = 'see APN_AMBR_ext'
+            for v in range(1, 255):
+                d[v] = '%i Mbps more' % (v*256)
+            d[255] = 'see APN_AMBR_ext'
+        return d
+    
+    def map(self, s=''):
+        s_len = len(s)
+        if 1 < s_len <= 3:
+            for ie in self[0:2]: ie.Trans = False
+            for ie in self[2:]: ie.Trans = True
+        elif 3 < s_len <= 5:
+            for ie in self[0:4]: ie.Trans = False
+            for ie in self[4:]: ie.Trans = True
+        elif 5 < s_len:
+            for ie in self: ie.Trans = False
+
 #
