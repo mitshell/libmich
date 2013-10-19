@@ -31,10 +31,12 @@
 from libmich.core.element import Bit, Int, Str, Layer, show, debug
 from libmich.core.IANA_dict import IANA_dict
 
+__all__ = ['LCP', 'LCPopt', 'NCP', 'IPCP']
 ###
 # this is from RFC 1331 and 1332 on PPP
 ###
 
+###
 # RFC 1331
 
 LCPCode_dict = IANA_dict({
@@ -90,7 +92,7 @@ class LCPopt(Layer):
         self.Data.Len = self.Length
         self.Data.LenFunc = lambda l: l()-2
 
-#
+###
 # RFC 1332
 
 NCPCode_dict = IANA_dict({
@@ -108,7 +110,7 @@ class NCP(Layer):
         Int('Code', Pt=0, Type='uint8', Dict=LCPCode_dict),
         Int('Identifier', Pt=0, Type='uint8'),
         Int('Length', Type='uint16'),
-        Str('Data', Pt='', Repr='hex'),
+        Str('Data', Pt=''), #, Repr='hex'),
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
@@ -116,6 +118,19 @@ class NCP(Layer):
         self.Length.PtFunc = lambda d: len(d)+4
         self.Data.Len = self.Length
         self.Data.LenFunc = lambda l: l()-4
+    
+    def map(self, s=''):
+        if s:
+            Layer.map(self, s)
+            data, ipcp_list = self.Data(), []
+            while data:
+                ipcp = IPCP()
+                ipcp.map(data)
+                data = data[len(ipcp):]
+                ipcp_list.append( ipcp )
+            if ipcp_list:
+                self.Data.Val = None
+                self.Data.Pt = tuple(ipcp_list)
 
 IPCPType_dict = IANA_dict({
     1 : 'IP-Addresses',

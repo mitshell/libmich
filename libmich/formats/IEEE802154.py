@@ -45,7 +45,9 @@ def unh(buf):
 #
 # These are from IEEE 802.15.4 spec
 Bool_dict = {0:'False', 1:'True'}
-Type_dict = {0:'Beacon', 1:'Data', 2:'Ack', 3:'MAC command'}
+Type_dict = {0:'Beacon', 1:'Data', 2:'Ack', 3:'MAC command', # from standard IEEE 802.15.4
+             4:'Visibility', # from Samsung ETRI (802.15.7)
+             }
 Addr_dict = {0:'Not present', 1:'Reserved', \
              2:'16-bit address', 3:'64-bit address'}
 Addr_len = {0:0, 1:0, 2:2, 3:8}
@@ -87,22 +89,26 @@ class IEEE802154(Block):
         self[-1].map(s)
         s = s[len(self[-1]):]
         # insert DATA layer
-        if len(s) > 2:
-            self << Data()
-            if self.FCS_INCL: self[-1].map(s[:-2])
-            else: self[-1].map(s)
-        # insert error detection code (CRC)
         if self.FCS_INCL:
-            self >> FCS()
-            self[-1].map(s[-2:])
-            #
-            # verify CRC
-            crc = self.FCS.FCS()
-            self.FCS.FCS < None
-            if self.FCS.FCS() != crc and self.dbg >= ERR:
-                log(ERR, 'bad 802.15.4 CRC16 in MAC suffix')
-            # refill with the original value
-            self.FCS.FCS < crc
+            if len(s) > 2:
+                self << Data()
+                self[-1].map(s[:-2])
+            if len(s) >= 2:
+                self >> FCS()
+                self[-1].map(s[-2:])
+                # verify CRC
+                crc = self.FCS.FCS()
+                self.FCS.FCS < None
+                if self.FCS.FCS() != crc and self.dbg >= ERR:
+                    log(ERR, 'bad 802.15.4 CRC16 in MAC suffix')
+                # refill with the original value
+                self.FCS.FCS < crc
+            elif self.dbg >= ERR:
+                log(ERR, 'buffer not long enough for FCS')
+                
+        elif len(s) > 0:
+            self << Data()
+            self[-1].map(s)
 
 class PHY(Layer):
     constructorList = [
@@ -211,6 +217,7 @@ class FCS(Layer):
 # buf the boolean FCS indicates FCS verification done by the dongle
 #
 class TI_PSD(Layer):
+    _byte_aligned = False
     constructorList = [
         Bit('unused', Pt=0, BitLen=5, Repr='bin'),
         Bit('Incomp', ReprName='Incomplete packet', Pt=0, BitLen=1, \
@@ -243,3 +250,4 @@ class TI_PSD(Layer):
         self.Corr.TransFunc = lambda c: False if c() else True
         self.LQI.Trans = self.Corrinc
         self.LQI.TransFunc = lambda c: True if c() else False
+
