@@ -45,22 +45,46 @@ from libmich.formats.L3Mobile_IE import *
 from libmich.formats.L3GSM_IE import *
 from libmich.formats.L3GSM_rest import *
 #
+#
+######
+# TS 24.007, section 11.2.3.1.1
+# Protocol Discriminator dict
+PD_dict = IANA_dict({
+    0:"group call control",
+    1:("broadcast call control", "BC"),
+    2:("EPS session management messages", "ESM"),
+    3:("call control; call related SS messages", "CC"),
+    4:"GPRS Transparent Transport Protocol (GTTP)",
+    5:("mobility management messages", "MM"),
+    6:("radio resources management messages", "RR"),
+    7:("EPS mobility management messages", "EMM"),
+    8:("GPRS mobility management messages", "GMM"),
+    9:("short messages service", "SMS"),
+    10:("GPRS session management messages", "SM"),
+    11:"non call related SS messages",
+    12:"Location services", # specified in 3GPP TS 44.071 [8a]
+    13:"reserved for extension of the PD to one octet length",
+    14:"testing",
+    })
+
+#
 # the following list is used when parsing L3 messages
 # if a field has 1 of the following name (possibly with an _[0-9]{1,} suffix)
 # its content will be mapped onto the corresponding Information Element
 IE_lookup = {
-    'BCDnumber' : BCDNumber,
+    'BCDNumber' : BCDNumber,
     'CallingBCD' : BCDNumber,
     'CalledBCD' : BCDNumber,
     'RedirectingBCD' : BCDNumber,
     'LAI' : LAI,
     'RAI' : RAI,
     'ID' : ID,
+    'IMEISV' : ID,
     'MSCm1' : MSCm1,
     'MSCm2' : MSCm2,
     'MSCm3' : MSCm3,
     'PLMN' : PLMN,
-    'PLMNlist' : PLMNlist,
+    'PLMNList' : PLMNList,
     'AuxState' : AuxState,
     'BearerCap' : BearerCap,
     'CCCap' : CCCap,
@@ -69,18 +93,29 @@ IE_lookup = {
     'ProtConfig' : ProtConfig,
     'PFlowID' : PacketFlowID,
     'MSNetCap' : MSNetCap,
-    'MSRACap' : MSRACap, # end of L3Mobile_IE
+    'MSRACap' : MSRACap,
+    # LTE / EPC IE
+    'GUTI' : GUTI, 
+    'EPSFeatSup' : EPSFeatSup,
+    'TAI' : TAI,
+    'TAIList' : TAIList,
+    'UENetCap' : UENetCap,
+    'UESecCap' : UESecCap,
+    'CLI' : BCDNumber,
+    'APN_AMBR' : APN_AMBR,
+    # end of L3Mobile_IE.py
     'CellChan' : CellChan,
     'BCCHFreq' : BCCHFreq,
     'ExtBCCHFreq' : ExtBCCHFreq,
-    'RACHctrl' : RACHctrl,
+    'RACHCtrl' : RACHCtrl,
     'CChanDesc' : CChanDesc,
     'CellOpt' : CellOpt,
     'CellSel' : CellSel,
     'ChanDesc' : ChanDesc,
     'MobAlloc' : MobAlloc,
     'PChanDesc' : PChanDesc, 
-    'ReqRef' : ReqRef, # end of L3GSM_IE
+    'ReqRef' : ReqRef,
+    # end of L3GSM_IE.py
     'P1RestOctets' : P1RestOctets,
     'IARestOctets' : IARestOctets,
     'SI1RestOctets' : SI1RestOctets,
@@ -88,7 +123,8 @@ IE_lookup = {
     'SI2quaterRestOctets' : SI2quaterRestOctets,
     'SI3RestOctets' : SI3RestOctets,
     'SI4RestOctets' : SI4RestOctets,
-    'SI13RestOctets' : SI13RestOctets, # end of L3GSM_rest
+    'SI13RestOctets' : SI13RestOctets,
+    # end of L3GSM_rest.py
     }
 IE_list = IE_lookup.keys()
 
@@ -100,8 +136,7 @@ IE_list = IE_lookup.keys()
 # from mandatory IE (without tag) 
 # generally: Str(), Int(), Bit(), Type4_LV(), Type6_LVE()
 #
-# Type1_V() will certainly not be used, better call directly Int() or Str()
-# anyway, "Trans" should always stay False
+# Type1_V() will certainly not be used, better call directly Bit()
 class Type1_V(Layer):
     # Type1_TV consists only of 4 bits (MSB or LSB)
     _byte_aligned = False
@@ -251,27 +286,6 @@ class Type6_TLVE(Layer):
             return self.L() + 3
 
 ######
-# TS 24.007, section 11.2.3.1.1
-# Protocol Discriminator dict
-PD_dict = IANA_dict({
-    0:"group call control",
-    1:("broadcast call control", "BC"),
-    2:"EPS session management messages",
-    3:("call control; call related SS messages", "CC"),
-    4:"GPRS Transparent Transport Protocol (GTTP)",
-    5:("mobility management messages", "MM"),
-    6:("radio resources management messages", "RR"),
-    7:"EPS mobility management messages",
-    8:("GPRS mobility management messages", "PS_MM"),
-    9:("short messages service", "SMS"),
-    10:("GPRS session management messages", "PS_SM"),
-    11:"non call related SS messages",
-    12:"Location services", # specified in 3GPP TS 44.071 [8a]
-    13:"reserved for extension of the PD to one octet length",
-    14:"testing",
-    })
-
-######
 # for GSM RR over broadcast channel, we have 
 # extra length and padding processing for signalling messages
 #
@@ -324,30 +338,41 @@ class Layer3(Layer):
     dbg = 1
     
     # message format dependancy: Net / ME
-    # needed for some messages in L3Mobile_CC, L3Mobile_PS_MM
-    #_initiator = 'Net'
+    # needed for some messages in L3Mobile_CC
+    #initiator = 'Net'
     _initiator = 'ME'
     
     # for a complete decoding
     _interpret_IE = True
     # for IE representation in .show()
     _IE_with_repr = ['LAI', 'ID', 'PLMN']
-    _IE_no_show = []
-    #_IE_no_show = ['CSN1_padding', 'CSN1_condition']
+    #_IE_no_show = []
+    _IE_no_show = ['CSN1_padding', 'CSN1_condition']
     
-    def __init__(self, CallName='', ReprName='', Trans=False):
+    def __init__(self, CallName='', ReprName='', Trans=False, **kwargs):
         Layer.__init__(self, CallName='', ReprName='', Trans=Trans)
+        #
+        for ie in self:
+            if hasattr(ie, 'CallName') and ie.CallName in kwargs:
+                if hasattr(ie, 'V'):
+                    ie.V > kwargs[ie.CallName]
+                else:
+                    ie > kwargs[ie.CallName]
     
     # handles optional tag (TLV) transparency at initialization
     def _post_init(self, with_options=True, **kwargs):
         for ie in self:
-            if hasattr(ie, 'T') and ie.Trans is False:
+            # this condition changes the way messages with repeated indicator 
+            # and IEs are generated
+            # TODO: take a decision on which condition is the most convinient!
+            #if hasattr(ie, 'T') and ie.Trans is False:
+            if hasattr(ie, 'T'):
                 ie.Trans = not with_options
-            if ie.CallName in kwargs:
+            if hasattr(ie, 'CallName') and ie.CallName in kwargs:
                 if hasattr(ie, 'V'):
-                    ie.V.Pt = kwargs[ie.CallName]
+                    ie.V > kwargs[ie.CallName]
                 else:
-                    ie.Pt = kwargs[ie.CallName]
+                    ie > kwargs[ie.CallName]
     
     
     # Patch L2 length for dummy GSM RR length computation !!!
@@ -367,20 +392,19 @@ class Layer3(Layer):
     # and pointing to specific libraries in IE_sources when exists
     def map(self, string=''):
         # Layer3 have optional fields that need special processing
+        # they all have a tag (attribute .T)
         opt_fields = (Type1_TV, Type2, Type3_TV, Type4_TLV, Type6_TLVE)
         GSM_RR = False
         # handle special string truncature for L3GSM_RR that is on CCCH
         # cause opts may not be there, but we still have rest octets to map
-        #if isinstance(self[-1], StrRR):
-        # get a more safe condition here
         if self.CallName in RR_in_CCCH:
             if self.safe:
                 assert(isinstance(self[0], Bit) and self[0].CallName=='len')
             GSM_RR, l2_len = True, self._len_gsmrr(string)
             string, rest = string[:l2_len+1], string[l2_len+1:]
             if self.dbg >= DBG:
-                log(DBG, '(Layer3 GSM_RR - %s)\nstring: %s\nrest: %s' \
-                    % (self.CallName, hexlify(string), hexlify(rest)))
+                log(DBG, '(Layer3 GSM_RR - %s)\nl2len: %i\nstring: %s\nrest: %s' \
+                    % (self.CallName, l2_len, hexlify(string), hexlify(rest)))
         # Otherwise we mimic standard Layer().map() behaviour
         self._Layer__BitStack = []
         self._Layer__BitStack_len = 0
@@ -418,7 +442,12 @@ class Layer3(Layer):
                     e.map(string)
                     string = string[e.map_len():]
         # for GSM RR: map rest octets, that comes after tagged IE
-        if GSM_RR: self[-1].map(rest)
+        if GSM_RR and rest:
+            if isinstance(self[-1], StrRR):
+                self[-1].Trans = False
+            else:
+                self.append(StrRR('RestOctets', Repr='hex'))
+            self[-1].map(rest)
         # delete .map() *internal* attributes
         del self._Layer__BitStack
         del self._Layer__BitStack_len
@@ -426,7 +455,8 @@ class Layer3(Layer):
         if not self._interpret_IE:
             return
         # Go again through all L3 fields that are not transparent
-        # (tested with their length, WNG: do not work for LV()) 
+        # (tested with their length, WNG: do not work for LV(), however,
+        # LV field should always be there...) 
         # and check if L3Mobile_IE is available for even more interpretation
         for e in [f for f in self if len(f)]:
             cn = e.CallName
@@ -444,7 +474,6 @@ class Layer3(Layer):
             #if hasattr(L3Mobile_IE, cn) or hasattr(L3GSM_IE, cn):
             if cn in IE_list:
                 self.interpret_IE(e, cn)
-        ###
     
     def interpret_IE(self, field, cn):
         # interpret field as cn
@@ -479,25 +508,17 @@ class Layer3(Layer):
     def __map_opts(self, string=''):
         # retrieve all optional IE from the Layer3 into opt_ie list
         opt_ie = self.__get_opts()
-        taglist = [ie[0]() for ie in opt_ie]
+        taglist = [ie[0]() for ie in opt_ie if not isinstance(ie, StrRR)]
         if self.dbg >= DBG:
             log(DBG, '(Layer3 - %s) opt_ie: %s' % (self.CallName, opt_ie))
         # go over the string and map to optional IE found
         while len(string) > 0:
-            # check each iteration for 4 bits and 8 bits tags
-            t4, t8 = ord(string[0])>>4, ord(string[0])
-            if self.dbg >= DBG:
-                log(DBG, '(Layer3 - %s) t4, t8: %s, %s\ntaglist: %s' \
-                    % (self.CallName, t4, t8, taglist))
-            # handle 4 bits tag in priority
-            # guessing from 3GPP spec:
-            #   4 bits and 8 bits tags should never clash...
-            # actually, this is not always the case 
-            #   e.g. for tag 4 (BearerCap) and 64 (SuppCodecs)
-            if t4 in taglist:
-                string, opt_ie = self.__map_opt(t4, string, opt_ie)
-            elif t8 in taglist:
-                string, opt_ie = self.__map_opt(t8, string, opt_ie)
+            # check each iteration for the right tag
+            t = self._select_tag(string[0], taglist)
+            if t:
+                string, opt_ie = self.__map_opt(t, string, opt_ie)
+                taglist.remove(t)
+            #
             else:
                 if self.dbg >= ERR:
                     log(WNG, '(Layer3 - %s) unknown optional IE' \
@@ -508,6 +529,7 @@ class Layer3(Layer):
                 if string2 == string:
                     break
                 string = string2
+            #
         # optional IE that have not been mapped have to go "transparent"
         if len(opt_ie) > 0:
             [setattr(ie, 'Trans', True) for ie in opt_ie]
@@ -520,6 +542,40 @@ class Layer3(Layer):
             log(ERR, '(Layer3 - %s) string not completely mapped\nremaining: ' \
                 '%s' % (self.CallName, string))
     
+    def _select_tag_old_(self, s='\0', taglist=[]):
+        # check for 4 bits and 8 bits tags
+        t4, t8 = ord(s[0])>>4, ord(s[0])
+        if self.dbg >= DBG:
+            log(DBG, '(Layer3 - %s) t4, t8: %s, %s\ntaglist: %s' \
+                     % (self.CallName, t4, t8, taglist))
+        #
+        # handle 4 bits tag in priority
+        # guessing from 3GPP spec:
+        #   4 bits and 8 bits tags should never clash...
+        # actually, this is not always the case 
+        #   e.g. for tag 4 (BearerCap) and 64 (SuppCodecs)
+        # TODO: this is actually a real issue,
+        # e.g. with GSM RR ASSIGNMENT_COMMAND
+        if t4 in taglist:
+            return t4
+        elif t8 in taglist:
+            return t8
+        return None
+    
+    def _select_tag(self, s='\0', taglist=[]):
+        # check for 4 bits and 8 bits tags
+        t4, t8 = ord(s[0])>>4, ord(s[0])
+        if self.dbg >= DBG:
+            log(DBG, '(Layer3 - %s) t4, t8: %s, %s\ntaglist: %s' \
+                     % (self.CallName, t4, t8, taglist))
+        #
+        # try another way:
+        # prefer the tag which is 1st in the taglist, whatever tag length
+        for t in taglist:
+            if t in (t4, t8):
+                return t
+        return None
+    
     def __get_opts(self):
         found_opt, opt_ie = False, []
         # we have at least 3 mandatory fields (L3 header: SI, PD, Type)
@@ -528,9 +584,12 @@ class Layer3(Layer):
         else: ie_to_check = self[3:]
         #
         for ie in ie_to_check:
-            if hasattr(ie, 'T'):
+            if hasattr(ie, 'T') or isinstance(ie, (Type2, StrRR)):
                 found_opt = True
                 opt_ie.append(ie)
+                # make all optional fields not transparent (so all of them
+                # can be mapped, whatever Layer3.__init__() options given)
+                ie.Trans = False
             elif found_opt and self.dbg >= ERR:
                 # we should not find mandatory IE after optional
                 log(ERR, '(Layer3 - %s) mandatory IE found after ' \
@@ -539,16 +598,24 @@ class Layer3(Layer):
     
     def __map_opt(self, tag, string, opt_ie):
         # retrieve 1st optional IE for the given tag: in opt
+        opt = None
         for ie in opt_ie:
             if ie[0]() == tag:
                 opt = ie
                 break
         # remove it from the opt_ie list that will be further processed
-        # python's "remove()" remove the 1st iteration of an element in a list 
+        # python's "remove()" remove the 1st iteration of an element in a list
+        if not opt:
+            log(ERR, '(Layer3 - %s) no remaining optional field for tag %i' \
+                     % (self.CallName, tag))
+            return '', opt_ie
         opt_ie.remove(opt)
         # force it to be not transparent, map it and truncate the string
         opt.Trans = False
         opt.map(string)
+        if self.dbg >= DBG:
+            log(DBG, '(Layer3 - %s) mapping %s on %s' \
+                      % (self.__class__, hexlify(string), opt.CallName))
         string = string[opt.map_len():]
         return string, opt_ie
     
@@ -601,4 +668,5 @@ class Layer3(Layer):
         str_lst.insert(0, '### %s[%s]%s ###\n' % (re, self.CallName, tr))
         # return full inline string without last CR
         return ''.join(str_lst)[:-1]
+
 #
