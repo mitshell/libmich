@@ -345,7 +345,7 @@ class FACILITY(Layer3):
     constructorList = [ie for ie in Header(3, 58)]
     def __init__(self, with_options=True, **kwargs):
         Layer3.__init__(self)
-        self.extend([Type4_LV('Facility', T=0x1C, V='')])
+        self.extend([Type4_LV('Facility', V='')])
         if self._initiator != 'Net':
             # MS to network direction
             self.extend([Type4_TLV('SSversion', T=0x7F, V='')])
@@ -733,13 +733,13 @@ class SETUP(Layer3):
             Type4_TLV('UU', ReprName='User-User', T=0x7E, \
                       V='\0'),
             Type4_TLV('SSversion', T=0x7F, V=''),
-            Type2('CLIRsuppr', T=0x8),
-            Type2('CLIRinvoc', T=0x19),
+            Type2('CLIRSuppr', T=0x8),
+            Type2('CLIRInvoc', T=0x19),
             Type4_TLV('CCCap', T=0x15, V=CCCap()),
             Type4_TLV('FacilityAdvanced', T=0x1D, V=''),
             Type4_TLV('FacilityNotEssential', T=0x1B, V=''),
             Type4_TLV('StreamId', T=0x2D, V='\0\0'),
-            Type4_TLV('SuppCodecs', ReprName='Supported codecs list', \
+            Type4_TLV('SuppCodecs', ReprName='Supported Codecs List', \
                       T=0x40, V='\0\0\0'),
             Type2('Redial', T=0xA3)])
         self._post_init(with_options, **kwargs)
@@ -816,7 +816,7 @@ class STATUS(Layer3):
         self.extend([ \
             Type4_LV('Cause', V='\0\x80'),
             Str('CallState', Pt='\0', Len=1, Repr='hex'),
-            Type4_TLV('AuxState', V=AuxState())])
+            Type4_TLV('AuxState', T=0x24, V=AuxState())])
         self._post_init(with_options, **kwargs)
 
 #section 9.3.28
