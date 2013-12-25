@@ -1,0 +1,10 @@
+################
+# AuC database #
+################
+#
+# file used by AuC.py
+# 
+# csv'style file, with the following fields:
+# IMSI (digit), K (hex), SQN (int)
+#
+001010000000001;000102030405060708090A0B0C0D0E0F;1

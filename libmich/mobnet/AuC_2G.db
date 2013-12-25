@@ -1,0 +1,13 @@
+###################
+# 2G AuC database #
+###################
+#
+# file used by AuC.py
+# 
+# csv'style file, with the following fields:
+# IMSI (digit), RAND (hex), Kc (hex), RES (hex)
+#
+# for 2G authentication, always replay run_gsm_algorithm() result
+# much easier than running COMP-128 variants
+#
+001010000000001;00000000000000000000000000000000;ba5ad2d3d2c92637;0f09d7cb
