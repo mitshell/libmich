@@ -20,33 +20,45 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : formats/LTENAS.py
+# * File Name : formats/L3Mobile_ESM.py
 # * Created : 2013-10-02
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
 #*/ 
-
 #!/usr/bin/env python
 
 # exporting
-#__all__ = [
-#            ]
+__all__ = ['ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST',
+           'ACTIVATE_DEFAULT_EPS_BEARER_CTX_ACCEPT',
+           'ACTIVATE_DEFAULT_EPS_BEARER_CTX_REJECT',
+           'ACTIVATE_DEDI_EPS_BEARER_CTX_REQUEST',
+           'ACTIVATE_DEDI_EPS_BEARER_CTX_ACCEPT',
+           'ACTIVATE_DEDI_EPS_BEARER_CTX_REJECT',
+           'MODIFY_EPS_BEARER_CTX_REQUEST',
+           'MODIFY_EPS_BEARER_CTX_ACCEPT',
+           'MODIFY_EPS_BEARER_CTX_REJECT',
+           'DEACTIVATE_EPS_BEARER_CTX_REQUEST',
+           'DEACTIVATE_EPS_BEARER_CTX_ACCEPT',
+           'PDN_CONNECTIVITY_REQUEST', 'PDN_CONNECTIVITY_REJECT',
+           'PDN_DISCONNECT_REQUEST', 'PDN_DISCONNECT_REJECT',
+           'BEARER_RESOURCE_ALLOC_REQUEST', 'BEARER_RESOURCE_ALLOC_REJECT',
+           'BEARER_RESOURCE_MODIF_REQUEST', 'BEARER_RESOURCE_MODIF_REJECT',
+           'ESM_INFORMATION_REQUEST', 'ESM_INFORMATION_RESPONSE',
+           'ESM_NOTIFICATION', 'ESM_STATUS',
+           'ESM_dict', 'ESMCause_dict', 'PDNType_dict', 'ESMTransFlag_dict'
+            ]
 
 from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
      Block, show, log, ERR, WNG, DBG
-from libmich.core.IANA_dict import IANA_dict
-from binascii import hexlify
-#from re import search
 
-# these are the libraries for IE interpretation 
+# these are the libraries for the handling of L3 NAS msg
 from L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, \
      Type4_LV, Type4_TLV, Type6_LVE, Type6_TLVE, PD_dict, Layer3
+from L3Mobile_NAS import Layer3NAS
 #
+# these are the libraries for IE interpretation 
 from L3Mobile_SM import RequestType_dict
 from L3Mobile_IE import QoS, PDPAddr, ProtConfig
-#
-# for the NAS security header and operations
-from L3Mobile_EMM import Layer3NAS
 
 ###
 # TS 24.301, 11.5.0 specification
@@ -152,10 +164,11 @@ ESMTransFlag_dict = {
     0 : 'Security protected ESM information transfer not required',
     1 : 'Security protected ESM information transfer required',
     }
+
 ###
 # NAS protocol headers
 # section 9.2
-#
+###
 
 class ESMHeader(Layer):
     constructorList = [
@@ -169,7 +182,7 @@ class ESMHeader(Layer):
 
 ###
 # NAS ESM messages
-#
+###
 
 # section 8.3.6
 class ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST(Layer3NAS):
@@ -184,7 +197,7 @@ class ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST(Layer3NAS):
             Type4_LV('EQoS', ReprName='EPS QoS', V='\0'),
             Type4_LV('APN', ReprName='Access Point Name', V='\0'),
             Type4_LV('PDNAddr', ReprName='PDN Address', V=5*'\0'),
-            Type4_TLV('TI', ReprName='Transaction Identifier', T=0x5D, V='\0'),
+            Type4_TLV('LTI', ReprName='Linked Transaction Identifier', T=0x5D, V='\0'),
             Type4_TLV('QoS', ReprName='Negotiated QoS', T=0x30, V=12*'\0'),
             Type3_TV('LLC_SAPI', ReprName='Negotiated LLC Service Access ' \
                       'Point ID', T=0x32, V='\0', Len=1),

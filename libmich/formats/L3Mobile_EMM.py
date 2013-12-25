@@ -20,43 +20,55 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : formats/LTENAS.py
+# * File Name : formats/L3Mobile_EMM.py
 # * Created : 2013-10-02
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
 #*/ 
-
 #!/usr/bin/env python
 
 # exporting
-#__all__ = [
-#            ]
+__all__ = ['EMMHeader', 'Layer3NASEMM',
+           'ATTACH_REQUEST', 'ATTACH_ACCEPT',
+           'ATTACH_COMPLETE', 'ATTACH_REJECT',
+           'DETACH_REQUEST', 'DETACH_ACCEPT',
+           'TRACKING_AREA_UPDATE_REQUEST', 'TRACKING_AREA_UPDATE_ACCEPT',
+           'TRACKING_AREA_UPDATE_COMPLETE', 'TRACKING_AREA_UPDATE_REJECT',
+           'SERVICE_REQUEST', 'EXTENDED_SERVICE_REQUEST', 'SERVICE_REJECT',
+           'GUTI_REALLOCATION_COMMAND', 'GUTI_REALLOCATION_COMPLETE',
+           'EPS_AUTHENTICATION_REQUEST', 'EPS_AUTHENTICATION_RESPONSE',
+           'EPS_AUTHENTICATION_REJECT', 'EPS_AUTHENTICATION_FAILURE',
+           'EPS_IDENTITY_REQUEST', 'EPS_IDENTITY_RESPONSE',
+           'SECURITY_MODE_COMMAND', 'SECURITY_MODE_COMPLETE',
+           'SECURITY_MODE_REJECT',
+           'EMM_STATUS', 'EMM_INFORMATION',
+           'DOWNLINK_NAS_TRANSPORT', 'UPLINK_NAS_TRANSPORT',
+           'CS_SERVICE_NOTIFICATION',
+           'DOWNLINK_GENERIC_NAS_TRANSPORT', 'UPLINK_GENERIC_NAS_TRANSPORT',
+           'EMM_dict', 'EMMCause_dict', 'EPSAttRes_dict', 'EPSAttType_dict',
+           'MEDetType_dict', 'NetDetType_dict', 'EPSUpdType_dict',
+           'EPSUpdRes_dict', 'GUTIType_dict', 'PagingID_dict',
+           'GeneContType_dict', 'ServType_dict', 'CSFBResp_dict',
+           ]
+
 
 from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
      Block, show, log, ERR, WNG, DBG
-from libmich.core.IANA_dict import IANA_dict
-from struct import pack
-from binascii import hexlify, unhexlify
-#from re import search
 
-# these are the libraries for IE interpretation 
+# these are the libraries for the handling of L3 NAS msg
 from L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, \
      Type4_LV, Type4_TLV, Type6_LVE, Type6_TLVE, PD_dict, Layer3
+from L3Mobile_NAS import Layer3NAS, SecHdr_dict
 #
+# for handling ESM container
+from L3Mobile_ESM import *
+#
+# these are the libraries for IE interpretation 
 from L3Mobile_MM import IDType_dict
 from L3Mobile_GMM import TMSIStatus_dict, CKSN_dict
 from L3Mobile_IE import LAI, ID, MSCm1, MSCm2, MSCm3, PLMNList, BCDNumber, \
      NASKSI_dict
 
-#
-try:
-    from CryptoMobile.CM import *
-    __with_crypto = True
-except ImportError:
-    print('[WNG] CryptoMobile module not found')
-    print('LTE NAS security procedure not supported')
-    __with_crypto = False
-    
 ###
 # TS 24.301, 11.5.0 specification
 # NAS protocol for Evolved Packet System
@@ -143,16 +155,6 @@ EMMCause_dict = {
     100 : "Conditional IE error",
     101 : "Message not compatible with the protocol state",
     111 : "Protocol error, unspecified"
-    }
-
-#
-SecHdr_dict = {
-    0 : 'No security',
-    1 : 'Integrity protected',
-    2 : 'Integrity protected and ciphered',
-    3 : 'Integrity protected with new EPS security context',
-    4 : 'Integrity protected and ciphered with new EPS security context',
-    12 : 'Security header for SERVICE REQUEST'
     }
 
 # section 9.9.3.10
@@ -261,191 +263,62 @@ CSFBResp_dict = {
     0 : 'CS fallback rejected by the UE',
     1 : 'CS fallback accepted by the UE'
     }
-###
-    
-###
-# NAS protocol security header
-# section 9.2
-#
-# An LTE security context needs to be define to run all security functions
-# a security context at the MME is made of:
-# - Kasme (LTE master key)
-# - NAS uplink and downlink counters
-# - EEA and EIA security algorithms (0:None, 1:SNOW, 2:AES or 3:ZUC)
-# -> Kasme is computed from CK, IK, SQN xor AK (all from a 3G auth vector), 
-# plus the Serving Network ID (MCC/MNC)
-# -> K_NAS_int and K_NAS_enc are derived from Kasme and EEA / EIA indices
-# -> K_eNB is derived from Kasme and uplink NAS counter
-# It is indexed by the KSI.
-#
-# .secctx = {0:{'Kasme':32*'\0', 'UL':0, 'DL':0, 'EEA':0, 'EIA':0}, 
-#            1:{...}, 
-#            ..., 
-#            7:None}
 
-class NASSecHeader(Layer):
-    constructorList = [
-        Bit('SH', ReprName='Security Header Type', Pt=1, BitLen=4, 
-            Dict=SecHdr_dict, Repr='hum'),
-        Bit('PD', ReprName='Protocol Discriminator', Pt=7, BitLen=4,
-            Dict=PD_dict, Repr='hum'),
-        Str('MAC', ReprName='Message Authentication Code', Pt=4*'\0', Len=4,
-            Repr='hex'),
-        Int('seq', ReprName='Sequence Number', Pt=0, Type='uint8')
-        ]
-
-class Layer3NAS(Layer3):
-    
-    constructorList = [ RawLayer() ]
-    
-    # NAS security algorithm
-    EIA = None
-    #EIA = EIA1
-    EEA = None
-    #EEA = EEA1
-    
-    def __init__(self, with_security=False, **kwargs):
-        Layer3.__init__(self, **kwargs)
-        if with_security:
-            self.ins_sec_hdr()
-    
-    def ins_sec_hdr(self):
-        if not hasattr(self, 'MAC'):
-            index = 0
-            for ie in NASSecHeader():
-                self.insert(index, ie)
-                index += 1
-    
+###
+# NAS EMM message can embed ESM message into ESMContainer
+###
+L3Mobile_ESM_Call = {
+    193:ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST,
+    194:ACTIVATE_DEFAULT_EPS_BEARER_CTX_ACCEPT,
+    195:ACTIVATE_DEFAULT_EPS_BEARER_CTX_REJECT,
+    197:ACTIVATE_DEDI_EPS_BEARER_CTX_REQUEST,
+    198:ACTIVATE_DEDI_EPS_BEARER_CTX_ACCEPT,
+    199:ACTIVATE_DEDI_EPS_BEARER_CTX_REJECT,
+    201:MODIFY_EPS_BEARER_CTX_REQUEST,
+    202:MODIFY_EPS_BEARER_CTX_ACCEPT,
+    203:MODIFY_EPS_BEARER_CTX_REJECT,
+    205:DEACTIVATE_EPS_BEARER_CTX_REQUEST,
+    206:DEACTIVATE_EPS_BEARER_CTX_ACCEPT,
+    208:PDN_CONNECTIVITY_REQUEST,
+    209:PDN_CONNECTIVITY_REJECT,
+    210:PDN_DISCONNECT_REQUEST,
+    211:PDN_DISCONNECT_REJECT,
+    212:BEARER_RESOURCE_ALLOC_REQUEST,
+    213:BEARER_RESOURCE_ALLOC_REJECT,
+    214:BEARER_RESOURCE_MODIF_REQUEST,
+    215:BEARER_RESOURCE_MODIF_REJECT,
+    217:ESM_INFORMATION_REQUEST,
+    218:ESM_INFORMATION_RESPONSE,
+    219:ESM_NOTIFICATION,
+    232:ESM_STATUS
+    }
+class Layer3NASEMM(Layer3NAS):
+    # this is done the dirty way...
+    #
     def map(self, s=''):
-        if not s:
-            return
-        # check the security header
-        s0 = ord(s[0])
-        sh, pd = s0>>4, s0&0xF
-        # no security header
-        if sh == 0:
-            self.__init__(with_security=False)
-            Layer3.map(self, s)
-        # security header
-        elif sh in (1, 2, 3, 4):
-            self.__init__(with_security=True)
-            # if no ciphering applied
-            if sh in (1, 3) or self.EEA not in (EEA1, EEA2, EEA3):
-                # map directly the buffer onto the NAS payload
-                Layer3.map(self, s)
-            else:
-                # keep track of all IE of the original packet
-                self._pay = self[4:]
-                # replace them with a RawLayer
-                for ie in self._pay:
-                    self.remove(ie)
-                self << RawLayer()
-                Layer3.map(self, s)
-        else:
-            log(ERR, '[ERR] invalid Security Header value %i' % sh)
-    
-    ###
-    # security procedures
-    ###
-    
-    def verify_mac(self, key=16*'\0', cnt=0, dir=0):
-        # key: K_NAS_int
-        # cnt: NAS uplink or downlink counter
-        # dir: direction (uplink / downlink)
-        # using self.EIA
+        Layer3NAS.map(self, s)
         #
-        # if no MAC to check
-        if self.SH() not in (1, 2, 3) \
-        or self.EIA not in (EIA1, EIA2, EIA3):
-            return True
-        #
-        # get NAS payload buffer
-        if hasattr(self, '_pay'):
-            pay = str(self._pay)
-        else:
-            pay = str(self[4:])
-        # compute MAC
-        mac = self.EIA(key, cnt, 0, dir, pay)
-        # compare MAC
-        if mac != str(self.MAC):
-            return False
-        else:
-            return True
-    
-    def compute_mac(self, key=16*'\0', cnt=0, dir=0):
-        # if no MAC to apply
-        if self.SH() not in (1, 2, 3) \
-        or self.EIA not in (EIA1, EIA2, EIA3):
-            # give it null value
-            if hasattr(self, 'MAC'):
-                self.MAC < None
-                self.MAC > 4*'\0'
-            return
-        #
-        # get NAS payload buffer
-        pay = str(self[4:])
-        # compute MAC
-        mac = self.EIA(key, cnt, 0, dir, pay)
-        print('MAC: %s' % repr(mac))
-        self.MAC < None
-        self.MAC > mac
-    
-    def decipher(self, key=16*'\0', cnt=0, dir=0):
-        # key: K_NAS_enc
-        # cnt: NAS uplink or downlink counter
-        # dir: direction (uplink / downlink)
-        # using self.EEA
-        #
-        # if no deciphering to apply
-        if self.SH() not in (2, 3) \
-        or self.EEA not in (EEA1, EEA2, EEA3):
-            return
-        if not hasattr(self, '_pay') or not isinstance(self[-1], RawLayer):
-            log(ERR, 'Layer3NAS - decipher: not ready for deciphering')
-            return
-        #
-        enc = str(self[-1])
-        dec = self.EEA(key, cnt, 0, dir, enc)
-        #
-        # get the complete packet buffer
-        buf = str(self[:4]) + dec
-        # reinsert NAS payload IEs
-        self.remove(self[-1])
-        self.extend(self._pay)
-        # remap the complete deciphered buffer to the NAS layer
-        Layer3.map(self, buf)
-    
-    def cipher(self, key=16*'\0', cnt=0, dir=0):
-        # if no ciphering to apply
-        if self.SH() not in (2, 3) \
-        or self.EEA not in (EEA1, EEA2, EEA3):
-            return
-        #
-        # keep track of all IE of the original packet
-        self._pay = self[4:]
-        dec = str(self._pay)
-        enc = self.EEA(key, cnt, 0, dir, dec)
-        #
-        # replace them with a RawLayer
-        for ie in self._pay:
-            self.remove(ie)
-        self << RawLayer()
-        self[-1].map(enc)
-    
-    def protect(self, key_int=16*'\0', key_enc=16*'\0', cnt=0, dir=0):
-        self.cipher(key_enc, cnt, dir)
-        self.compute_mac(key_int, cnt, dir)
-    
-    def unprotect(self, key_int=16*'\0', key_enc=16*'\0', cnt=0, dir=0):
-        ret = self.verify_mac(key_int, cnt, dir)
-        if not ret:
-            log(WNG, 'Layer3NAS - unprotect: MAC verificaion failed')
-        self.decipher(key_enc, cnt, dir)
+        # check for ESM container
+        for ie in self[3:]:
+            if ie.CallName == 'ESMContainer':
+                cont = ie.getobj()
+                if len(cont) < 3:
+                    break
+                # check for PD and Type references to ESM
+                PD = ord(cont[0]) & 0x0F
+                Type = ord(cont[2])
+                if PD == 2 and Type in L3Mobile_ESM_Call:
+                    esm = L3Mobile_ESM_Call[Type]()
+                    esm.map(cont)
+                    if str(esm) == cont:
+                        ie.V < None
+                        ie.V > esm
 
 ###
 # NAS EMM standard header
 # section 9.2
-#
+###
+
 class EMMHeader(Layer):
     constructorList = [
         Bit('SH', ReprName='Security Header Type', Pt=0, BitLen=4, 
@@ -457,43 +330,43 @@ class EMMHeader(Layer):
 
 ###
 # NAS EMM messages
-#
+###
 
 # section 8.2.4
-class ATTACH_REQUEST(Layer3NAS):
+class ATTACH_REQUEST(Layer3NASEMM):
     '''
     UE -> Net
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=65)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
-            Bit('NASKSI', ReprName='NAS Key Set Indentifier', Pt=0, BitLen=4,
+            Bit('NASKSI', ReprName='NAS Key Set Identifier', Pt=0, BitLen=4,
                 Dict=NASKSI_dict, Repr='hum'),
             Bit('EPSAttType', ReprName='EPS Attach Type', Pt=1, BitLen=4, 
                 Dict=EPSAttType_dict, Repr='hum'),
             Type4_LV('EPS_ID', ReprName='EPS Mobile Identity', V=4*'\0'),
-            Type4_LV('UENetCap', ReprName='UE network capability', V='\0\0'),
+            Type4_LV('UENetCap', ReprName='UE Network Capability', V='\0\0'),
             Type6_LVE('ESMContainer', V=3*'\0'),
-            Type3_TV('PTMSISign', ReprName='Old P-TMSI signature', T=0x19,
+            Type3_TV('PTMSISign', ReprName='Old P-TMSI Signature', T=0x19,
                      V=3*'\0', Len=3),
             Type4_TLV('GUTI', ReprName='Additional GUTI', T=0x50, V=11*'\0'),
             Type3_TV('TAI', ReprName='Last Visited TAI', T=0x52,
                      V=5*'\0', Len=5),
             Type3_TV('DRX', ReprName='DRX Parameter', T=0x5C, V=2*'\0', Len=2),
-            Type4_TLV('MSNetCap', ReprName='MS network capability', T=0x31,
+            Type4_TLV('MSNetCap', ReprName='MS Network Capability', T=0x31,
                       V='\0\0'),
             Type3_TV('LAI', ReprName='Old LAI', T=0x13, V=LAI(), Len=5),
-            Type1_TV('TMSIStat', ReprName='TMSI status', T=0x9, V=0,
+            Type1_TV('TMSIStat', ReprName='TMSI Status', T=0x9, V=0,
                      Dict=TMSIStatus_dict),
             Type4_TLV('MSCm2', T=0x11, V=MSCm2()),
             Type4_TLV('MSCm3', T=0x20, V=MSCm3()),
-            Type4_TLV('SuppCodecs', ReprName='Supported codecs list',
+            Type4_TLV('SuppCodecs', ReprName='Supported Codecs List',
                       T=0x40, V='\0\0\0'),
             Type1_TV('AddUpdType', ReprName='Additional Update Type', T=0xF,
                      V=0),
-            Type4_TLV('VoicePref', ReprName='Voice domain preference', T=0x5D,
+            Type4_TLV('VoicePref', ReprName='Voice Domain Preference', T=0x5D,
                       V='\0'),
             Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0),
             Type1_TV('GUTIType', ReprName='Old GUTI Type', T=0xE, V=0,
@@ -506,14 +379,14 @@ class ATTACH_REQUEST(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.1
-class ATTACH_ACCEPT(Layer3NAS):
+class ATTACH_ACCEPT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=66)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Bit('spare', Pt=0, BitLen=4),
             Bit('EPSAttRes', ReprName='EPS Attach Result', Pt=1, BitLen=4, 
@@ -541,7 +414,7 @@ class ATTACH_ACCEPT(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.2
-class ATTACH_COMPLETE(Layer3NAS):
+class ATTACH_COMPLETE(Layer3NASEMM):
     '''
     UE -> Net
     Dual
@@ -550,14 +423,14 @@ class ATTACH_COMPLETE(Layer3NAS):
         Type6_LVE('ESMContainer', V=3*'\0')]
 
 # section 8.2.3
-class ATTACH_REJECT(Layer3NAS):
+class ATTACH_REJECT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=68)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('EMMCause', Pt=0, Type='uint8', Dict=EMMCause_dict),
             Type6_TLVE('ESMContainer', T=0x78, V=3*'\0'),
@@ -567,14 +440,14 @@ class ATTACH_REJECT(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.11
-class DETACH_REQUEST(Layer3NAS):
+class DETACH_REQUEST(Layer3NASEMM):
     '''
     Net <-> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=69)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         if self._initiator != 'Net':
             self.extend([
                 Bit('NASKSI', ReprName='NAS Key Set Indentifier', Pt=0,
@@ -591,7 +464,7 @@ class DETACH_REQUEST(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.10
-class DETACH_ACCEPT(Layer3NAS):
+class DETACH_ACCEPT(Layer3NASEMM):
     '''
     Net <-> UE
     Dual
@@ -599,14 +472,14 @@ class DETACH_ACCEPT(Layer3NAS):
     constructorList = [ie for ie in EMMHeader(Type=70)]
 
 # section 8.2.29
-class TRACKING_AREA_UPDATE_REQUEST(Layer3NAS):
+class TRACKING_AREA_UPDATE_REQUEST(Layer3NASEMM):
     '''
     UE -> Net
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=72)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Bit('NASKSI', ReprName='NAS Key Set Indentifier', Pt=0, BitLen=4,
                 Dict=NASKSI_dict, Repr='hum'),
@@ -654,14 +527,14 @@ class TRACKING_AREA_UPDATE_REQUEST(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.26
-class TRACKING_AREA_UPDATE_ACCEPT(Layer3NAS):
+class TRACKING_AREA_UPDATE_ACCEPT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=73)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Bit('spare', Pt=0, BitLen=4),
             Bit('EPSUpdRes', ReprName='EPS Update Result', Pt=0, BitLen=4,
@@ -690,7 +563,7 @@ class TRACKING_AREA_UPDATE_ACCEPT(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.27 
-class TRACKING_AREA_UPDATE_COMPLETE(Layer3NAS):
+class TRACKING_AREA_UPDATE_COMPLETE(Layer3NASEMM):
     '''
     UE -> Net
     Dual
@@ -698,14 +571,14 @@ class TRACKING_AREA_UPDATE_COMPLETE(Layer3NAS):
     constructorList = [ie for ie in EMMHeader(Type=74)]
 
 # section 8.2.28
-class TRACKING_AREA_UPDATE_REJECT(Layer3NAS):
+class TRACKING_AREA_UPDATE_REJECT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=75)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('EMMCause', Pt=0, Type='uint8', Dict=EMMCause_dict),
             Type4_TLV('T3346', T=0x5F, V='\0') # timer with Length attribute but fixed length (1 byte)...
@@ -714,7 +587,7 @@ class TRACKING_AREA_UPDATE_REJECT(Layer3NAS):
 
 # section 8.2.25
 # Service Request: no standard EMM header
-class SERVICE_REQUEST(Layer3):
+class SERVICE_REQUEST(Layer3NASEMM):
     '''
     UE -> Net
     Dual
@@ -722,24 +595,24 @@ class SERVICE_REQUEST(Layer3):
     '''
     constructorList = [
         Bit('SH', ReprName='Security Header Type', Pt=1, BitLen=4, 
-            Dict='SecHdr_dict', Repr='hum'),
+            Dict=SecHdr_dict, Repr='hum'),
         Bit('PD', ReprName='Protocol Discriminator', Pt=7, BitLen=4,
             Dict=PD_dict, Repr='hum'),
         Bit('NASKSI', Pt=0, BitLen=3, Dict=NASKSI_dict, Repr='hum'),
-        Bit('seq', ReprName='NAS COUNT LSB', Pt=0, BitLen=5, Repr='hum'),
-        Int('MAC', ReprName='Message Authentication Code LSB', Type='uint16',
+        Bit('SN', ReprName='NAS COUNT LSB', Pt=0, BitLen=5, Repr='hum'),
+        Str('MAC', ReprName='Message Authentication Code LSB', Pt='\0\0', Len=2,
             Repr='hex')
         ]
  
 # section 8.2.15
-class EXTENDED_SERVICE_REQUEST(Layer3NAS):
+class EXTENDED_SERVICE_REQUEST(Layer3NASEMM):
     '''
     UE -> Net
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=76)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Bit('NASKSI', ReprName='NAS Key Set Indentifier', Pt=0, BitLen=4,
                 Dict=NASKSI_dict, Repr='hum'),
@@ -755,14 +628,14 @@ class EXTENDED_SERVICE_REQUEST(Layer3NAS):
 
 
 # section 8.2.24
-class SERVICE_REJECT(Layer3NAS):
+class SERVICE_REJECT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=78)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('EMMCause', Pt=0, Type='uint8', Dict=EMMCause_dict),
             Type3_TV('T3442', T=0x5B, V='\0', Len=1),
@@ -771,14 +644,14 @@ class SERVICE_REJECT(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.16
-class GUTI_REALLOCATION_COMMAND(Layer3NAS):
+class GUTI_REALLOCATION_COMMAND(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=80)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Type4_LV('GUTI', V=11*'\0'),
             Type4_TLV('TAIList', ReprName='Tracking Area Identity List', 
@@ -787,7 +660,7 @@ class GUTI_REALLOCATION_COMMAND(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.17
-class GUTI_REALLOCATION_COMPLETE(Layer3NAS):
+class GUTI_REALLOCATION_COMPLETE(Layer3NASEMM):
     '''
     UE -> Net
     Dual
@@ -795,7 +668,7 @@ class GUTI_REALLOCATION_COMPLETE(Layer3NAS):
     constructorList = [ie for ie in EMMHeader(Type=81)]
 
 # section 8.2.7
-class EPS_AUTHENTICATION_REQUEST(Layer3NAS):
+class EPS_AUTHENTICATION_REQUEST(Layer3NASEMM):
     '''
     Net -> UE
     Dual
@@ -812,7 +685,7 @@ class EPS_AUTHENTICATION_REQUEST(Layer3NAS):
         self.AUTN.V.Repr = 'hex'
 
 # section 8.2.8
-class EPS_AUTHENTICATION_RESPONSE(Layer3NAS):
+class EPS_AUTHENTICATION_RESPONSE(Layer3NASEMM):
     '''
     UE -> Net
     Dual
@@ -825,7 +698,7 @@ class EPS_AUTHENTICATION_RESPONSE(Layer3NAS):
         self.RES.V.Repr = 'hex'
 
 # section 8.2.6
-class EPS_AUTHENTICATION_REJECT(Layer3NAS):
+class EPS_AUTHENTICATION_REJECT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
@@ -833,14 +706,14 @@ class EPS_AUTHENTICATION_REJECT(Layer3NAS):
     constructorList = [ie for ie in EMMHeader(Type=84)]
 
 # section 8.2.5
-class EPS_AUTHENTICATION_FAILURE(Layer3NAS):
+class EPS_AUTHENTICATION_FAILURE(Layer3NASEMM):
     '''
     UE -> Net
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=92)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('EMMCause', Pt=26, Type='uint8', Dict=EMMCause_dict),
             Type4_TLV('AUTS', T=0x30, V=14*'\0')
@@ -849,25 +722,25 @@ class EPS_AUTHENTICATION_FAILURE(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.18
-class EPS_IDENTITY_REQUEST(Layer3NAS):
+class EPS_IDENTITY_REQUEST(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=85)] + [
         Bit('spare', Pt=0, BitLen=4),
-        Bit('IDtype', Pt=1, BitLen=4, Dict=IDType_dict, Repr='hum')
+        Bit('IDType', Pt=1, BitLen=4, Dict=IDType_dict, Repr='hum')
         ]
 
 # section 8.2.19
-class EPS_IDENTITY_RESPONSE(Layer3NAS):
+class EPS_IDENTITY_RESPONSE(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=86)] + [
         Type4_LV('ID', V=ID())]
 
 # section 8.2.20
-class SECURITY_MODE_COMMAND(Layer3NAS):
+class SECURITY_MODE_COMMAND(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=93)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('NASSecAlg', ReprName='Selected NAS Security Algorithms',
-                Pt=0, Type='uint8'),
+                Pt=0, Type='uint8', Repr='hex'),
             Bit('spare', Pt=0, BitLen=4),
             Bit('NASKSI', ReprName='NAS Key Set Indentifier', Pt=0, BitLen=4,
                 Dict=NASKSI_dict, Repr='hum'),
@@ -880,23 +753,23 @@ class SECURITY_MODE_COMMAND(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section  8.2.21
-class SECURITY_MODE_COMPLETE(Layer3NAS):
+class SECURITY_MODE_COMPLETE(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=94)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Type4_TLV('ID', ReprName='IMEISV', T=0x23, V=ID())
             ])
         self._post_init(with_options, **kwargs)
 
 # section 8.2.22
-class SECURITY_MODE_REJECT(Layer3NAS):
+class SECURITY_MODE_REJECT(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=95)] + [
         Int('EMMCause', Pt=23, Type='uint8', Dict=EMMCause_dict)
         ]
 
 # section 8.2.14
-class EMM_STATUS(Layer3NAS):
+class EMM_STATUS(Layer3NASEMM):
     '''
     Net <-> UE
     Local
@@ -905,14 +778,14 @@ class EMM_STATUS(Layer3NAS):
         Int('EMMCause', Pt=0, Type='uint8', Dict=EMMCause_dict)]
 
 # section 8.2.13
-class EMM_INFORMATION(Layer3NAS):
+class EMM_INFORMATION(Layer3NASEMM):
     '''
     Net -> UE
     Local
     '''
     constructorList = [ie for ie in EMMHeader(Type=97)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([ \
             Type4_TLV('NetFullName', T=0x43, V='\0'),
             Type4_TLV('NetShortName', T=0x45, V='\0'),
@@ -925,7 +798,7 @@ class EMM_INFORMATION(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2.12, encapsulates SMS to UE
-class DOWNLINK_NAS_TRANSPORT(Layer3NAS):
+class DOWNLINK_NAS_TRANSPORT(Layer3NASEMM):
     '''
     Net -> UE
     Dual
@@ -934,19 +807,19 @@ class DOWNLINK_NAS_TRANSPORT(Layer3NAS):
         Type4_LV('NASContainer', V='\0\0')]
 
 # section 8.2.30, encapsulates SMS from UE
-class UPLINK_NAS_TRANSPORT(Layer3NAS):
+class UPLINK_NAS_TRANSPORT(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=99)] + [
         Type4_LV('NASContainer', V='\0\0')]
 
 # section 8.2.9
-class CS_SERVICE_NOTIFICATION(Layer3NAS):
+class CS_SERVICE_NOTIFICATION(Layer3NASEMM):
     '''
     Net -> UE
     Dual
     '''
     constructorList = [ie for ie in EMMHeader(Type=100)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('PagingID', Pt=0, Type='uint8', Dict=PagingID_dict),
             Type4_TLV('CLI', ReprName='Calling Line', T=0x60, V='\0'),
@@ -960,10 +833,10 @@ class CS_SERVICE_NOTIFICATION(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2., encapsulates any application (e.g. position / location) to UE
-class DOWNLINK_GENERIC_NAS_TRANSPORT(Layer3NAS):
+class DOWNLINK_GENERIC_NAS_TRANSPORT(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=104)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('ContType', ReprName='Generic Container Type', Pt=1,
                 Type='uint8', Dict=GeneContType_dict),
@@ -973,10 +846,10 @@ class DOWNLINK_GENERIC_NAS_TRANSPORT(Layer3NAS):
         self._post_init(with_options, **kwargs)
 
 # section 8.2., encapsulates any application (e.g. position / location) from UE
-class UPLINK_GENERIC_NAS_TRANSPORT(Layer3NAS):
+class UPLINK_GENERIC_NAS_TRANSPORT(Layer3NASEMM):
     constructorList = [ie for ie in EMMHeader(Type=105)]
     def __init__(self, with_options=False, with_security=False, **kwargs):
-        Layer3NAS.__init__(self, with_security)
+        Layer3NASEMM.__init__(self, with_security)
         self.extend([
             Int('ContType', ReprName='Generic Container Type', Pt=1,
                 Type='uint8', Dict=GeneContType_dict),

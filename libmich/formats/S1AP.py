@@ -31,20 +31,19 @@ __all__ = ['GlobalENBID', 'SupportedTAs', 'PagingDRX',
            'S1AP_PDU', 'S1AP_HDR', 'S1AP_IE',
            ]
 
-
-# This is a naive and quick implementation of the S1AP protocol:
-# This is firstly developped to interoperate with the lteenb application
-# from amarisoft (F. Bellard SDR LTE implementation)
-#
-# message formatting is taken from TS 36.413 11.2.0
- 
 from libmich.core.element import Str, Int, Bit, \
      Layer, Block, RawLayer, show
 from libmich.core.IANA_dict import IANA_dict
-#from libmich.formats.L3Mobile import parse_L3
-from libmich.formats.L3Mobile_IE import PLMN
+from libmich.formats.L3Mobile_IE import PLMN, TAI
 #
-from binascii import *
+
+###
+# This is a naive and quick implementation of the S1AP protocol:
+# This is firstly developped to interoperate with the lteenb application
+# from Amarisoft (F. Bellard SDR LTE implementation)
+#
+# message formatting is taken from TS 36.413, section 11
+###
 
 
 Type_dict = {
@@ -285,7 +284,7 @@ class GlobalENBID(Layer):
         Int('F_PLMN', Type='uint8', Repr='hex'),
         PLMN(),
         Int('F_eNBID', Type='uint8', Repr='hex'),
-        Bit('eNBID', BitLen=20, Repr='hum'),
+        Bit('eNBID', BitLen=20, Repr='hex'),
         Bit('pad', BitLen=4, Repr='hex'),
         ]
 
@@ -294,7 +293,7 @@ class SupportedTAs(Layer):
     _byte_aligned = False
     constructorList = [
         Bit('pad', BitLen=10, Repr='bin'),
-        Bit('TAC', BitLen=16, Repr='hum'),
+        Bit('TAC', BitLen=16, Repr='hex'),
         Bit('F_PLMN', BitLen=6, Repr='bin'),
         PLMN(),
         ]
@@ -313,6 +312,7 @@ class PagingDRX(Layer):
         Bit('pad', BitLen=5),
         ]
 
+        
 ###
 # S1AP Packet Data Unit
 #
@@ -322,6 +322,7 @@ class S1AP_PDU(Block):
     IE = {
         59 : GlobalENBID,
         64 : SupportedTAs,
+        #67 : TAI,
         137 : PagingDRX,
         }
     
@@ -359,6 +360,12 @@ class S1AP_PDU(Block):
                     ie.value > ie_content
                     ie.value.Repr = 'hum'
                     ie._interpreted = True
+    
+    def get_tlv(self):
+        tlv = {}
+        for ie in self[1:]:
+            tlv[ie.id()] = ie.value.getobj()
+        return tlv
 
 ###
 # S1AP Header

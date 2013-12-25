@@ -29,7 +29,8 @@
 #!/usr/bin/env python
 
 # exporting
-__all__ = ['StrBCD', 'BCDNumber', 'BCDType_dict', 'NumPlan_dict',
+__all__ = [# 2G / 3G:
+           'StrBCD', 'BCDNumber', 'BCDType_dict', 'NumPlan_dict',
            'LAI', 'RAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
            'PLMN', 'PLMNList', 'AuxState',
            'BearerCap', 'CCCap', 'AccessTechnoType_dict', 'MSNetCap', 'MSRACap',
@@ -196,7 +197,7 @@ class PLMNList(Layer):
     
     def __init__(self, *args, **kwargs):
         Layer.__init__(self)
-        self.add_plmn(args)
+        self.add_plmn(*args)
     
     def add_plmn(self, *args):
         for arg in args:
@@ -339,9 +340,7 @@ class ID(Layer):
             repr = IDtype_dict[t]
         # imsi, imei, imeisv
         elif self.type() in (1, 2, 3):
-            repr = '%s:%s' % (IDtype_dict[t], \
-                              ''.join([str(getattr(self, 'digit%s'%i)()) \
-                                       for i in range(1, len(self)*2+self.odd()-1)]))
+            repr = '%s:%s' % (IDtype_dict[t], self.get_bcd())
         # tmsi
         elif t == 4:
             repr = '%s:0x%s' % (IDtype_dict[t], hex(self.tmsi))
@@ -351,13 +350,21 @@ class ID(Layer):
         return '<[ID]: %s>' % repr
     
     def get_imsi(self):
-        # this is easier than using self.__repr__()[12:]...
         if self.type() == 1:
-            return ''.join([str(getattr(self, 'digit%s'%i)()) \
-                            for i in range(1, len(self)*2+self.odd()-1)])
+            return self.get_bcd()
         else:
             return ''
-
+    
+    def get_imei(self):
+        if self.type() in (2, 3):
+            return self.get_bcd()
+        else:
+            return ''
+    
+    def get_bcd(self):
+        return ''.join([str(getattr(self, 'digit%s'%i)()) \
+                        for i in range(1, len(self)*2+self.odd()-1)])
+    
 # section 10.5.1.5
 # Mobile Station Classmark 1
 Revision_level = {
@@ -768,6 +775,8 @@ class PDPAddr(Layer):
 # Protocol configuration options: 24.008, 10.5.6.3
 # crazy !
 ProtID_dict = {
+    0x000D : 'DNS server IPv4 address request',
+    0x000A : 'IP address allocation via NAS signalling',
     0xC021 : 'LCP',
     0xC023 : 'PAP',
     0xC223 : 'CHAP',
@@ -1178,6 +1187,10 @@ class GUTI(Layer):
         Int('MMECode', Pt=0, Type='uint8', Repr='hex'),
         Str('MTMSI', Pt=4*'\0', Len=4, Repr='hex')
         ]
+    def __init__(self, MCCMNC='00101', **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.PLMN.set_mcc(MCCMNC[:3])
+        self.PLMN.set_mnc(MCCMNC[3:])
 
 # section 9.9.3.12A
 CSLCS_dict = {
@@ -1205,7 +1218,7 @@ class EPSFeatSup(Layer):
 class TAI(Layer):
     constructorList = [
         PLMN(),
-        Int('TAC', Pt=0, Type='uint16')
+        Int('TAC', Pt=0, Type='uint16', Repr='hex')
         ]
     def __init__(self, MCCMNC='00101', TAC=0x0000):
         Layer.__init__(self)
@@ -1227,7 +1240,7 @@ class PartialTAIList(Layer):
         Bit('Type', Pt=0, BitLen=2, Repr='hum', Dict=PartialTAI_dict),
         Bit('Num', Pt=1, BitLen=5, Repr='hum'),
         PLMN(),
-        Int('TAC', Pt=0, Type='uint16')
+        Int('TAC', Pt=0, Type='uint16', Repr='hex')
         ]
     
     def __init__(self, *args, **kwargs):
@@ -1236,17 +1249,17 @@ class PartialTAIList(Layer):
             self._set_plmn( kwargs['PLMN'] )
         for arg in args:
             if isinstance(arg, PLMN):
-                sell._set_plmn( arg )
+                self._set_plmn( arg )
     
     def _set_plmn(self, plmn):
         if isinstance(plmn, PLMN):
-            self.PLMN.set_mcc( arg.get_mcc() )
-            self.PLMN.set_mnc( arg.get_mnc() )
+            self.PLMN.set_mcc( plmn.get_mcc() )
+            self.PLMN.set_mnc( plmn.get_mnc() )
     
     def add_tac(self, *args):
         for arg in args:
             if isinstance(arg, int):
-                self.append( Int('TAC', Pt=arg, Type='uint16') )
+                self.append( Int('TAC', Pt=arg, Type='uint16', Repr='hex') )
             elif isinstance(arg, (list, tuple)):
                 # the recursive way
                 for e in arg:
@@ -1264,14 +1277,14 @@ class PartialTAIList(Layer):
     def map(self, s):
         Layer.map(self, s)
         s = s[5:]
-        # depending of .Type(), stack the correct structure
+        # depending of Type(), stack the correct structure
         if self.Type() == 0:
-            # stacking only TAC uint16 values, .Num() number of time
-            max_tacs = min(len(s)//2, self.Num())
-            self.add_tac( unpack('!'+'H'*max_tacs, s) )
+            # stacking only additional TAC uint16 values, Num()-1 number of time
+            max_tacs = min(len(s)//2, self.Num()-1)
+            self.add_tac( unpack('!'+'H'*max_tacs, s[:2*max_tacs]) )
         elif self.Type() == 2:
-            # stacking complete TAI (PLMN + TAC) struct, .Num() number of time
-            max_tais = min(len(s)//5, self.Num())
+            # stacking complete TAI (PLMN + TAC) struct, Num()-1 number of time
+            max_tais = min(len(s)//5, self.Num()-1)
             for i in range(max_tais):
                 tai = TAI()
                 tai.map(s)
@@ -1279,36 +1292,33 @@ class PartialTAIList(Layer):
                 s = s[5:]
 
 class PartialTAIList0(PartialTAIList):
-    constructorList = [
-        Bit('spare', Pt=0, BitLen=1),
-        Bit('Type', Pt=0, BitLen=2, Repr='hum', Dict=PartialTAI_dict),
-        Bit('Num', ReprName='Number of TAC', Pt=1, BitLen=5, Repr='hum'),
-        PLMN()
-        ]
+    # Non-consecutive TAC belonging to one PLMN
+    #
+    # constructorList is the same as partialTAIList
     def __init__(self, *args, **kwargs):
         PartialTAIList.__init__(self, *args, **kwargs)
         self.Type > 0
-        # add (possibly multiple) TAC(s)
-        for arg in args:
-            if isinstance(arg, (int, list, tuple)):
-                self.add_tac(arg)
-        if 'TAC' in kwargs and isinstance(kwargs['TAC'], (int, list, tuple)):
-            self.add_tac( kwargs['TAC'] )
         # automate Num(), corresponding to the number of stacked TACs
         self.Num.Pt = self
-        self.Num.PtFunc = lambda s: len([t for t in self[3:] \
+        self.Num.PtFunc = lambda s: len([t for t in self[5:] \
                                           if t.CallName=='TAC'])
 
 class PartialTAIList1(PartialTAIList):
+    # Consecutive TAC belonging to one PLMN
+    #
     # constructorList is the same as partialTAIList
     def __init__(self, *args, **kwargs):
         PartialTAIList.__init__(self, *args, **kwargs)
         self.Type > 1
+        # Num() has to be filled by hand
+        # according to the number of consecutive TAC
 
 class PartialTAIList2(PartialTAIList):
+    # TAIs belonging to different PLMNs
+    #
     # constructorList is the same as partialTAIList
     def __init__(self, *args, **kwargs):
-        Layer.__init__(self, *args **kwargs)
+        PartialTAIList.__init__(self, *args, **kwargs)
         self.Type > 2
         # add (possibly multiple) TAI(s)
         for arg in args:
@@ -1316,6 +1326,10 @@ class PartialTAIList2(PartialTAIList):
                 self.add_tai(arg)
         if 'TAI' in kwargs and isinstance(kwargs['TAI'], (TAI, list, tuple)):
             self.add_tai( kwargs['TAI'] )
+        # automate Num(), corresponding to the number of stacked TAIs
+        self.Num.Pt = self
+        self.Num.PtFunc = lambda s: len([p for p in self[5:] \
+                                          if p.CallName=='PLMN'])
 
 class TAIList(Layer):
     constructorList = [ ]
@@ -1394,6 +1408,7 @@ class UENetCap(Layer):
         Layer.map(self, s)
 
 class UESecCap(Layer):
+    _byte_aligned = False
     constructorList = [
         Bit('EEA0', Pt=0, BitLen=1, Repr='hum'),
         Bit('EEA1', Pt=0, BitLen=1, Repr='hum'),
@@ -1436,6 +1451,19 @@ class UESecCap(Layer):
         Bit('GEA6', Pt=0, BitLen=1, Repr='hum'),
         Bit('GEA7', Pt=0, BitLen=1, Repr='hum'),
         ]
+    def map(self, s=2*'\0'):
+        s_len = len(s)
+        if s_len == 2:
+            for ie in self[16:]:
+                ie.Trans = True
+        elif s_len == 3:
+            for ie in self[24:]:
+                ie.Trans = True
+        elif s_len == 4:
+            for ie in self[32:]:
+                ie.Trans = True
+        # else, we get all indicators
+        Layer.map(self, s)
 
 APN_AMBR_dict = {}
 APN_AMBR_EXT_dict = {}
@@ -1492,16 +1520,6 @@ class APN_AMBR(Layer):
                 d[v] = '%i Mbps more' % (v*256)
             d[255] = 'see APN_AMBR_ext'
         return d
-    
-    def map(self, s=''):
-        s_len = len(s)
-        if 1 < s_len <= 3:
-            for ie in self[0:2]: ie.Trans = False
-            for ie in self[2:]: ie.Trans = True
-        elif 3 < s_len <= 5:
-            for ie in self[0:4]: ie.Trans = False
-            for ie in self[4:]: ie.Trans = True
-        elif 5 < s_len:
-            for ie in self: ie.Trans = False
+
 
 #
