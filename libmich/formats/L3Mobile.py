@@ -43,6 +43,7 @@ from L3Mobile_SMS import *
 from L3Mobile_GMM import *
 from L3Mobile_SM import *
 # 4G core stacks (complete)
+from L3Mobile_NAS import *
 from L3Mobile_EMM import *
 from L3Mobile_ESM import *
 # 2G / 3G / 4G Information Element (uncomplete)
@@ -53,7 +54,7 @@ from L3Mobile_IE import *
 
 L3Call = {
 # L3Mobile_ESM, PD=2
-2 : {
+2:{
     193:ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST,
     194:ACTIVATE_DEFAULT_EPS_BEARER_CTX_ACCEPT,
     195:ACTIVATE_DEFAULT_EPS_BEARER_CTX_REJECT,
@@ -284,35 +285,60 @@ def parse_L3(buf, L2_length_incl=0):
     the protocol discriminator and message type.
     E.g. for messages passed over GSM BCCH or CCCH: L2_length_incl=1
     
-    parse_L3(string_buffer, L2_length_incl=0) -> L3Mobile_instance
+    parse_L3(string_buffer, L2_length_incl=0) -> Layer3 instance
     '''
     # select message from PD and Type
     if len(buf) < 2:
         log(ERR, '(parse_L3) message too short for L3 mobile')
         return RawLayer(buf)
     #
+    ###
+    # Protocol Discriminator
+    ###
     # protocol discriminator is 4 last bits (LSB) of 1st byte
     PD = ord(buf[L2_length_incl]) & 0x0F
     #
+    ###
+    # Message Type
+    ###
     # for MM, CC and GSM RR, only 6 1st bits for the message type
     if PD in (3, 5, 6):
         Type = ord(buf[L2_length_incl+1]) & 0x3F
-    # for LTE NAS protocols, the security processing and decoding is
-    # managed in Layer3NAS class
-    elif PD in (2, 7):
+    #
+    # for LTE NAS messages: message content (including Type) can be ciphered
+    # (the security processing is available in the Layer3NAS class)
+    # EMM header has a security header
+    elif PD == 7:
         # check Security Header
         SH = ord(buf[L2_length_incl]) >> 4
-        # no security
+        # no security:
         if SH == 0:
-            Type = ord(buf[L2_length_incl+1])
-        # integrity protection only
+            Type = ord(buf[1])
+        # integrity protection only:
         elif SH in (1, 3):
             if len(buf) < 8:
-                Type = None 
+                Type = None
             Type = ord(buf[7])
         # ciphering, hence not possible to know the payload Type
         elif SH in (2, 4):
             Type = None
+        elif SH == 12 and len(buf) >= 4:
+            # LTE NAS service request
+            l3 = SERVICE_REQUEST()
+            l3.map(buf)
+            return l3
+        else:
+            log(WNG, '(parse_L3) unknown NAS EMM security header: %i' % SH)
+            Type = None
+    #
+    # ESM header has bearer ID in the 4 MSB of 1st byte
+    # and Transaction ID between PD and Type
+    elif PD == 2:
+        if len(buf) < 3:
+            Type = None
+        Type = ord(buf[2])
+    #
+    # for other 2G and 3G core protocols (GMM, SM, SMS, ...), nothing special
     else:
         Type = ord(buf[L2_length_incl+1])
     #
@@ -334,19 +360,25 @@ def parse_L3(buf, L2_length_incl=0):
         # because GSM RR are not all implemented
         if PD == 6:
             l3.Type.Dict = GSM_RR_dict
+    #
     # select the correct L3 signalling message
     else:
         # for LTE NAS, if ciphered
+        #log(DBG, '(parse_L3) PD %i, Type %i' % (PD, Type))
         if Type is None:
             l3 = Layer3NAS(with_security=True)
         else:
             l3 = L3Call[PD][Type]()
+        #
         try:
+            #log(DBG, '(parse_L3) mapping ?')
             l3.map(buf)
+            #log(DBG, '(parse_L3) mapped correctly')
         except:
             log(ERR, '(parse_L3) mapping buffer on L3 message failed')
             l3 = RawL3()
             l3.map(buf)
+    #
     return l3
 
 #
@@ -447,7 +479,7 @@ def test_regr():
                             else:
                                 if str(m2) != buf:
                                     error = '__str__() result discrepancy ' + \
-                                            ' parse()d buffer'
+                                            ' with parse()d buffer'
                     if error:
                         log(ERR, 'message %s test returns error: %s' \
                                  % (repr(cl), error))
