@@ -136,8 +136,17 @@ IE_list = IE_lookup.keys()
 # from mandatory IE (without tag) 
 # generally: Str(), Int(), Bit(), Type4_LV(), Type6_LVE()
 #
+
+class LayerTLV(Layer):
+    def getobj(self):
+        if isinstance(self.V.Pt, (Element, Layer, tuple, list)) \
+        and not self.V.Val:
+            return self.V.Pt
+        else:
+            return self.V()
+
 # Type1_V() will certainly not be used, better call directly Bit()
-class Type1_V(Layer):
+class Type1_V(LayerTLV):
     # Type1_TV consists only of 4 bits (MSB or LSB)
     _byte_aligned = False
     constructorList = [
@@ -147,7 +156,7 @@ class Type1_V(Layer):
         Layer.__init__(self, CallName=CallName, ReprName=ReprName)
         self.V.Pt = V
 
-class Type1_TV(Layer):
+class Type1_TV(LayerTLV):
     constructorList = [
         Bit(CallName='T', BitLen=4, Repr='hum'),
         Bit(CallName='V', BitLen=4, Repr='bin'), # or Repr='hum'),
@@ -170,7 +179,7 @@ class Type1_TV(Layer):
 
 # Type2() must be used instead of Int() or Str() for optional IE 
 # that is a single tag (/ uchar) flag
-class Type2(Layer):
+class Type2(LayerTLV):
     constructorList = [
         Int(CallName='T', Type='uint8'),
         ]
@@ -187,7 +196,7 @@ class Type2(Layer):
 
 # Type3_V() will certainly not be used, better call directly Str()
 # anyway, "Trans" should always stay False
-class Type3_V(Layer):
+class Type3_V(LayerTLV):
     constructorList = [
         Str(CallName='V'),
         ]
@@ -196,7 +205,7 @@ class Type3_V(Layer):
         self.V.Pt = V
         self.V.Len = Len
 
-class Type3_TV(Layer):
+class Type3_TV(LayerTLV):
     constructorList = [
         Int(CallName='T', Type='uint8'),
         Str(CallName='V'),
@@ -214,7 +223,7 @@ class Type3_TV(Layer):
         else: return self.V.Len + 1
 
 # "Trans" should always stay False
-class Type4_LV(Layer):
+class Type4_LV(LayerTLV):
     constructorList = [
         Int(CallName='L', Type='uint8'),
         Str(CallName='V'),
@@ -227,7 +236,7 @@ class Type4_LV(Layer):
         self.V.LenFunc = lambda L: int(L)
         self.V.Pt = V
 
-class Type4_TLV(Layer):
+class Type4_TLV(LayerTLV):
     constructorList = [
         Int(CallName='T', Type='uint8'),
         Int(CallName='L', Type='uint8'),
@@ -250,7 +259,7 @@ class Type4_TLV(Layer):
             return self.L() + 2
 
 # "Trans" should always stay False
-class Type6_LVE(Layer):
+class Type6_LVE(LayerTLV):
     constructorList = [
         Int(CallName='L', Type='uint16'),
         Str(CallName='V'),
@@ -263,7 +272,7 @@ class Type6_LVE(Layer):
         self.V.LenFunc = lambda L: int(L)
         self.V.Pt = V
 
-class Type6_TLVE(Layer):
+class Type6_TLVE(LayerTLV):
     constructorList = [
         Int(CallName='T', Pt=0, Type='uint8'),
         Int(CallName='L', Type='uint16'),
@@ -349,6 +358,9 @@ class Layer3(Layer):
     #_IE_no_show = []
     _IE_no_show = ['CSN1_padding', 'CSN1_condition']
     
+    # not representing transparent IE
+    _repr_trans = False
+    
     def __init__(self, CallName='', ReprName='', Trans=False, **kwargs):
         Layer.__init__(self, CallName='', ReprName='', Trans=Trans)
         #
@@ -373,7 +385,7 @@ class Layer3(Layer):
                     ie.V > kwargs[ie.CallName]
                 else:
                     ie > kwargs[ie.CallName]
-    
+                ie.Trans = False
     
     # Patch L2 length for dummy GSM RR length computation !!!
     def _len_gsmrr(self, string=''):
@@ -451,9 +463,11 @@ class Layer3(Layer):
         # delete .map() *internal* attributes
         del self._Layer__BitStack
         del self._Layer__BitStack_len
+        #
         ### special Layer3 processing ###
         if not self._interpret_IE:
             return
+        #
         # Go again through all L3 fields that are not transparent
         # (tested with their length, WNG: do not work for LV(), however,
         # LV field should always be there...) 
@@ -477,7 +491,7 @@ class Layer3(Layer):
     
     def interpret_IE(self, field, cn):
         # interpret field as cn
-        # cn is looked up in L3GSM_IE or L3GSM_RR lib
+        # cn is looked up in L3Mobile_IE, L3GSM_IE or L3GSM_RR libs
         if self.dbg >= DBG:
             log(DBG, 'Layer3 - interpret IE: %s' % cn)
         # check if direct field, or (T)LV-like field
@@ -668,5 +682,4 @@ class Layer3(Layer):
         str_lst.insert(0, '### %s[%s]%s ###\n' % (re, self.CallName, tr))
         # return full inline string without last CR
         return ''.join(str_lst)[:-1]
-
 #
