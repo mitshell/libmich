@@ -214,7 +214,9 @@ class Element(object):
     
     # this is to retrieve element's dynamicity from a mapped element
     def reautomatize(self):
-        if self.Val is not None and self.PtFunc:
+        if self.Val is not None:
+            if not self.PtFunc:
+                self.Pt = self.Val
             self.Val = None
     
 	# this is for uniformity with Block()
@@ -992,6 +994,9 @@ class Layer(object):
     Reservd = ['CallName', 'ReprName', 'elementList', 'Len', 'BitLen', \
                 'hierarchy', 'inBlock', 'Trans', 'ConstructorList', \
                 'dbg', 'Reservd']
+    #
+    # represent transparent elements in __repr__()
+    _repr_trans = True
     
     # structure description:
     constructorList = []
@@ -1361,7 +1366,8 @@ class Layer(object):
             t = ' - transparent '
         s = '<%s[%s]%s: ' % ( self.ReprName, self.CallName, t )
         for e in self:
-            s += '%s(%s):%s, ' % ( e.CallName, e.ReprName, repr(e) )
+            if self._repr_trans or not e.is_transparent():
+                s += '%s(%s):%s, ' % ( e.CallName, e.ReprName, repr(e) )
         s = s[:-2] + '>'
         return s
     
