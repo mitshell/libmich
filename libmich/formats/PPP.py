@@ -119,18 +119,19 @@ class NCP(Layer):
         self.Data.Len = self.Length
         self.Data.LenFunc = lambda l: l()-4
     
-    def map(self, s=''):
+    def map(self, s='', ipcp=True):
         if s:
             Layer.map(self, s)
-            data, ipcp_list = self.Data(), []
-            while data:
-                ipcp = IPCP()
-                ipcp.map(data)
-                data = data[len(ipcp):]
-                ipcp_list.append( ipcp )
-            if ipcp_list:
-                self.Data.Val = None
-                self.Data.Pt = tuple(ipcp_list)
+            if ipcp:
+                data, ipcp_list = self.Data(), []
+                while data:
+                    ipcp = IPCP()
+                    ipcp.map(data)
+                    data = data[len(ipcp):]
+                    ipcp_list.append( ipcp )
+                if ipcp_list:
+                    self.Data.Val = None
+                    self.Data.Pt = tuple(ipcp_list)
 
 IPCPType_dict = IANA_dict({
     1 : 'IP-Addresses',

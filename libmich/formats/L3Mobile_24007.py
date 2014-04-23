@@ -117,6 +117,8 @@ IE_lookup = {
     'ReqRef' : ReqRef,
     # end of L3GSM_IE.py
     'P1RestOctets' : P1RestOctets,
+    'P2RestOctets' : P2RestOctets,
+    'P3RestOctets' : P3RestOctets,
     'IARestOctets' : IARestOctets,
     'SI1RestOctets' : SI1RestOctets,
     'SI2terRestOctets' : SI2terRestOctets,

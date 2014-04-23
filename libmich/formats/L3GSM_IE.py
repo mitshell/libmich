@@ -161,16 +161,40 @@ class CellChan(Layer):
     # this is to return the list of ARFCNs
     # different coding scheme are used
     def ARFCN(self):
-        if self.format() == 0: return self._decode_bitmap0()
+        if self.format() == 0:
+            try:
+                return self._decode_bitmap0()
+            except:
+                return []
         elif self.format() in (1, 2):
             if hasattr(self, 'format_ext'):
                 fmt_ext = self.format_ext()
-                if fmt_ext == 0: return self._decode_range(1024)
-                elif fmt_ext == 4: return self._decode_range(512)
-                elif fmt_ext == 5: return self._decode_range(256)
-                elif fmt_ext == 6: return self._decode_range(128)
-                elif fmt_ext == 7: return self._decode_bitmapvar()
-        else: return []
+                if fmt_ext == 0:
+                    try:
+                        return self._decode_range(1024)
+                    except:
+                        return []
+                elif fmt_ext == 4:
+                    try:
+                        return self._decode_range(512)
+                    except:
+                        return []
+                elif fmt_ext == 5:
+                    try:
+                        return self._decode_range(256)
+                    except:
+                        return []
+                elif fmt_ext == 6:
+                    try:
+                        return self._decode_range(128)
+                    except:
+                        return []
+                elif fmt_ext == 7:
+                    try:
+                        return self._decode_bitmapvar()
+                    except:
+                        return []
+        return []
     
     def _decode_bitmap0(self):
         # shift / filter each bit of the ARFCN_list
@@ -571,3 +595,4 @@ class CmEnq(Layer):
             Pt=0, BitLen=1, Repr='hum'),
         Bit('spare', Pt=0, BitLen=2),
         ]
+#

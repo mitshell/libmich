@@ -480,7 +480,7 @@ class IMMEDIATE_ASSIGNMENT(Layer3):
                 Len=3), # TODO: 44018, 10.5.2.30
             Int('TimeAdv', ReprName='Timing Advance', Pt=0, Type='uint8'),
             Type4_LV('MobAlloc', ReprName='Mobile allocation', \
-                     V=''), # 44018, 10.5.2.21, in L3GSM_IE.py
+                     V=MobAlloc()), # 44018, 10.5.2.21, in L3GSM_IE.py
             Type3_TV('Start', ReprName='Starting time', T=0x7C, \
                      V='\0\0', Len=2), # 44018, 10.5.2.38
             StrRR('IARestOctets', Repr='hex')]) # 44018, 10.5.2.16

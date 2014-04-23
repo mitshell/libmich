@@ -29,13 +29,14 @@
 #!/usr/bin/env python
 
 # exporting
-__all__ = ['RestOctets', 'P1RestOctets', 'IARestOctets',
+__all__ = ['RestOctets',
+           'P1RestOctets', 'P2RestOctets', 'P3RestOctets',
+           'IARestOctets',
            'SI1RestOctets', 'SI2terRestOctets', 'SI2quaterRestOctets',
-           'SI3RestOctets', 'SI4RestOctets', 'SI13RestOctets' ]
-           #'u']
+           'SI3RestOctets', 'SI4RestOctets', 'SI6RestOctets', 'SI13RestOctets']
 
 # for convinience
-from binascii import unhexlify as u
+from binascii import unhexlify as unh
 #
 from libmich.core.element import Bit, Layer, show, log, DBG, WNG, ERR
 from libmich.core.shtr import decomposer, shtr
@@ -46,6 +47,7 @@ from libmich.formats.L3Mobile_IE import AccessTechnoType_dict
 class _Paf_(Bit):
     def map(self, s):
         raise(Exception)
+
 
 # In order to map correctly the rest bits at the end of the RestOctets
 class RestOctets(CSN1):
@@ -72,9 +74,12 @@ class RestOctets(CSN1):
         # append the padding element
         self.append(Bit('%s' % self.rest_name, BitLen=rem, Repr='hex'))
         self[-1].map(s)
+    
+###
+# 44.018, section 10.5.2.23, paging type 1 rest octets
 
-#
-# TS 44.018, section 9.1.21a: Group Call information (see TS 44.608 too)
+# TS 44.018, section 9.1.21a: Group Call information (see TS 44.60 too)
+# WNG : already defined in L3GSM_IE.py, for standard LV structure
 class MobAlloc(CSN1):
     csn1List = [
         Bit('len', Pt=1, BitLen=8),
@@ -285,8 +290,10 @@ class MBMSInformation(CSN1):
     csn1List = [
         MBMSSessionsList(),
         {'0':BREAK,
-         '1':({'0':BREAK, '1':BREAK}, MBMSSessionsList())},
-        {'1':(MBMSChannelParameters(), MBMSSessionsList())}
+         '1':(Bit('MBMSChanAsNotif', BitLen=1),
+              MBMSSessionsList())},
+        {'0':BREAK_LOOP,
+         '1':(MBMSChannelParameters(), MBMSSessionsList())}
         ]
 
 class ETWSPrimaryNotificationStatus(CSN1):
@@ -316,7 +323,7 @@ Priority_dict = {
 	4 : 'call priority level 1',
 	5 : 'call priority level 0',
 	6 : 'call priority level B',
-	7 : 'call priority level A',
+	7 : 'call priority level A'
     }
 class P1RestOctets(RestOctets):
     csn1List = [
@@ -342,7 +349,42 @@ class P1RestOctets(RestOctets):
         {'L':BREAK, 'H':{'0':BREAK, '1':Bit('AMRConfig', BitLen=4)}},
         # Rel.8 additions
         {'L':BREAK, 'H':(Bit('PriorityUplinkAccess', BitLen=1),
-                        {'0':BREAK, '1':ETWSPrimaryNotificationStatus()})},
+                        {'0':BREAK, '1':ETWSPrimaryNotificationStatus()})}
+        ]
+
+
+###
+# 44.018, section 10.5.2.24 paging type 2 rest octets, 
+class P2RestOctets(RestOctets):
+    csn1List = [
+        {'L':BREAK, 'H':Bit('CN3', BitLen=2)},
+        {'L':BREAK, 'H':(Bit('NLN_PCH', BitLen=2), Bit('NLN_status_PCH', BitLen=1))},
+        {'L':BREAK, 'H':Bit('Priority1', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        {'L':BREAK, 'H':Bit('Priority2', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        {'L':BREAK, 'H':Bit('Priority3', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        LHFlag('PacketPageInd3', Dict=PacketPageInd_dict),
+        # Rel.6 additions
+        {'L':BREAK,
+         'H':({'0':BREAK, '1':MBMSChannelParameters('MBMSNotification2')},
+              {'0':BREAK, '1':MBMSInformation()})},
+        # Rel.10 additions
+        {'L':BREAK,
+         'H':(Bit('ImplicitRejectCS', BitLen=1), Bit('ImplicitRejectPS', BitLen=1))}
+        ]
+
+###
+# 44.018, section 10.5.2.25 paging type 3 rest octets, 
+class P3RestOctets(RestOctets):
+    csn1List = [
+        {'L':BREAK, 'H':(Bit('CN3', BitLen=2), Bit('CN4', BitLen=2))},
+        {'L':BREAK, 'H':(Bit('NLN_PCH', BitLen=2), Bit('NLN_status_PCH', BitLen=1))},
+        {'L':BREAK, 'H':Bit('Priority1', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        {'L':BREAK, 'H':Bit('Priority2', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        {'L':BREAK, 'H':Bit('Priority3', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        {'L':BREAK, 'H':Bit('Priority4', BitLen=3, Dict=Priority_dict, Repr='hum')},
+        # Rel.10 additions
+        {'L':BREAK,
+         'H':(Bit('ImplicitRejectCS', BitLen=1), Bit('ImplicitRejectPS', BitLen=1))}
         ]
 
 ###
@@ -935,42 +977,54 @@ class RepeatedEUTRANPCIDtoTAmapping(CSN1):
         {'0':BREAK_LOOP, '1':Bit('EUTRAN_FREQUENCY_INDEX', BitLen=3)}
         ]
 
+class ServingCellPriorityParameters(CSN1):
+    csn1List = [
+        Bit('GERAN_PRIORITY', BitLen=3),
+        Bit('THRES_Priority_Search', BitLen=4),
+        Bit('THRES_GSM_low', BitLen=4), 
+        Bit('H_PRIO', BitLen=2),
+        Bit('T_Reselection', BitLen=2)
+        ]
+
+class RepeatedUTRANPriorityParameters(CSN1):
+    csn1List = [
+        # exact syntax: {1<UTRAN_FREQUENCY_INDEX:bit(5)>}**0 ???
+        {'0':BREAK_LOOP, '1':Bit('UTRAN_FREQUENCY_INDEX', BitLen=5)},
+        {'0':BREAK, '1':Bit('UTRAN_PRIORITY', BitLen=3)},
+        Bit('THRES_UTRAN_high', BitLen=5),
+        {'0':BREAK, '1':Bit('THRES_UTRAN_low', BitLen=5)},
+        {'0':BREAK, '1':Bit('UTRAN_QRXLEVMIN', BitLen=5)}
+        ]
+
+class ThreeGPriorityParameters(CSN1):
+    csn1List = [
+        Bit('UTRAN_Start', BitLen=1),
+        Bit('UTRAN_Stop', BitLen=1),
+        {'0':BREAK,
+         '1':(Bit('DEFAULT_UTRAN_PRIORITY', BitLen=3),
+              Bit('DEFAULT_THRES_UTRAN', BitLen=5),
+              Bit('DEFAULT_UTRAN_QRXLEVMIN', BitLen=5))},
+        # reapeated UTRAN priority
+        {'0':BREAK_LOOP, '1':RepeatedUTRANPriorityParameters()}
+        ]
+
+class EUTRANParameters(CSN1):
+    csn1List = [
+        Bit('EUTRAN_CCN_ACTIVE', BitLen=1),
+        Bit('EUTRAN_Start', BitLen=1),
+        Bit('EUTRAN_Stop', BitLen=1),
+        {'0':BREAK, '1':EUTRANMeasurementParameters()},
+        {'0':BREAK, '1':GPRSEUTRANMeasurementParameters()},
+        {'0':BREAK_LOOP, '1':RepeatedEUTRANNeighbourCells()},
+        {'0':BREAK_LOOP, '1':RepeatedEUTRANNotAllowedCells()},
+        {'0':BREAK_LOOP, '1':RepeatedEUTRANPCIDtoTAmapping()}
+        ]
+
 class PriorityAndEUTRANParameters(CSN1):
     csn1List = [
-        # serving cell prio
-        {'0':BREAK,
-         '1':(Bit('GERAN_PRIORITY', BitLen=3),
-              Bit('THRES_Priority_Search', BitLen=4),
-              Bit('THRES_GSM_low', BitLen=4), 
-              Bit('H_PRIO', BitLen=2),
-              Bit('T_Reselection', BitLen=2))},
-        # 3G prio
-        {'0':BREAK,
-         '1':(Bit('UTRAN_Start', BitLen=1),
-              Bit('UTRAN_Stop', BitLen=1),
-              {'0':BREAK,
-               '1':(Bit('DEFAULT_UTRAN_PRIORITY', BitLen=3),
-                    Bit('DEFAULT_THRES_UTRAN', BitLen=5),
-                    Bit('DEFAULT_UTRAN_QRXLEVMIN', BitLen=5))},
-              # reapeated UTRAN priority
-              {'0':BREAK_LOOP,
-               '1':({'0':BREAK_LOOP, 
-                     # repeated UTRAN_FREQUENCY_INDEX
-                     '1':Bit('UTRAN_FREQUENCY_INDEX', BitLen=5)},
-                    {'0':BREAK, '1':Bit('UTRAN_PRIORITY', BitLen=3)},
-                    Bit('THRES_UTRAN_high', BitLen=5),
-                    {'0':BREAK, '1':Bit('THRES_UTRAN_low', BitLen=5)},
-                    {'0':BREAK, '1':Bit('UTRAN_QRXLEVMIN', BitLen=5)})})},
-        # EUTRAN: TODO
-        {'0':BREAK,
-         '1':(Bit('EUTRAN_CCN_ACTIVE', BitLen=1),
-              Bit('EUTRAN_Start', BitLen=1),
-              Bit('EUTRAN_Stop', BitLen=1),
-              {'0':BREAK, '1':EUTRANMeasurementParameters()},
-              {'0':BREAK, '1':GPRSEUTRANMeasurementParameters()},
-              {'1':RepeatedEUTRANNeighbourCells(), '0':BREAK_LOOP},
-              {'1':RepeatedEUTRANNotAllowedCells(), '0':BREAK_LOOP},
-              {'1':RepeatedEUTRANPCIDtoTAmapping(), '0':BREAK_LOOP})}
+        {'0':BREAK, '1':ServingCellPriorityParameters()},
+        {'0':BREAK, '1':ThreeGPriorityParameters()},
+        {'0':BREAK, '1':EUTRANParameters()}
         ]
 
 class ThreeG_CSG(CSN1):

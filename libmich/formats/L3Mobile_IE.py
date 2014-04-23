@@ -774,9 +774,22 @@ class PDPAddr(Layer):
 #
 # Protocol configuration options: 24.008, 10.5.6.3
 # crazy !
+# LCP, PAP, CHAP and IPCP: refer to RFC 3232
 ProtID_dict = {
-    0x000D : 'DNS server IPv4 address request',
+    0x0001 : 'P-CSCF IPv6 Address Request',
+    0x0002 : 'IM CN Subsystem Signaling Flag',
+    0x0003 : 'DNS Server IPv6 Address Request',
+    0x0004 : 'Policy Control rejection code',
+    0x0005 : 'Selected Bearer Control Mode',
+    0x0006 : 'Reserved',
+    0x0007 : 'DSMIPv6 Home Agent Address',
+    0x0008 : 'DSMIPv6 Home Network Prefix',
+    0x0009 : 'DSMIPv6 IPv4 Home Agent Address',
     0x000A : 'IP address allocation via NAS signalling',
+    0x000B : 'Reserved',
+    0x000C : 'P-CSCF IPv4 Address',
+    0x000D : 'DNS server IPv4 address request',
+    0x000E : 'MSISDN Request',
     0xC021 : 'LCP',
     0xC023 : 'PAP',
     0xC223 : 'CHAP',
@@ -799,12 +812,15 @@ class ProtID(Layer):
         if s:
             Layer.map(self, s)
             c = self.content()
-            if c:
+            if c and self.ID() in (0xC021, 0xC023, 0xC223, 0x8021):
                 ncp = NCP()
-                ncp.map(c)
+                if self.ID() == 0x8021:
+                    ncp.map(c, ipcp=True)
+                else:
+                    ncp.map(c, ipcp=False)
                 self.content.Val = None
                 self.content.Pt = ncp
-        
+
 #
 class ProtConfig(Layer):
     constructorList = [
@@ -985,7 +1001,7 @@ class MSRAAccessCap(CSN1):
     csn1List = [
         Bit('Length', Pt=0, BitLen=7, Repr='hum'),
         MSRAContent(),
-        Bit('spare', Pt=0, BitLen=0)
+        #Bit('spare', Pt=0, BitLen=0)
         ]
     def __init__(self, *args, **kwargs):
         CSN1.__init__(self, *args, **kwargs)
@@ -1003,11 +1019,11 @@ class MSRAAccessCap(CSN1):
                 self[1].remove(self[1][-1])
             # in case its becoming too short, add spare bits
             if self[1].bit_len() < total_len:
-                self.append(self.csn1List[2])
+                self.append(Bit('spare', Pt=0, BitLen=0))
                 self[-1].BitLen = total_len - self[1].bit_len()
         #
         elif total_len > cont_len:
-            self.append(self.csn1List[2])
+            self.append(Bit('spare', Pt=0, BitLen=0))
             self[-1].BitLen = total_len - cont_len
 #
 class MSRAAddTech(CSN1):
@@ -1039,7 +1055,7 @@ class MSRAAdd(CSN1):
                 bufsh=bufsh<<1
                 l-=1
                 for ie in MSRAAddTech.csn1List:
-                    self.append(ie)
+                    self.append(ie.clone())
                     self[-1].map(bufsh)
                     bufsh=bufsh<<self[-1].bit_len()
                 l-=9

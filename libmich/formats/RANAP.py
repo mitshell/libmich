@@ -1,23 +1,23 @@
 # −*− coding: UTF−8 −*−
 #/**
-# * Software Name : libmich 
+# * Software Name : libmich
 # * Version : 0.2.2
 # *
 # * Copyright © 2013. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
-# * by the Free Software Foundation. 
+# * by the Free Software Foundation.
 # *
 # * This program is distributed in the hope that it will be useful,
 # * but WITHOUT ANY WARRANTY; without even the implied warranty of
 # * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# * GNU General Public License for more details. 
+# * GNU General Public License for more details.
 # *
 # * You will find a copy of the terms and conditions of the GNU General Public
 # * License version 2 in the "license.txt" file or
 # * see http://www.gnu.org/licenses/ or write to the Free Software Foundation,
-# * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
+# * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 # *
 # *--------------------------------------------------------
 # * File Name : formats/RANAP.py
@@ -383,7 +383,7 @@ class IE(Layer):
             self.value.Repr = 'hum'
             #self.remove(self.value)
             #for elt in naspdu:
-            #    self.append(elt)
+            # self.append(elt)
             # update length : pointing to naspdu
             #self[2].Len = self.naspdu
             #self[2].LenFunc = lambda n: len(n)+1

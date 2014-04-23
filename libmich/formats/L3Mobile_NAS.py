@@ -42,8 +42,8 @@ try:
     from CryptoMobile.CM import *
     __with_crypto = True
 except ImportError:
-    print('[WNG] CryptoMobile module not found')
-    print('LTE NAS security procedures not supported')
+    print('[WNG] CryptoMobile module not found: ' \
+          'LTE NAS security procedures not supported')
     __with_crypto = False
 
 ###

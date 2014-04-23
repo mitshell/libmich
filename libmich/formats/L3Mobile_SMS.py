@@ -589,7 +589,9 @@ class TP_DCS(Layer):
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
+        #
         # 23.038, section 4
+        #
         # for group 0b11, without groupext 0b11, 
         # IndActive/Reserved/IndType are there
         self.IndActive.Trans = self.Group
@@ -598,6 +600,7 @@ class TP_DCS(Layer):
         self.Reserved.TransFunc = self._lsb_type
         self.IndType.Trans = self.Group
         self.IndType.TransFunc = self._lsb_type
+        #
         # otherwise, Class/Charset are there 
         #self.GroupExt.Trans = self.Group
         #self.GroupExt.TransFunc = lambda g: not self._lsb_type(g)
@@ -605,6 +608,7 @@ class TP_DCS(Layer):
         self.Class.TransFunc = lambda g: not self._lsb_type(g)
         self.Charset.Trans = self.Group
         self.Charset.TransFunc = lambda g: not self._lsb_type(g)
+        #
         # for group 0b00, 0b01 and group-groupext 0b1111
         self.GroupExt.Dict = self.Group
         self.GroupExt.DictFunc = lambda g: TP_DCS_general_ext_dict \
@@ -614,24 +618,24 @@ class TP_DCS(Layer):
         self.Charset.Dict = self.Group
         self.Charset.DictFunc = self._cs_1111
     
-    def _lsb_type(self, g):
-        if g() == 0b11 and self.GroupExt() in (0, 1, 2):
+    def _lsb_type(self, _unused):
+        if self.Group() == 0b11 and self.GroupExt() in (0, 1, 2):
             return False
         else:
             return True
         
-    def _cl_1111(self, g):
-        if g() in (0, 1) and self.GroupExt() in (1, 3):
+    def _cl_1111(self, _unused):
+        if self.Group() in (0, 1) and self.GroupExt() in (1, 3):
             return TP_DCS_class_dict
-        elif g() == 3 and self.GroupExt() == 3:
+        elif self.Group() == 3 and self.GroupExt() == 3:
             return TP_DCS_class_dict
         else:
             return {}
      
-    def _cs_1111(self, g):
-        if g() in (0, 1):
+    def _cs_1111(self, _unused):
+        if self.Group() in (0, 1):
             return TP_DCS_charset_dict
-        elif g() == 3 and self.GroupExt() == 3:
+        elif self.Group() == 3 and self.GroupExt() == 3:
             return TP_DCS_charset_dict
         else:
             return {}
@@ -993,12 +997,31 @@ class SMS_DELIVER(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
 
 # 23.040, section 9.2.2.1a
 class SMS_DELIVER_REPORT_RP_ERROR(Layer):
@@ -1017,17 +1040,36 @@ class SMS_DELIVER_REPORT_RP_ERROR(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, with_options=False, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
         if not with_options:
             self.TP_PID.Trans = True
             self.TP_DCS.Trans = True
             self.TP_UDL.Trans = True
             self.TP_UD.Trans = True
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
     
     def map(self, s=''):
         s_len = len(s)
@@ -1055,17 +1097,36 @@ class SMS_DELIVER_REPORT_RP_ACK(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, with_options=False, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
         if not with_options:
             self.TP_PID.Trans = True
             self.TP_DCS.Trans = True
             self.TP_UDL.Trans = True
             self.TP_UD.Trans = True
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
     
     def map(self, s=''):
         s_len = len(s)
@@ -1101,15 +1162,34 @@ class SMS_SUBMIT(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
         # Validity Period automation
         self.TP_VP.Len = self.TP_VPF
         self.TP_VP.LenFunc = self._vp_len
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
     
     def _vp_len(self, vpf):
         val = vpf()
@@ -1154,17 +1234,36 @@ class SMS_SUBMIT_REPORT_RP_ERROR(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, with_options=False, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
         if not with_options:
             self.TP_PID.Trans = True
             self.TP_DCS.Trans = True
             self.TP_UDL.Trans = True
             self.TP_UD.Trans = True
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
     
     def map(self, s=''):
         s_len = len(s)
@@ -1193,17 +1292,36 @@ class SMS_SUBMIT_REPORT_RP_ACK(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, with_options=False, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
         if not with_options:
             self.TP_PID.Trans = True
             self.TP_DCS.Trans = True
             self.TP_UDL.Trans = True
             self.TP_UD.Trans = True
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
     
     def map(self, s=''):
         s_len = len(s)
@@ -1243,18 +1361,37 @@ class SMS_STATUS_REPORT(Layer):
             Type='uint8'),
         Str7b('TP_UD', Pt=''),
         ]
+    
     def __init__(self, with_options=False, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_UDL.Pt = self.TP_UD
-        self.TP_UDL.PtFunc = lambda d: len(d.decode())
+        self.TP_UDL.PtFunc = self._get_udl
         self.TP_UD.Len = self.TP_UDL
-        self.TP_UD.LenFunc = lambda l: int(ceil(l()*7.0/8))
+        self.TP_UD.LenFunc = self._get_ud_len
         if not with_options:
             self.TP_PI.Trans = True
             self.TP_PID.Trans = True
             self.TP_DCS.Trans = True
             self.TP_UDL.Trans = True
             self.TP_UD.Trans = True
+    
+    def _get_udl(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return len(self.TP_UD)
+            elif self.TP_DCS.Charset() == 2:
+                return len(self.TP_UD)//2
+        return len(self.TP_UD.decode())
+    
+    def _get_ud_len(self, _unused):
+        if hasattr(self.TP_DCS, 'Charset') \
+        and not self.TP_DCS.Charset.is_transparent():
+            if self.TP_DCS.Charset() == 1:
+                return self.TP_UDL()
+            elif self.TP_DCS.Charset() == 2:
+                return self.TP_UDL()*2
+        return int(ceil(self.TP_UDL()*7.0/8))
     
     def map(self, s=''):
         s_len = len(s)
@@ -1290,6 +1427,7 @@ class SMS_COMMAND(Layer):
         Int('TP_CDL', ReprName='TP Command Data Length', Type='uint8'),
         Str('TP_CD', Pt=''),
         ]
+    
     def __init__(self, with_options=False, **kwargs):
         Layer.__init__(self, **kwargs)
         self.TP_CDL.Pt = self.TP_CD

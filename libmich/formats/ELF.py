@@ -29,7 +29,6 @@
 #!/usr/bin/env python
 from libmich.core.element import Bit, Int, Str, Layer, RawLayer, Block, show, debug
 from libmich.core.IANA_dict import IANA_dict
-#from libmich.core.shtr import shtr
 
 # endianness to use when mapping an ELF file onto our Elf Layers
 Int._endian = 'little'
@@ -79,6 +78,7 @@ e_machine_dict = {
     51 : 'Stanford MIPS-X',
     52 : 'Motorola Coldfire',
     53 : 'Motorola M68HC12',
+    164 : 'Qualcomm Hexagon',
     }
 e_version_dict = {
     0 : 'EV_NONE: Invalid',
@@ -287,10 +287,16 @@ class ELF(Block):
             elf.extend( s )
             return elf
         else:
-            print('No ELF stream has been mapped yet...')
+            print('Some ELF sub-streams seem missing...')
+            print('check ._ph for program header, ._sh for section header')
+            return None
         
-    def show(self):
-        return self.get_all().show()
+    def show(self, with_trans=False):
+        elf_full = self.get_all()
+        if elf_full:
+            return elf_full.show(with_trans)
+        else:
+            return Block.show(self, with_trans)
 
         
 # this is for program content
