@@ -494,7 +494,10 @@ class Str(Element):
             if self.dbg >= DBG:
                 log(DBG, '(Element) mapping %s on %s, %s' \
                     % (repr(string), self.CallName, repr(self)))
-
+    
+    def map_ret(self, string=''):
+        self.map(string)
+        return string[len(self):]
 
 class Int(Element):
     '''
@@ -704,6 +707,14 @@ class Int(Element):
         # standard handling
         if not self.is_transparent():
             self.Val = self.__unpack(string[:self.Len])
+    
+    def map_ret(self, string=''):
+        l = len(self)
+        if 0 < l <= len(string):
+            self.map(string)
+            return string[l:]
+        else:
+            return string
     
     def __pack(self):
         # manage endianness (just in case...)
@@ -956,6 +967,15 @@ class Bit(Element):
         if self.safe:
             assert( 0 <= value <= pow(2, self.bit_len()) )
         self.Val = value
+    
+    def map_ret(self, string=''):
+        if self.is_transparent():
+            return string
+        else:
+            shtring = shtr(string)
+            bitlen = self.bit_len()
+            self.map_bit( shtring.left_val(bitlen) )
+            return shtring << bitlen
 
 
 class Layer(object):
@@ -1349,7 +1369,7 @@ class Layer(object):
     # I never used this crappy definition of __int__()
     # (or I do not remember uf such a mess),
     def __int__old(self):
-        # really silly... still can be convinient: how knows?
+        # really silly... still can be convinient: who knows?
         return len( str(self) )
     
     # but now (03/10/2013), I need a correct one
@@ -1542,6 +1562,30 @@ class Layer(object):
         self.__BitStack_len = 0
         # finally return string to parent method .map()
         return string
+    
+    # map_ret() maps a buffer to a Layer, the unaligned way,
+    # and returns the rest of the buffer that was not mapped
+    def map_ret(self, string=''):
+        if self.dbg >= DBG:
+            log(DBG, '(Layer.map_ret) entering map_ret() for %s' % self.CallName)
+        # First take care of transparent Layer (e.g. in L3Mobile)
+        if hasattr(self, 'Trans') and self.Trans:
+            return string
+        if self._byte_aligned is True:
+            self.__map_aligned(string)
+            return string[len(self):]
+        else:
+            # actually, map_ret() is only interesting for unaligned layers
+            s = shtr(string)
+            for e in self:
+                if self.dbg >= DBG:
+                    log(DBG, '(Layer.map_ret) %s, bit length: %i' \
+                        % (e.CallName, e.bit_len()))
+                    log(DBG, '(Layer.map_ret) string: %s' % hexlify(s))
+                # this is beautiful
+                e.map(s)
+                s = s << e.bit_len()
+            return s
     
     # define methods when Layer is in a Block:
     # next, previous, header: return Layer object reference
