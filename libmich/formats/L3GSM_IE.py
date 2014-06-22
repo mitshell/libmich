@@ -429,7 +429,7 @@ class CellSel(Layer):
             Pt=0, BitLen=5, Repr='hum'),
         Bit('ACS', Pt=0, BitLen=1, Repr='hum'),
         Bit('NECI', Pt=0, BitLen=1, Repr='hum', Dict=NECI_dict),
-        Bit('RXLEV_ACCESS_MIN ', ReprName='Min RX level to access the system', \
+        Bit('RXLEV_ACCESS_MIN', ReprName='Min RX level to access the system', \
             Pt=0, BitLen=6, Repr='hex')
         ]
 
