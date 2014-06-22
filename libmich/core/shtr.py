@@ -29,16 +29,17 @@
 
 #!/usr/bin/env python
 
-# exporting
+# export filter
 __all__ = ['decomposer', 'shtr']
 
-# Utility class to decompose / recompose integer
+# Utility classes to :
+# decompose and recompose integers
 # and manipulate str like integers (shifting them)
 
 class decomposer(object):
     '''
     little utility to decompose an integer into factors from an 
-    exponential (self.MUL), and returns the list or remainder:
+    exponential (self.MUL), and returns the list of remainders:
     
     example:
     decomposer(0x10).decompose(53) -> [5, 3]
@@ -66,21 +67,22 @@ class decomposer(object):
 
 class shtr(str):
     '''
-    shtr are strings that can be shifted
+    shtr are strings that can be shifted !
     
-    when a shtr is shifted, it returns:
-    1) the resulting string
-    2) the integer value corresponding to the bits that have been removed 
-       from the string
-    Integer value is computed given the following:
-    the shtr is ascii encoded, each byte is taken as unsigned char
-    MSB is left-side, LSB is right-side, in each byte
+    When a shtr is shifted (<< X or >> X), it returns the resulting string.
+    When right shifted (>> X), null bytes are appended left-side. 
+    Methods .left_val(X) and .right_val(X) returns the integer value corresponding to 
+    the X bits left or right side of the shtr.
     '''
+    def __init__(self, s):
+        #str.__init__(self, s)
+        self._bitlen = len(s)*8
     
     def left_val(self, val):
         '''
-        return big endian integer value from the `val' left bits of the shtr
+        returns big endian integer value from the `val' left bits of the shtr
         '''
+        if val > self._bitlen: val = self._bitlen
         acc = 0
         # 1) get value of full bytes
         for i in xrange(val/8):
@@ -94,6 +96,7 @@ class shtr(str):
         '''
         return big endian integer value from the `val' right bits of the shtr
         '''
+        if val > self._bitlen: val = self._bitlen
         acc = 0
         # 1) get value of full bytes
         for i in range(val/8):
@@ -117,18 +120,21 @@ class shtr(str):
         # 2) then bit shifting
         bsh = val%8
         invbsh = 8-bsh
-        #
         #                LSB of byte i       plus    MSB of byte i+1
         strlist = [ ((ord(buf[i])<<bsh)%0x100) + (ord(buf[i+1])>>invbsh) \
                     for i in xrange(len(buf)-1) ]
         # and add last bits of the string
         strlist.append( (ord(buf[-1])<<bsh)%0x100 )
         #
-        return shtr(''.join(map(chr, strlist)))
+        #return shtr(''.join(map(chr, strlist)))
+        #
+        ret = shtr(''.join(map(chr, strlist)))
+        ret._bitlen = max(0, self._bitlen - val)
+        return ret
     
     def __rshift__(self, val):
         '''
-        return resulting shtr after shifting right of `val' bits
+        returns resulting shtr after shifting right of `val' bits
         '''
         # 1) handle full byte shifting
         Bsh = val / 8
@@ -143,4 +149,8 @@ class shtr(str):
         strlist.append( ord(buf[0])>>bsh )
         strlist.reverse()
         #
-        return shtr(''.join(map(chr, strlist)))
+        #return shtr(''.join(map(chr, strlist)))
+        ret = shtr(''.join(map(chr, strlist)))
+        ret._bitlen = self._bitlen + val
+        return ret
+#
