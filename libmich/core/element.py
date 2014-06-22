@@ -1398,6 +1398,20 @@ class Layer(object):
                    else (self.BitLen // 8)
         return self.BitLen
     
+    def __hex__(self):
+        bit_len = self.bit_len()
+        hex_len = bit_len/4
+        if bit_len%4:
+            hex_len += 1
+        #
+        return str(self).encode('hex')[:hex_len]
+    
+    def __bin__(self):
+        bits = []
+        for e in self:
+            bits.append( e.__bin__() )
+        return ''.join(bits)
+    
     # I never used this crappy definition of __int__()
     # (or I do not remember uf such a mess),
     def __int__old(self):
