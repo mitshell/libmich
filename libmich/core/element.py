@@ -509,8 +509,8 @@ class Int(Element):
     PtFunc: when defined, PtFunc(Pt) is used to generate the integer value;
     Val: when defined, overwrites the Pt (and PtFunc) integer value, 
          used when mapping a string buffer to the element;
-    Type: type of integer for encoding, 8,16,32,64 bits signed or
-          8,16,24,32,67 unsigned integer;
+    Type: type of integer for encoding, 8,16,24,32,40,48,56,64 bits signed or
+          unsigned integer;
     Dict: dictionnary to use for a look-up when representing 
           the element into python;
     Repr: representation style, binary, hexa or human: human uses Dict 
@@ -523,9 +523,12 @@ class Int(Element):
     # endianness is 'little' or 'big'
     _endian = "big"
     # types format for struct library
+    # 24 (16+8), 40 (32+8), 48 (32+16), 56 (32+16+8)
     _types = { "int8":"b", "int16":"h", "int32":"i", "int64":"q",
+               "int24":None, "int40":None, "int48":None, "int56":None,
                "uint8":"B", "uint16":"H", "uint32":"I", "uint64":"Q",
-               "uint24":None }
+               "uint24":None, "uint40":None, "uint48":None, "uint56":None }
+    #
     # for object representation
     _reprs = ["hex", "bin", "hum"]
     
@@ -720,32 +723,61 @@ class Int(Element):
         # manage endianness (just in case...)
         if self._endian == "little": e = "<"
         else: e = ">"
-        if self.Type[-2:] != '24':
+        if self.Type[-2:] in ('t8', '16', '32', '64'):
             return pack(e+self._types[self.Type], self())
-        return self.__pack_u24()
+        elif self.Type[0] == 'u':
+            return self.__pack_uX(e)
+        else:
+            return self.__pack_iX(e)
     
     def __unpack(self, string=''):
         if self._endian == 'little': e = '<'
         else: e = '>'
-        if self.Type[-2:] != '24':
+        if self.Type[-2:] in ('t8', '16', '32', '64'):
             return unpack(e+self._types[self.Type], string[:self.Len])[0]
-        return self.__unpack_u24(string)
+        elif self.Type[0] == 'u':
+            return self.__unpack_uX(string[:self.Len], e)
+        else:
+            return self.__unpack_iX(string[:self.Len], e)
     
-    def __pack_u24(self):
-        if self._endian == 'little':
-            # would need some verif
-            return pack('<HB', self()%65536, self()//65536)
+    def __pack_uX(self, e='>'):
+        if e == '<':
+            # little endian
+            return pack('<Q', self())[:self.Len]
         else:
-            return pack('>BH', self()//65536, self()%65536)
-        
-    def __unpack_u24(self, string='\0\0\0'):
-        if self._endian == 'little':
-            # would need some verif
-            lsb, msb = unpack('<HB', string)
-            return msb*65536+lsb
+            return pack('>Q', self())[-self.Len:]
+    
+    def __pack_iX(self, e='>'):
+        val = self()
+        if val >= 0:
+            return self.__pack_uX(e)
         else:
-            msb, lsb = unpack('>BH', string)
-            return msb*65536+lsb
+            X = int(self.Type[-2:])
+            if e == '<':
+                # little endian
+                return pack('<Q', 2**X - abs(val))[:self.Len]
+            else:
+                return pack('>Q', 2**X - abs(val))[-self.Len:]
+    
+    def __unpack_uX(self, string='\0\0\0', e='>'):
+        add = 8 - self.Len
+        if e == '<':
+            # little endian
+            return unpack('<Q', string + add*'\0')[0]
+        else:
+            return unpack('>Q', add*'\0' + string)[0]
+    
+    def __unpack_iX(self, string='\0\0\0', e='>'):
+        add = 8 - self.Len
+        X = int(self.Type[-2:])
+        if e == '<':
+            pass
+        else:
+            ret = unpack('>Q', add*'\0' + string)[0]
+            if 0 <= ret < 2**(X-1):
+                return ret
+            else:
+                return ret-2**X
 
 
 class Bit(Element):
