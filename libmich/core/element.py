@@ -259,8 +259,8 @@ class Str(Element):
                  Len=None, LenFunc=None,
                  Repr="hum",
                  Trans=False, TransFunc=None):
-        
-        self.CallName = CallName
+        if CallName or not self.CallName:
+            self.CallName = CallName
         if ReprName is None :
             self.ReprName = ''
         else :
@@ -531,7 +531,8 @@ class Int(Element):
                  Type="int32", Dict=None, DictFunc=None,
                  Repr="hum", 
                  Trans=False, TransFunc=None):
-        self.CallName = CallName
+        if CallName or not self.CallName:
+            self.CallName = CallName
         if ReprName is None: 
             self.ReprName = ''
         else: 
@@ -666,14 +667,12 @@ class Int(Element):
                 except KeyError: val = value
             else:
                 val = value
-            #return repr(val)
             rep = repr(val)
             if rep[-1] == 'L':
                 rep = rep[:-1]
             return rep
     
     def getattr(self):
-        #return self.__dict__.keys()
         return ["CallName", "ReprName", "Pt", "PtFunc", "Val", "Len", \
                 "Type", "Dict", "DictFunc", "Repr", "Trans", "TransFunc"]
     
@@ -769,7 +768,8 @@ class Bit(Element):
                  BitLen=1, BitLenFunc=None,
                  Dict=None, DictFunc=None, Repr="bin", 
                  Trans=False, TransFunc=None):
-        self.CallName = CallName
+        if CallName or not self.CallName:
+            self.CallName = CallName
         if ReprName is None: 
             self.ReprName = ''
         else: 
@@ -1112,7 +1112,7 @@ class Layer(object):
         #if isinstance(element, Element):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
-            if element.CallName in CallNames and self.dbg >= WNG:
+            if self.dbg >= WNG and element.CallName in CallNames:
                 log(WNG, '(Layer - %s) different elements have same CallName %s' \
                     % (self.__class__, element.CallName))
             self.elementList.append(element)
@@ -1127,7 +1127,7 @@ class Layer(object):
         #if isinstance(element, Element):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
-            if element.CallName in CallNames and self.dbg >= WNG:
+            if self.dbg >= WNG and element.CallName in CallNames:
                 log(WNG, '(Layer - %s) different elements have same CallName %s' \
                     % (self.__class__, element.CallName))
             self.elementList.insert(index, element)
