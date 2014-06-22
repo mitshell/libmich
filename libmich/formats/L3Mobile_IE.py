@@ -365,6 +365,25 @@ class ID(Layer):
         return ''.join([str(getattr(self, 'digit%s'%i)()) \
                         for i in range(1, len(self)*2+self.odd()-1)])
     
+    def anon(self):
+        # for IMSI and IMEI, clear some digits to anonymize identities 
+        if self.type() in (1, 2, 3):
+            if hasattr(self, 'digit8'):
+                self.digit8 < None
+                self.digit8 > 0
+            if hasattr(self, 'digit9'):
+                self.digit9 < None
+                self.digit9 > 0
+            if hasattr(self, 'digit10'):
+                self.digit10 < None
+                self.digit10 > 0
+            if hasattr(self, 'digit11'):
+                self.digit11 < None
+                self.digit11 > 0
+            if hasattr(self, 'digit12'):
+                self.digit12 < None
+                self.digit12 > 0
+
 # section 10.5.1.5
 # Mobile Station Classmark 1
 Revision_level = {
