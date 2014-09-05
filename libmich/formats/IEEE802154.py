@@ -192,9 +192,9 @@ class FCS(Layer):
         Layer.__init__(self, **kwargs)
         # CRC is computed over the whole MAC + Data
         self.FCS.Pt = 0
-        self.FCS.PtFunc = self.__crc
+        self.FCS.PtFunc = self._crc
     
-    def __crc(self, _unused):
+    def _crc(self, _unused):
         if hasattr(self, 'Block'):
             if isinstance(self.Block, PHY):
                 start=1
@@ -210,44 +210,75 @@ class FCS(Layer):
 # Texas Instrument PSD format
 # Used (AFAIK) by the CC25XY (e.g. CC2531) product line
 # explained in the product documentation from TI: 
-# SmartRF Packet Sniffer User Manual (section 5), freely available
+# SmartRF Packet Sniffer User Manual (section 4), freely available
+# http://www.ti.com/lit/ug/swru187g/swru187g.pdf
 #
-# 802.15.4 MAC and data are in .Data() Str element
-# PHY is not present, FCS is also not present (in general)
-# buf the boolean FCS indicates FCS verification done by the dongle
+# 802.15.4 MAC and data are in the CC2531_Payload.Payload element.
+# PHY is not present, FCS is also stripped by the capture device.
+# CC2531_Payload.Length should correspond to the length of the PHY header.
+# 
+# The boolean TI_PSD.FCS indicates FCS verification done by the dongle
 #
+
+# this is the format of 802.15.4 packet sent by CC device
+class TI_CC(Layer):
+    constructorList = [
+        Int('Length', Pt=0, Type='uint8'),
+        Str('Payload', Pt='', Repr='hex'),
+        Int('RSSI', Pt=0, Type='int8'),
+        Bit('FCS', ReprName='FCS OK', Pt=0, BitLen=1, Repr='hum',
+            Dict=Bool_dict),
+        Bit('Correl', Pt=0, BitLen=7)
+        ]
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.Length.Pt = self.Payload
+        self.Length.PtFunc = lambda p: len(p)+2
+        self.Payload.Len = self.Length
+        self.Payload.LenFunc = lambda l: l()-2
+
+# this is the format of the USB frame sent by CC device
+class TI_USB(Layer):
+    constructorList = [
+        Int('pad', Pt=0, Type='uint8', Repr='hex'),
+        Int('Length', Pt=0, Type='uint16'),
+        Int('TS', Pt=0, Type='uint32'),
+        TI_CC()
+        ]
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.Length._endian = 'little'
+        self.TS._endian = 'little'
+
+# this is the PSD format used by TI SmartRF packet sniffer for binary storage
+# into file
+# however, this is poorly documented, and has not been truly tested
 class TI_PSD(Layer):
     _byte_aligned = False
     constructorList = [
-        Bit('unused', Pt=0, BitLen=5, Repr='bin'),
-        Bit('Incomp', ReprName='Incomplete packet', Pt=0, BitLen=1, \
+        Bit('unused', Pt=0, BitLen=3, Repr='bin'),
+        Bit('GenProt', ReprName='Generic protocol', Pt=0, BitLen=1,
             Repr='hum', Dict=Bool_dict),
-        Bit('Corrinc', ReprName='Correlation used', Pt=0, BitLen=1, \
+        Bit('BufOF', ReprName='Buffer overflow', Pt=0, BitLen=1,
             Repr='hum', Dict=Bool_dict),
-        Bit('FCSinc', ReprName='FCS included', Pt=0, BitLen=1, \
+        Bit('Incomp', ReprName='Incomplete packet', Pt=0, BitLen=1,
+            Repr='hum', Dict=Bool_dict),
+        Bit('Corrinc', ReprName='Correlation used', Pt=0, BitLen=1,
+            Repr='hum', Dict=Bool_dict),
+        Bit('FCSinc', ReprName='FCS included', Pt=0, BitLen=1,
             Repr='hum', Dict=Bool_dict),
         Int('Pnbr', ReprName='Packet number', Pt=0, Type='uint32'),
         Int('Ts', ReprName='Timestamp', Pt=0, Type='uint64'),
+        # Length field seems to depend of SmartRF Packet Sniffer version
+        #Int('Length', Pt=0, Type='uint16'),
         Int('Length', Pt=0, Type='uint8'),
-        Str('Data', Pt='', Repr='hex'),
-        Int('RSSI', Pt=0, Type='int8'),
-        Bit('FCS', ReprName='FCS OK', Pt=0, BitLen=1, Repr='hum', \
-            Dict=Bool_dict),
-        Bit('Corr', ReprName='Correlation value', Pt=0, BitLen=7, \
-            Repr='hum', Trans=True),
-        Bit('LQI', Pt=0, BitLen=7, Repr='hum')
+        #
+        TI_CC(),
+        Str('spare', Pt='', Repr='hex')
         ]
-    
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
         self.Pnbr._endian = 'little'
         self.Ts._endian = 'little'
-        # Raw data length automation
-        self.Data.Len = self.Length
-        self.Data.LenFunc = lambda l: l()-2 if self.FCSinc() else l()
-        # Corr / LQI selection
-        self.Corr.Trans = self.Corrinc
-        self.Corr.TransFunc = lambda c: False if c() else True
-        self.LQI.Trans = self.Corrinc
-        self.LQI.TransFunc = lambda c: True if c() else False
+        self.Length._endian = 'little'
 
