@@ -24,9 +24,7 @@
 # * Created : 2011-08-28 
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-
-#!/usr/bin/env python
+#*/
 
 from libmich.core.element import RawLayer, Block, show, debug, \
     log, ERR, WNG, DBG
@@ -39,6 +37,7 @@ from L3GSM_RR import *
 from L3Mobile_MM import *
 from L3Mobile_CC import *
 from L3Mobile_SMS import *
+from L3Mobile_SS import *
 # 2G / 3G core PS stacks (complete)
 from L3Mobile_GMM import *
 from L3Mobile_SM import *
@@ -262,8 +261,14 @@ L3Call = {
     91:REQUEST_SECONDARY_PDP_CONTEXT_ACTIVATION,
     92:REQUEST_SECONDARY_PDP_CONTEXT_ACTIVATION_REJECT,
     93:GPRS_NOTIFICATION
+    },
+# L3Mobile_SS, PD=11
+11:{
+    42:SS_RELEASE_COMPLETE,
+    58:SS_FACILITY,
+    59:SS_REGISTER
     }
-    # Nothing more yet...
+# Nothing more yet...
 }
 
 # Define a dummy RAW L3 header / message for parts not implemented
@@ -301,8 +306,8 @@ def parse_L3(buf, L2_length_incl=0):
     ###
     # Message Type
     ###
-    # for MM, CC and GSM RR, only 6 1st bits for the message type
-    if PD in (3, 5, 6):
+    # for MM, CC, SS and GSM RR, only 6 1st bits for the message type
+    if PD in (3, 5, 6, 11):
         Type = ord(buf[L2_length_incl+1]) & 0x3F
     #
     # for LTE NAS messages: message content (including Type) can be ciphered
@@ -437,7 +442,7 @@ _bts_test = \
 
 # as the L3Mobile starts to grow up quite a bit
 # some regression testing may be welcome !
-def test_regr():
+def test_regr(print_infos=True):
     '''
     L3GSM_RR and L3Mobile_* regression testing:
     checking all signalling messages from the L3Call dictionnary
@@ -487,17 +492,19 @@ def test_regr():
         return e
     #
     Layer3._initiator = 'Net'
-    log(DBG, 'testing with Net initiator')
+    if print_infos:
+        log(DBG, 'testing with Net initiator')
     glob_errors += test_dict()
     Layer3._initiator = 'ME'
-    log(DBG, 'testing with ME initiator')
+    if print_infos:
+        log(DBG, 'testing with ME initiator')
     glob_errors += test_dict()
     #
     Element.safe = e_safe
     Layer.safe = l_safe
     #
-    if not glob_errors:
-        print('[Heeeeha!!!] all L3Mobile tests passed successfully')
+    if not glob_errors and print_infos:
+        log(DBG, '[Heeeeha!!!] all L3Mobile tests passed successfully')
     return glob_errors 
-
-
+#
+#

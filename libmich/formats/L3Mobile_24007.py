@@ -50,19 +50,19 @@ from libmich.formats.L3GSM_rest import *
 # TS 24.007, section 11.2.3.1.1
 # Protocol Discriminator dict
 PD_dict = IANA_dict({
-    0:"group call control",
+    0:("group call control", "GCC"),
     1:("broadcast call control", "BC"),
     2:("EPS session management messages", "ESM"),
     3:("call control; call related SS messages", "CC"),
-    4:"GPRS Transparent Transport Protocol (GTTP)",
+    4:("GPRS Transparent Transport Protocol", "GTTP"),
     5:("mobility management messages", "MM"),
     6:("radio resources management messages", "RR"),
     7:("EPS mobility management messages", "EMM"),
     8:("GPRS mobility management messages", "GMM"),
     9:("short messages service", "SMS"),
     10:("GPRS session management messages", "SM"),
-    11:"non call related SS messages",
-    12:"Location services", # specified in 3GPP TS 44.071 [8a]
+    11:("non call related SS messages", "SS"),
+    12:("Location services", "LCS"), # specified in 3GPP TS 44.071 [8a]
     13:"reserved for extension of the PD to one octet length",
     14:"testing",
     })
@@ -72,6 +72,7 @@ PD_dict = IANA_dict({
 # if a field has 1 of the following name (possibly with an _[0-9]{1,} suffix)
 # its content will be mapped onto the corresponding Information Element
 IE_lookup = {
+    # L3Mobile_IE.py: 2G / 3G IE
     'BCDNumber' : BCDNumber,
     'CallingBCD' : BCDNumber,
     'CalledBCD' : BCDNumber,
@@ -94,7 +95,7 @@ IE_lookup = {
     'PFlowID' : PacketFlowID,
     'MSNetCap' : MSNetCap,
     'MSRACap' : MSRACap,
-    # LTE / EPC IE
+    # L3Mobile_IE.py: LTE / EPC IE
     'GUTI' : GUTI, 
     'EPSFeatSup' : EPSFeatSup,
     'TAI' : TAI,
@@ -103,7 +104,11 @@ IE_lookup = {
     'UESecCap' : UESecCap,
     'CLI' : BCDNumber,
     'APN_AMBR' : APN_AMBR,
-    # end of L3Mobile_IE.py
+    # L3Mobile_IE.py: supplementary services
+    'Facility' : Facility,
+    #'SSscreen' : SSscreen,
+    'SSversion' : SSversion,
+    # L3GSM_IE.py
     'CellChan' : CellChan,
     'BCCHFreq' : BCCHFreq,
     'ExtBCCHFreq' : ExtBCCHFreq,
@@ -115,7 +120,7 @@ IE_lookup = {
     'MobAlloc' : MobAlloc,
     'PChanDesc' : PChanDesc, 
     'ReqRef' : ReqRef,
-    # end of L3GSM_IE.py
+    # L3GSM_rest.py
     'P1RestOctets' : P1RestOctets,
     'P2RestOctets' : P2RestOctets,
     'P3RestOctets' : P3RestOctets,
@@ -126,7 +131,6 @@ IE_lookup = {
     'SI3RestOctets' : SI3RestOctets,
     'SI4RestOctets' : SI4RestOctets,
     'SI13RestOctets' : SI13RestOctets,
-    # end of L3GSM_rest.py
     }
 IE_list = IE_lookup.keys()
 

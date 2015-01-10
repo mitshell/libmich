@@ -35,6 +35,9 @@ __all__ = [# 2G / 3G:
            'PLMN', 'PLMNList', 'AuxState',
            'BearerCap', 'CCCap', 'AccessTechnoType_dict', 'MSNetCap', 'MSRACap',
            'PDPAddr', 'QoS', 'ProtID', 'ProtConfig', 'PacketFlowID',
+           # Supplementary Services
+           'Facility', 'SSversion',
+           'SS_Invoke', 'SS_ReturnResult', 'SS_ReturnError', 'SS_Reject',
            # LTE / EPC specifics:
            'IntegAlg_dict', 'CiphAlg_dict', 'NASKSI_dict', 'NASSecToEUTRA',
            'GUTI', 'EPSFeatSup', 'TAI', 'PartialTAIList', 'PartialTAIList0',
@@ -408,6 +411,15 @@ class MSCm1(Layer):
         Bit('noA51', Pt=0, BitLen=1, Repr='hum'),
         Bit('RFclass', Pt=0, BitLen=3, Repr='hum', Dict=RFclass_dict)]
 
+# SS screening indicator
+# TS 24.080, section 3.7.1
+SSscreen_dict = {
+    0:'default value of phase 1',
+    1:'capability of handling of ellipsis notation and phase 2 error handling',
+    2:'ffu',
+    3:'ffu'
+    }
+
 # section 10.5.1.6
 # Mobile Station Classmark 2        
 class MSCm2(Layer):
@@ -420,7 +432,7 @@ class MSCm2(Layer):
         Bit('RFclass', Pt=0, BitLen=3, Repr='hum', Dict=RFclass_dict),
         Bit('spare2', Pt=0, BitLen=1),
         Bit('PScap', Pt=0, BitLen=1, Repr='hum'),
-        Bit('SSscreen', Pt=0, BitLen=2),
+        Bit('SSscreen', Pt=0, BitLen=2, Dict=SSscreen_dict, Repr='hum'),
         Bit('SMcap', Pt=0, BitLen=1, Repr='hum'),
         Bit('VBSnotif', Pt=0, BitLen=1, Repr='hum'),
         Bit('VGCSnotif', Pt=0, BitLen=1, Repr='hum'),
@@ -1556,5 +1568,190 @@ class APN_AMBR(Layer):
             d[255] = 'see APN_AMBR_ext'
         return d
 
-
+###
+# TS 24.080: Supplementary Services IE
+# section 3
+###
 #
+# section 3.6.1: Facility Component
+#
+
+class SS_Component(Layer):
+    constructorList = [
+        Int('T', Pt=0, Type='uint8'),
+        Int('L', Pt=0, Type='uint8'),
+        #Int('Lext', Pt=0, Type='uint8'),
+        Str('V', Pt='', Repr='hex')
+        ]
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.L.Pt = self.V
+        self.L.PtFunc = lambda v: len(v)
+        self.V.Len = self.L
+        self.V.LenFunc = lambda l: int(l)
+    
+    # TODO: ASN.1 BER: Length L can be extended to multiple bytes
+        #
+        #self.L.Pt = self.V
+        #self.L.PtFunc = self.__calc_len
+        #
+        #self.Lext.Trans = self.V
+        #self.Lext.TransFunc = self.__calc_lenext
+        #
+        #self.V.Len = (self.L, self.Lext)
+        #self.V.LenFunc = self.__calc_lenv
+    #
+    #def __calc_len(self, V):
+    #    if len(V) >= 128:
+    #        return
+    
+SSComponentID_dict = {
+    2 : 'Invoke ID',
+    128 : 'Linked ID'
+    }
+SSProblemCode_dict = {
+    128 : 'General problem',
+    129 : 'Invoke problem',
+    130 : 'Return Result problem',
+    131 : 'Return Error problem'
+    }
+
+class SS_ComponentInvokeID(SS_Component):
+    def __init__(self, **kwargs):
+        SS_Component.__init__(self, **kwargs)
+        self.T.Pt = 2
+        self.T.Dict = SSComponentID_dict
+
+class SS_ComponentLinkedID(SS_Component):
+    def __init__(self, **kwargs):
+        SS_Component.__init__(self, **kwargs)
+        self.T.Pt = 128
+        self.T.Dict = SSComponentID_dict
+
+class SS_ComponentOperationCode(SS_Component):
+    def __init__(self, **kwargs):
+        SS_Component.__init__(self, **kwargs)
+        self.T.Pt = 2
+        self.T.Dict = {2:'Operation Code'}
+
+class SS_ComponentErrorCode(SS_Component):
+    def __init__(self, **kwargs):
+        SS_Component.__init__(self, **kwargs)
+        self.T.Pt = 2
+        self.T.Dict = {2:'Error Code'}
+
+class SS_ComponentProblemCode(SS_Component):
+    def __init__(self, **kwargs):
+        SS_Component.__init__(self, **kwargs)
+        self.T.Pt = 128
+        self.T.Dict = SSProblemCode_dict
+
+class SS_ComponentParameters(SS_Component):
+    pass
+
+SSComponentType_dict = {
+    161 : 'Invoke',
+    162 : 'Return Result',
+    163 : 'Return Error',
+    164 : 'Reject'
+    }
+
+class SS_Invoke(Layer):
+    constructorList = [
+        Int('T', Pt=161, Type='uint8', Dict=SSComponentType_dict),
+        Int('L', Type='uint8'),
+        SS_ComponentInvokeID(),
+        SS_ComponentLinkedID(), # optional
+        SS_ComponentOperationCode(),
+        SS_ComponentParameters() # optional
+        ]
+    def map(self, s=''):
+        s = self[0:3].map_ret(s)
+        if s:
+            if ord(s[0]) == 2:
+                self.SS_ComponentLinkedID.Trans = True
+                s = self[4].map_ret(s)
+            else:
+                s = self[3:5].map_ret(s)
+        if s:
+            self.SS_ComponentParameters.map(s)
+        else:
+            self.SS_ComponentParameters.Trans = True
+
+class SS_ReturnResult(Layer):
+    constructorList = [
+        Int('T', Pt=162, Type='uint8', Dict=SSComponentType_dict),
+        Int('L', Type='uint8'),
+        SS_ComponentInvokeID(),
+        Int('T_seq', Pt=48, Type='uint8'), # optional, together with L_seq
+        Int('L_seq', Pt=0, Type='uint8'), # optional, together with T_seq
+        SS_ComponentOperationCode(), # optional
+        SS_ComponentParameters() # optional
+        ]
+    def map(self, s=''):
+        s = self[0:3].map_ret(s)
+        if s:
+            if ord(s[0]) != 48:
+                self.T_seq.Trans = True
+                self.L_seq.Trans = True
+            else:
+                s = self[3:5].map_ret(s)
+        if s:
+            if ord(s[0]) != 2:
+                self[-2].Trans = True
+            else:
+                s = self[-2].map_ret(s)
+        if s:
+            self[-1].map(s)
+        else:
+            self[-1].Trans = True
+
+class SS_ReturnError(Layer):
+    constructorList = [
+        Int('T', Pt=163, Type='uint8', Dict=SSComponentType_dict),
+        Int('L', Pt=0, Type='uint8'),
+        SS_ComponentInvokeID(),
+        SS_ComponentErrorCode(),
+        SS_ComponentParameters() # optional
+        ]
+    def map(self, s=''):
+        s = self[0:4].map_ret(s)
+        if s:
+            self[-1].map(s)
+        else:
+            self[-1].Trans = True
+
+class SS_Reject(Layer):
+    constructorList = [
+        Int('T', Pt=164, Type='uint8', Dict=SSComponentType_dict),
+        Int('L', Type='uint8'),
+        SS_ComponentInvokeID(),
+        SS_ComponentProblemCode()
+        ]
+
+class Facility(Layer):
+    constructorList = []
+    def map(self, s=''):
+        if not s:
+            return
+        t = ord(s[0])
+        if t == 161:
+            self.append( SS_Invoke() )
+        elif t == 162:
+            self.append( SS_ReturnResult() )
+        elif t == 163:
+            self.append( SS_ReturnError() )
+        elif t == 164:
+            self.append( SS_Reject() )
+        else:
+            self.append( Str('undef') )
+        Layer.map(self, s)
+
+SSversion_dict = IANA_dict({
+    0:'phase 2 service, ellipsis notation, and phase 2 error handling is supported',
+    1:'SS-Protocol version 3 is supported, and phase 2 error handling is supported'
+    })
+class SSversion(Layer):
+    constructorList = [
+        Int('SSversion', Pt=0, Type='uint8', Dict=SSversion_dict)
+        ]
