@@ -125,6 +125,7 @@ def generate_modules(mods=MODULE_NAMES):
         fd = open(asn, 'r')
         asntext = fd.read()
         fd.close()
+        GLOBAL.clear()
         log('processing %s' % asn_name)
         compile(asntext, mod_name)
 
