@@ -105,62 +105,98 @@ class shtr(str):
     Methods .left_val(X) and .right_val(X) returns the integer value corresponding to 
     the X bits left or right side of the shtr.
     '''
+    
     def __init__(self, s):
-        #str.__init__(self, s)
         self._bitlen = len(s)*8
     
-    def left_val(self, val):
+    def left_val(self, bitlen):
         '''
-        returns big endian integer value from the `val' left bits of the shtr
+        returns big endian integer value from the `bitlen' left bits of the shtr
+        '''
+        if bitlen > self._bitlen:
+            bitlen = self._bitlen
+        # 0)
+        reg64 =  bitlen//64
+        reg8  = (bitlen%64)//8
+        reg1  =  bitlen%8
+        acc, start, stop = 0, 0, 0
+        # 1)
+        if reg64:
+            stop = 8*reg64
+            acc += reduce(lambda x,y: (x<<64)+y,
+                          unpack('>'+reg64*'Q', self[:stop]))
+        # 2)
+        if reg8:
+            acc <<= 8*reg8
+            start = stop
+            stop = start + reg8
+            acc += reduce(lambda x,y: (x<<8)+y,
+                          unpack('>'+reg8*'B', self[start:stop]))
+        # 3)
+        if reg1:
+            acc <<= reg1
+            acc += (ord(self[stop:stop+1]) >> (8-reg1))
+        #
+        return acc
+    
+    def right_val(self, val):
+        '''
+        returns big endian integer value from the `val' right bits of the shtr
         '''
         if val > self._bitlen: val = self._bitlen
         acc = 0
         # 1) get value of full bytes
         for i in xrange(val/8):
-            acc += ord(self[i]) << (val - ((i+1)*8))
-        # 2) get value of last bits
-        if val%8 and val/8 < len(self):
-            acc += ord(self[val/8]) >> (8 - (val%8))
-        return acc
-    
-    def right_val(self, val):
-        '''
-        return big endian integer value from the `val' right bits of the shtr
-        '''
-        if val > self._bitlen: val = self._bitlen
-        acc = 0
-        # 1) get value of full bytes
-        for i in range(val/8):
             acc += ord(self[-1-i]) << (i*8)
         # 2) get value of last bits
         if val%8 and val/8 < len(self):
             acc += (ord(self[-1-(val/8)]) & ((1<<(val%8))-1)) << (8*(val/8))
         return acc
     
-    # making an intermediate list of char that will be ''.join(map(chr, )) 
-    # looks much faster in python
-    # So I do so
-    
-    def __lshift__(self, val):
+    def __lshift__(self, bitlen):
         '''
-        return resulting shtr after shifting left of `val' bits
+        returns resulting shtr after shifting left of `bitlen' bits
         '''
-        # 1) handle full byte shifting
-        Bsh = val/8
-        buf = ''.join((self[Bsh:], Bsh*'\0'))
-        # 2) then bit shifting
-        bsh = val%8
-        invbsh = 8-bsh
-        #                LSB of byte i       plus    MSB of byte i+1
-        strlist = [ ((ord(buf[i])<<bsh)%0x100) + (ord(buf[i+1])>>invbsh) \
-                    for i in xrange(len(buf)-1) ]
-        # and add last bits of the string
-        strlist.append( (ord(buf[-1])<<bsh)%0x100 )
-        #
-        #return shtr(''.join(map(chr, strlist)))
-        #
-        ret = shtr(''.join(map(chr, strlist)))
-        ret._bitlen = max(0, self._bitlen - val)
+        if bitlen > self._bitlen:
+            bitlen = self._bitlen
+        # 0) full byte shifting
+        buf = self[bitlen//8:]
+        # 1) bit shifting
+        reg1  = bitlen%8
+        if reg1:
+            buflen = len(buf)
+            reg64 = buflen//8
+            reg8  = buflen%8
+            reg1inv   = 8-reg1
+            reg1inv64 = 64-reg1
+            fmt = '>'+reg64*'Q'+reg8*'B'
+            values = unpack(fmt, buf)
+            #print values
+            if reg64:
+                #print('reg64')
+                chars = map(lambda X: ((X[0]<<reg1)%0x10000000000000000)\
+                                      +(X[1]>>reg1inv64),
+                            zip(values[:reg64], values[1:reg64]))
+                if reg8:
+                    #print('reg8')
+                    chars.append( ((values[reg64-1]<<reg1)%0x10000000000000000)\
+                                  +(values[reg64]>>reg1inv) )
+                    chars.extend( map(lambda X: ((X[0]<<reg1)%0x100)+(X[1]>>reg1inv),
+                                      zip(values[reg64:], values[reg64+1:])) )
+                    chars.append( (values[-1]<<reg1)%0x100 )
+                else:
+                    chars.append( (values[reg64-1]<<reg1)%0x10000000000000000 )
+            elif reg8:
+                #print('reg8')
+                chars = map(lambda X: ((X[0]<<reg1)%0x100)+(X[1]>>reg1inv),
+                            zip(values, values[1:]))
+                chars.append( (values[-1]<<reg1)%0x100 )
+            #
+            #print chars
+            ret = shtr(pack(fmt, *chars))
+        else:
+            ret = shtr(buf)
+        ret._bitlen = self._bitlen-bitlen
         return ret
     
     def __rshift__(self, val):
@@ -184,4 +220,5 @@ class shtr(str):
         ret = shtr(''.join(map(chr, strlist)))
         ret._bitlen = self._bitlen + val
         return ret
+#
 #
