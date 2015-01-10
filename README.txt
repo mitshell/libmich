@@ -27,6 +27,23 @@ You can also use the setup script for the installation:
 Archlinux users can download the libmich-git PKGBUILD from the AUR
 (https://aur.archlinux.org/packages.php?ID=52015), thanks to s1gma.
 
+1bis) How to check if it is working?
+First, it is possible to generate all ASN.1 modules; for this, start Python and 
+run:
+>>> from libmich.asn1.processor import *
+>>> generate_modules()
+[...]
+This must generate Python pickled modules in libmich/asn1/modules/, corresponding
+to ASN1 files in libmich/asn1/asn/
+
+Then, it is possible to test different libmich formats encoding and decoding with
+the following command:
+>>> from libmich.utils.perf import *
+>>> main()
+[...]
+If everything goes well during these steps, every important part of the library
+should work properly.
+
 2) Why Python?
 Because it is a language easy to learn, well and actively maintained, with a lot 
 of contributions and support.
