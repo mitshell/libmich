@@ -489,6 +489,23 @@ class Str(Element):
     def map_ret(self, string=''):
         self.map(string)
         return string[len(self):]
+    
+    # shar manipulation interface
+    def to_shar(self):
+        ret = shar()
+        ret.set_buf(self())
+        return ret
+    
+    def map_shar(self, sh):
+        if not self.is_transparent():
+            l = self.map_len()
+            if l is not None:
+                self.Val = sh.get_buf(l*8)
+            else:
+                self.Val = sh.get_buf()
+            if self.dbg >= DBG:
+                log(DBG, '(Element) mapping %s on %s, %s' \
+                    % (repr(string), self.CallName, repr(self)))
 
 class Int(Element):
     '''
@@ -766,8 +783,23 @@ class Int(Element):
                 return ret
             else:
                 return ret-2**X
-
-
+    
+    # shar manipulation interface
+    def to_shar(self):
+        ret = shar()
+        ret.set_buf(self.__str__())
+        return ret
+    
+    def map_shar(self, sh):
+        if len(sh)*8 < self.Len:
+            if self.dbg >= WNG:
+                log(WNG, '(%s) %s map(string) : shar buffer not long enough' \
+                    % (self.__class__, self.CallName))
+            return
+        # standard handling
+        if not self.is_transparent():
+            self.map(sh.get_buf(len(self)*8))
+    
 class Bit(Element):
     '''
     class defining a standard element, managed like a bit (e.g. a flag)
@@ -874,7 +906,7 @@ class Bit(Element):
         if not h:
             return ''
         if len(h) % 2: h = ''.join(('0', h))
-        return shtr(unhexlify(h)) << (8-(self.bit_len()%8))%8
+        return str(shtr(unhexlify(h)) << (8-(self.bit_len()%8))%8)
     
     def __len__(self):
         # just for fun here, 
@@ -991,8 +1023,17 @@ class Bit(Element):
             bitlen = self.bit_len()
             self.map_bit( shtring.left_val(bitlen) )
             return shtring << bitlen
-
-
+    
+    # shar manipulation interface
+    def to_shar(self):
+        ret = shar()
+        ret.set_uint(self(), self.bit_len())
+        return ret
+    
+    def map_shar(self, sh):
+        if not self.is_transparent():
+            self.map_bit( sh.get_uint(self.bit_len()) )
+    
 #------------------------------------------------------------------------------#
 # Layer definition
 #------------------------------------------------------------------------------#
@@ -1660,6 +1701,28 @@ class Layer(object):
     
     def parse(self, s=''):
         self.map(s)
+    
+    # shar manipulation interface
+    def to_shar(self):
+        if hasattr(self, 'Trans') and self.Trans:
+            return shar()
+        bits = []
+        for e in self:
+            bits.append( e.to_shar().get_bits() )
+        s = shar()
+        s.set_bits( bits )
+        return s
+    
+    def map_shar(self, sh):
+        if self.dbg >= DBG:
+            log(DBG, '(Layer.map) entering map() for %s' % self.CallName)
+        # First take care of transparent Layer (e.g. in L3Mobile)
+        if hasattr(self, 'Trans') and self.Trans:
+            return
+        if not isinstance(sh, shar):
+            sh = shar(sh)
+        for e in self:
+            e.map_shar(sh)
 
 
 class RawLayer(Layer):
