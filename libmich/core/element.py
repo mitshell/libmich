@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.2
+# * Version : 0.2.3
 # *
 # * Copyright © 2012. Benoit Michau. France Telecom.
 # *
@@ -26,28 +26,26 @@
 # *--------------------------------------------------------
 #*/ 
 
-#!/usr/bin/env python
 
-###############
-# The Libmich #
-###############
-'''
-# Python library, works with python 2.6 and over 
-# not tested with older version, 
-# neither with python 3.0 and higher (will not work anyway)
+#------------------------------------------------------------------------------#
+#                                   The Libmich                                #
+#------------------------------------------------------------------------------#
+# Python library, works with Python 2.6 and 2.7
+# not tested with older version
+# and not going to support Python 3 (str / bytes is PITA here)
 #
 # version: 0.2
 # author: Benoit Michau
 #
 # defines 3 kind of primary elements:
 #   `Str': for byte stream
-#   `Bit': for bit stream (actually assigned with integer value)
+#   `Bit': for bit stream (actually managed like an integer value)
 #   `Int': for integer value
-#   all are instances of `Element'
+#   all are subclasses of the common `Element' class
 #
 # elements can be stacked into a layer: 
 #   `Layer': stacks [Str, Bit, Byte, Layer] (yes, it's recursive)
-#   allows to manage dependencies between elements within the layer ,
+#   allows to manage dependencies between elements within the layer,
 #   and with surrounding layers (next, previous, header, payload)
 #   when placed in a block
 #   
@@ -59,14 +57,18 @@
 #
 # Particularly convinient for building / parsing complex and mixed data 
 # structure like network protocols: IKEv2, SCTP, Diameter, EAP, UMA...
-# or like file structure: zip, PNG, elf, MPEG4, ...
+# or like file structure: zip, PNG, ELF, MPEG4, ...
 #
 # TODO:
 # + actually, still a lot !
 # + defines plenty of formats
-'''
+#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
+# import business
+#------------------------------------------------------------------------------#
 # check python version for deepcopy bug in 2.6
+# and raise if Python version is not correct
 import sys
 def __version_err():
     print('[ERR] only python 2.6 and 2.7 are supported (unfortunately)')
@@ -82,31 +84,35 @@ if sys.version_info[0] == 2:
         __version_err()
 else:
     __version_err()
-#
-# export filter
-__all__ = ['Element', 'Str', 'Int', 'Bit', 'Layer', 'RawLayer', 'Block',
-           'type_funcs', 'debug_level', 'debug', 'ERR', 'WNG', 'DBG', 'log',
-           'show', 'showattr',
-           'testTLV', 'testA', 'testB']
 
+# export filtering
+#
+# exports the following constants:
+# type_funcs, debug_level, ERR, WNG, DBG,
+# functions: 
+# log(), debug(), show(), showattr(), test()
+# classes:
+# Element(), Str(), Int(), Bit(), Layer(), RawLayer(), Block()
+__all__ = ['Element', 'Str', 'Int', 'Bit', 'Layer', 'RawLayer', 'Block',
+           'type_funcs', 'debug_level', 'ERR', 'WNG', 'DBG', 'log', 'debug',
+           'show', 'showattr',
+           'test', 'test0', 'test1', 'test2',
+           'testTLV', 'testA', 'testB']
 
 from copy import deepcopy
 from struct import pack, unpack
 from socket import inet_ntoa
 from binascii import hexlify, unhexlify
 from re import split, sub
+
+from libmich.core.shar import shar
 from libmich.core.shtr import shtr, decomposer
+# TODO: cleanup the rest of libmich-related code to remove this import here
+from libmich.utils.repr import show, showattr
 
-# exports the following constants:
-# type_funcs, debug_level, ERR, WNG, DBG,
-# functions: 
-# debug(), log(), show(), showattr()
-# classes:
-# Element(), Str(), Int(), Bit(), Layer(), RawLayer(), Block(), testTLV()
-# functions / classes from external libraries:
-# pack, unpack, inet_ntoa, hexlify, unhexlify, split, sub, shtr, decomposer
-
-######
+#------------------------------------------------------------------------------#
+# helping routines
+#------------------------------------------------------------------------------#
 # defines a tuple of function-like 
 class Dummy(object):
     def __init__(self):
@@ -115,46 +121,31 @@ type_funcs = ( type(lambda x:1), \
                type(Dummy().__init__), \
                type(inet_ntoa) )
 del Dummy
-######
 #
-######
 # defines debugging facility
 debug_level = {1:'ERR', 2:'WNG', 3:'DBG'}
+ERR = 1
+WNG = 2
+DBG = 3
+
+def log(level=DBG, string=''):
+    # if needed, can be changed to write somewhere else
+    # will redirect all logs from the library
+    print('[libmich %s] %s' % (debug_level[level], string))
+
 def debug(thres, level, string):
     if level and level<=thres:
         print('[%s] %s' %(debug_level[level], string))
 
-ERR = 1
-WNG = 2
-DBG = 3
-def log(level=DBG, string=''):
-    # if needed, can be changed to write somewhere else
-    # will redirect all logs from the library
-    print('[%s] %s' % (debug_level[level], string))
-######
-#
-######
-# defines printing facility
-def show(element, with_trans=False):
-    if hasattr(element, 'show'):
-        print('%s' % element.show(with_trans))
-    else:
-        print('%s' % element)
-
-def showattr(element):
-    if hasattr(element, 'showattr'):
-        print('%s' % element.showattr())
-######
-
-
-######
+#------------------------------------------------------------------------------#
+# basic Element definitions
+#------------------------------------------------------------------------------#
 # Now defines Elements: Str, Int, Bit
 # Element is a wrapping object for all the 3 following
 # and has some common methods 
 class Element(object):
     '''
-    encapsulating class for:
-    Str, Bit, Int
+    encapsulating class for: Str, Bit, Int
     '''
     # checking Element boundaries extensively
     safe = True
@@ -210,9 +201,9 @@ class Element(object):
     
     # when willing to bit shift str, call this instead of standard __str__()
     def shtr(self):
-        return shtr(str(self))
+        return shtr(self.__str__())
     
-    # this is to retrieve element's dynamicity from a mapped element
+    # this is to retrieve element's dynamicity from a mapped buffer
     def reautomatize(self):
         if self.Val is not None:
             if not self.PtFunc:
@@ -248,7 +239,7 @@ class Str(Element):
     
     # this is used when printing the object representation
     _repr_limit = 1024
-    _reprs = ["hex", "bin", "hum", "ipv4"]
+    _reprs = ['hex', 'bin', 'hum', 'ipv4']
     
     # padding is used when .Pt and .Val are None, 
     # but Str instance has still a defined .Len attribute
@@ -280,34 +271,34 @@ class Str(Element):
         # (however, it is not a exhaustive test...)
         # managed with the class "safe" trigger
         if self.safe :
-            if attr == "CallName" :
+            if attr == 'CallName' :
                 if type(val) is not str or len(val) == 0 :
-                    raise AttributeError("CallName must be a non-null string")
-            elif attr == "ReprName" :
+                    raise AttributeError('CallName must be a non-null string')
+            elif attr == 'ReprName' :
                 if type(val) is not str:
-                    raise AttributeError("ReprName must be a string")
-            elif attr == "PtFunc" :
+                    raise AttributeError('ReprName must be a string')
+            elif attr == 'PtFunc' :
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("PtFunc must be a function")
-            elif attr == "Val" :
+                    raise AttributeError('PtFunc must be a function')
+            elif attr == 'Val' :
                 if val is not None and not isinstance(val, \
-                (str, Element, Layer, Block, tuple, list)) :
-                    raise AttributeError("Val must be a string or something " \
-                    "that makes a string at the end...")
-            elif attr == "Len" :
+                (str, bytes, Element, Layer, Block, tuple, list)) :
+                    raise AttributeError('Val must be a string or something ' \
+                    'that makes a string at the end...')
+            elif attr == 'Len' :
                 if val is not None and not isinstance(val, \
                 (int, tuple, Element, type_funcs)) :
-                    raise AttributeError("Len must be an int or element")
-            elif attr == "LenFunc" :
+                    raise AttributeError('Len must be an int or element')
+            elif attr == 'LenFunc' :
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("LenFunc must be a function")
-            elif attr == "Repr" :
+                    raise AttributeError('LenFunc must be a function')
+            elif attr == 'Repr' :
                 if val not in self._reprs :
-                    raise AttributeError("Repr %s does not exist, only: %s" \
+                    raise AttributeError('Repr %s does not exist, only: %s' \
                           % (val, self._reprs))
-            elif attr == "TransFunc" :
+            elif attr == 'TransFunc' :
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("TransFunc must be a function")
+                    raise AttributeError('TransFunc must be a function')
         # this is for Layer() pointed by Pt attr in Str() object
         #if isinstance(self.Pt, Layer) and hasattr(self.Pt, attr):
         #    setattr(self.Pt, attr, val)
@@ -366,7 +357,7 @@ class Str(Element):
         # when Element is Transparent:
         if self.is_transparent():
             return ''
-        #else: 
+        #else:
         return self()
     
     def __len__(self):
@@ -374,14 +365,14 @@ class Str(Element):
         # When a Str is defined, the length is considered dependent of the Str
         # the Str is dependent of the LenFunc(Len) only 
         # when mapping data into the Element
-        return len( str(self) )
+        return len(self.__str__())
     
     def bit_len(self):
         return len(self)*8
     
     def map_len(self):
         # need special length definition 
-        # when mapping a string to the "Str" element 
+        # when mapping a string to the 'Str' element 
         # that has no fixed length
         #
         # uses LenFunc, applied to Len, when length is variable:
@@ -403,7 +394,7 @@ class Str(Element):
         return shtr(self).left_val(len(self)*8)
     
     def __bin__(self):
-        # does not use the standard python "bin" function to keep 
+        # does not use the standard python 'bin' function to keep 
         # the right number of prefixed 0 bits
         h = hex(self)
         binary = ''
@@ -413,23 +404,23 @@ class Str(Element):
         return binary
     
     def __hex__(self):
-        return self().encode("hex")
+        return self().encode('hex')
     
     def __repr__(self):
         # check for simple representations
         if self.Pt is None and self.Val is None: 
             return repr(None)
-        if self.Repr == "ipv4":
+        if self.Repr == 'ipv4':
             #if self.safe: assert( len(self) == 4 )
             if len(self) != 4:
-                return "0x%s" % hex(self)
-            return inet_ntoa( str(self) )
-        elif self.Repr == "hex": 
-            ret = "0x%s" % hex(self)
-        elif self.Repr == "bin": 
-            ret = "0b%s" % self.__bin__()
+                return '0x%s' % hex(self)
+            return inet_ntoa( self.__str__() )
+        elif self.Repr == 'hex': 
+            ret = '0x%s' % hex(self)
+        elif self.Repr == 'bin': 
+            ret = '0b%s' % self.__bin__()
         # check for the best human-readable representation
-        elif self.Repr == "hum":
+        elif self.Repr == 'hum':
             # standard return
             ret = repr( self() )
             # complex return:
@@ -457,8 +448,8 @@ class Str(Element):
     
     # some more methods for checking Element's attributes:
     def getattr(self):
-        return ["CallName", "ReprName", "Pt", "PtFunc", "Val", "Len", \
-                "LenFunc", "Type", "Repr", "Trans", "TransFunc"]
+        return ['CallName', 'ReprName', 'Pt', 'PtFunc', 'Val', 'Len',
+                'LenFunc', 'Type', 'Repr', 'Trans', 'TransFunc']
     
     def showattr(self):
         for a in self.getattr():
@@ -521,21 +512,21 @@ class Int(Element):
                transparency aspect: used e.g. for conditional element;
     '''
     # endianness is 'little' or 'big'
-    _endian = "big"
+    _endian = 'big'
     # types format for struct library
     # 24 (16+8), 40 (32+8), 48 (32+16), 56 (32+16+8)
-    _types = { "int8":"b", "int16":"h", "int32":"i", "int64":"q",
-               "int24":None, "int40":None, "int48":None, "int56":None,
-               "uint8":"B", "uint16":"H", "uint32":"I", "uint64":"Q",
-               "uint24":None, "uint40":None, "uint48":None, "uint56":None }
+    _types = { 'int8':'b', 'int16':'h', 'int32':'i', 'int64':'q',
+               'int24':None, 'int40':None, 'int48':None, 'int56':None,
+               'uint8':'B', 'uint16':'H', 'uint32':'I', 'uint64':'Q',
+               'uint24':None, 'uint40':None, 'uint48':None, 'uint56':None }
     #
     # for object representation
-    _reprs = ["hex", "bin", "hum"]
+    _reprs = ['hex', 'bin', 'hum']
     
-    def __init__(self, CallName="", ReprName=None, 
+    def __init__(self, CallName='', ReprName=None, 
                  Pt=None, PtFunc=None, Val=None, 
-                 Type="int32", Dict=None, DictFunc=None,
-                 Repr="hum", 
+                 Type='int32', Dict=None, DictFunc=None,
+                 Repr='hum', 
                  Trans=False, TransFunc=None):
         if CallName or not self.CallName:
             self.CallName = CallName
@@ -553,42 +544,39 @@ class Int(Element):
         self.Trans = Trans
         self.TransFunc = TransFunc
         # automated attributes:
-        self.Len = int(self.Type.lstrip("uint"))//8
+        self.Len = int(self.Type.lstrip('uint'))//8
     
     def __setattr__(self, attr, val):
         # ensures no bullshit is provided into element's attributes 
         # (however, it is not a complete test...)
         if self.safe:
-            if attr == "CallName":
+            if attr == 'CallName':
                 if type(val) is not str or len(val) == 0:
-                    raise AttributeError("CallName must be a non-null string")
-            elif attr == "ReprName":
+                    raise AttributeError('CallName must be a non-null string')
+            elif attr == 'ReprName':
                 if type(val) is not str:
-                    raise AttributeError("ReprName must be a string")
-            elif attr == "PtFunc":
+                    raise AttributeError('ReprName must be a string')
+            elif attr == 'PtFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("PtFunc must be a function")
-            elif attr == "Val":
+                    raise AttributeError('PtFunc must be a function')
+            elif attr == 'Val':
                 if val is not None and not isinstance(val, (int, long)):
-                    raise AttributeError("Val must be an int or long")
-            elif attr == "Type":
+                    raise AttributeError('Val must be an int or long')
+            elif attr == 'Type':
                 if val not in self._types.keys():
-                    raise AttributeError("Type must be in: %s" % self._types)
-            #elif attr == "Dict":
-            #    if val is not None and hasattr(val, '__getitem__') is False:
-            #        raise AttributeError('Dict must support the "__getitem__" method')
-            elif attr == "DictFunc":
+                    raise AttributeError('Type must be in: %s' % self._types)
+            elif attr == 'DictFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("DictFunc must be a function")
-            elif attr == "Repr":
+                    raise AttributeError('DictFunc must be a function')
+            elif attr == 'Repr':
                 if val not in self._reprs:
-                    raise AttributeError("Repr %s does not exist, use in: %s" \
+                    raise AttributeError('Repr %s does not exist, use in: %s' \
                           % (val, self._reprs))
-            elif attr == "TransFunc":
+            elif attr == 'TransFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("TransFunc must be a function")
+                    raise AttributeError('TransFunc must be a function')
         if attr == 'Type':
-            self.Len = int(val.lstrip("uint"))//8
+            self.Len = int(val.lstrip('uint'))//8
         object.__setattr__(self, attr, val)
     
     def __call__(self):
@@ -659,9 +647,9 @@ class Int(Element):
     
     def __repr__(self):
         if self.Pt is None and self.Val is None: return repr(None)
-        if self.Repr == "hex": return "0x%s" % hex(self)
-        elif self.Repr == "bin": return "0b%s" % self.__bin__()
-        elif self.Repr == "hum":
+        if self.Repr == 'hex': return '0x%s' % self.__hex__()
+        elif self.Repr == 'bin': return '0b%s' % self.__bin__()
+        elif self.Repr == 'hum':
             value = self()
             if self.DictFunc:
                 if self.safe:
@@ -679,8 +667,8 @@ class Int(Element):
             return rep
     
     def getattr(self):
-        return ["CallName", "ReprName", "Pt", "PtFunc", "Val", "Len", \
-                "Type", "Dict", "DictFunc", "Repr", "Trans", "TransFunc"]
+        return ['CallName', 'ReprName', 'Pt', 'PtFunc', 'Val', 'Len',
+                'Type', 'Dict', 'DictFunc', 'Repr', 'Trans', 'TransFunc']
     
     def showattr(self):
         for a in self.getattr():
@@ -721,8 +709,8 @@ class Int(Element):
     
     def __pack(self):
         # manage endianness (just in case...)
-        if self._endian == "little": e = "<"
-        else: e = ">"
+        if self._endian == 'little': e = '<'
+        else: e = '>'
         if self.Type[-2:] in ('t8', '16', '32', '64'):
             return pack(e+self._types[self.Type], self())
         elif self.Type[0] == 'u':
@@ -771,6 +759,7 @@ class Int(Element):
         add = 8 - self.Len
         X = int(self.Type[-2:])
         if e == '<':
+            # TODO
             pass
         else:
             ret = unpack('>Q', add*'\0' + string)[0]
@@ -804,12 +793,12 @@ class Bit(Element):
                transparency aspect: used e.g. for conditional element;
     '''
     # for object representation
-    _reprs = ["hex", "bin", "hum"]
+    _reprs = ['hex', 'bin', 'hum']
     
-    def __init__(self, CallName="", ReprName=None, 
+    def __init__(self, CallName='', ReprName=None, 
                  Pt=None, PtFunc=None, Val=None, 
                  BitLen=1, BitLenFunc=None,
-                 Dict=None, DictFunc=None, Repr="bin", 
+                 Dict=None, DictFunc=None, Repr='bin', 
                  Trans=False, TransFunc=None):
         if CallName or not self.CallName:
             self.CallName = CallName
@@ -832,34 +821,31 @@ class Bit(Element):
         # ensures no bullshit is provided into element's attributes 
         # (however, it is not a complete test...)
         if self.safe:
-            if attr == "CallName":
+            if attr == 'CallName':
                 if type(val) is not str or len(val) == 0:
-                    raise AttributeError("CallName must be a non-null string")
-            elif attr == "ReprName":
+                    raise AttributeError('CallName must be a non-null string')
+            elif attr == 'ReprName':
                 if type(val) is not str:
-                    raise AttributeError("ReprName must be a string")
-            elif attr == "PtFunc":
+                    raise AttributeError('ReprName must be a string')
+            elif attr == 'PtFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("PtFunc must be a function")
-            elif attr == "Val":
+                    raise AttributeError('PtFunc must be a function')
+            elif attr == 'Val':
                 if val is not None and not isinstance(val, (int, long)):
-                    raise AttributeError("Val must be an int")
-            elif attr == "BitLenFunc":
+                    raise AttributeError('Val must be an int')
+            elif attr == 'BitLenFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("BitLenFunc must be a function")
-            #elif attr == "Dict":
-            #    if val is not None and hasattr(val, '__getitem__') is False:
-            #        raise AttributeError('Dict must support the "__getitem__" method')
-            elif attr == "DictFunc":
+                    raise AttributeError('BitLenFunc must be a function')
+            elif attr == 'DictFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("DictFunc must be a function")
-            elif attr == "Repr":
+                    raise AttributeError('DictFunc must be a function')
+            elif attr == 'Repr':
                 if val not in self._reprs:
-                    raise AttributeError("Repr %s does not exist, use in: %s" \
+                    raise AttributeError('Repr %s does not exist, use in: %s' \
                           % (val, self._reprs))
-            elif attr == "TransFunc":
+            elif attr == 'TransFunc':
                 if val is not None and not isinstance(val, type_funcs) :
-                    raise AttributeError("TransFunc must be a function")
+                    raise AttributeError('TransFunc must be a function')
         object.__setattr__(self, attr, val)
     
     def __call__(self):
@@ -913,8 +899,6 @@ class Bit(Element):
                 assert( type(self.BitLen) is int )
             return self.BitLen
     
-    # map_len() is a-priori not needed in "Int" element, 
-    # but still kept for Element uniformity
     def map_len(self):
         bitlen = self.bit_len()
         if bitlen % 8:
@@ -927,7 +911,7 @@ class Bit(Element):
             return ''
         hexa = hex(self())[2:]
         if hexa[-1] == 'L':
-            # thx to python to add 'L' for long on hex repr...
+            # thx to Python to add 'L' for long on hex repr...
             hexa = hexa[:-1]
         if self.bit_len()%4: 
             return '0'*(self.bit_len()//4 + 1 - len(hexa)) + hexa
@@ -945,9 +929,9 @@ class Bit(Element):
         return (bitlen - len(binary))*'0' + binary
         
     def __repr__(self):
-        if self.Repr == "hex": return "0x%s" % self.__hex__()
-        elif self.Repr == "bin": return "0b%s" % self.__bin__()
-        elif self.Repr == "hum":
+        if self.Repr == 'hex': return '0x%s' % self.__hex__()
+        elif self.Repr == 'bin': return '0b%s' % self.__bin__()
+        elif self.Repr == 'hum':
             value = self()
             if self.DictFunc:
                 if self.safe:
@@ -966,12 +950,12 @@ class Bit(Element):
             return rep
     
     def getattr(self):
-        return ["CallName", "ReprName", "Pt", "PtFunc", "Val", "BitLen", \
-                "BitLenFunc", "Dict", "DictFunc", "Repr", "Trans", "TransFunc"]
+        return ['CallName', 'ReprName', 'Pt', 'PtFunc', 'Val', 'BitLen',
+                'BitLenFunc', 'Dict', 'DictFunc', 'Repr', 'Trans', 'TransFunc']
     
     def showattr(self):
         for a in self.getattr():
-            if a == "Dict" and self.Dict is not None: 
+            if a == 'Dict' and self.Dict is not None: 
                 print('%s : %s' % ( a, self.__getattribute__(a).__class__) )
             else: 
                 print('%s : %s' % ( a, repr(self.__getattribute__(a))) )
@@ -1010,6 +994,9 @@ class Bit(Element):
             return shtring << bitlen
 
 
+#------------------------------------------------------------------------------#
+# Layer definition
+#------------------------------------------------------------------------------#
 class Layer(object):
     '''
     class built from stack of "Str", "Int", "Bit" and "Layer" objects
@@ -1036,16 +1023,18 @@ class Layer(object):
     a common handling:
     __str__, __len__, __int__, bit_len, getattr, showattr, show, map
     '''
+    #
     # debugging threshold for Layer:
     dbg = ERR
     # add some sanity checks
     safe = True
+    #safe = False
     # define the type of str() and map() method
     _byte_aligned = True
     # reserved attributes:
-    Reservd = ['CallName', 'ReprName', 'elementList', 'Len', 'BitLen', \
-                'hierarchy', 'inBlock', 'Trans', 'ConstructorList', \
-                'dbg', 'Reservd']
+    Reservd = ['CallName', 'ReprName', 'elementList', 'Len', 'BitLen',
+               'hierarchy', 'inBlock', 'Trans', 'ConstructorList',
+               'dbg', 'Reservd']
     #
     # represent transparent elements in __repr__()
     _repr_trans = True
@@ -1057,7 +1046,7 @@ class Layer(object):
         if type(CallName) is not str:
             raise AttributeError('CallName must be a string')
         elif len(CallName) == 0:
-            self.CallName = split('\.', str(self.__class__))[-1][:-2]
+            self.CallName = self.__class__.__name__
         else:
             self.CallName = CallName
         if type(ReprName) is str and len(ReprName) > 0: 
@@ -1078,13 +1067,13 @@ class Layer(object):
             if isinstance(e, (Element, Layer)):
                 if e.CallName in self.Reservd:
                     if self.safe or self.dbg >= ERR:
-                        log(self.dbg, '(Layer - %s) using a reserved '
+                        log(ERR, '(Layer - %s) using a reserved '
                             'attribute as CallName %s: aborting...' \
                           % (self.__class__, e.CallName))
                     return
                 if e.CallName in CallNames:
                     if self.dbg >= WNG:
-                        log(self.dbg, '(Layer - %s) different elements have ' \
+                        log(WNG, '(Layer - %s) different elements have ' \
                            'the same CallName %s' % (self.__class__, e.CallName))
                 if isinstance(e, Element):
                     self.append(e.clone())
@@ -1108,7 +1097,7 @@ class Layer(object):
             elif hasattr(e, 'Len') and type(e.Len) is int:
                 self.BitLen += (e.Len)*8
             else:
-                self.BitLen, self.Len = "var", "var"
+                self.BitLen, self.Len = 'var', 'var'
                 break
         if type(self.BitLen) is int :
             if self.BitLen % 8:
@@ -1124,7 +1113,7 @@ class Layer(object):
         # check additional args that would correspond to contained Element
         args = kwargs.keys()
         if self.dbg >= DBG:
-            print(DBG, '(%s) init kwargs: %s' % (self.__class__, args))
+            log(DBG, '(Layer - %s) init kwargs: %s' % (self.__class__, args))
         for e in self:
             if hasattr(e, 'CallName') and hasattr(e, 'Pt') \
             and e.CallName in args:
@@ -1165,8 +1154,8 @@ class Layer(object):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
             if self.dbg >= WNG and element.CallName in CallNames:
-                log(WNG, '(Layer - %s) different elements have same CallName %s' \
-                    % (self.__class__, element.CallName))
+                log(WNG, '(Layer - %s) different elements have the same '\
+                         'CallName %s' % (self.__class__, element.CallName))
             self.elementList.append(element)
     
     def __lshift__(self, element):
@@ -1180,8 +1169,8 @@ class Layer(object):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
             if self.dbg >= WNG and element.CallName in CallNames:
-                log(WNG, '(Layer - %s) different elements have same CallName %s' \
-                    % (self.__class__, element.CallName))
+                log(WNG, '(Layer - %s) different elements have the same '\
+                         'CallName %s' % (self.__class__, element.CallName))
             self.elementList.insert(index, element)
     
     def __rshift__(self, element):
@@ -1283,7 +1272,7 @@ class Layer(object):
         # dispatch to the right method depending of byte alignment
         if self._byte_aligned is True:
             return self.__str_aligned()
-        elif self._byte_aligned is False:
+        else:
             return self.__str_unaligned()
     
     def __str_unaligned(self):
@@ -1351,9 +1340,6 @@ class Layer(object):
                         BitStream = BitStream[8:]
                         if len(BitStream) < 8:
                             break
-                    #while BitStream:
-                    #    s += pack('!B', int(BitStream[:8], 2))
-                    #    BitStream = BitStream[8:]
                 if self.dbg >= DBG:
                     log(DBG, '(Element) %s: %s, %s\nBitstream: %s' \
                         % (e.CallName, e(), e.__bin__(), BitStream))
@@ -1380,10 +1366,13 @@ class Layer(object):
                 assert(not BitStream)
     
     def __call__(self):
-        return str(self)
+        return self.__str__()
     
     def __len__(self):
-        return len( str(self) )
+        return len(self.__str__())
+    
+    def shtr(self):
+        return shtr(self.__str__())
     
     def bit_len(self):
         # just go over all internal elements to track their own bit length
@@ -1404,7 +1393,7 @@ class Layer(object):
         if bit_len%4:
             hex_len += 1
         #
-        return str(self).encode('hex')[:hex_len]
+        return self.__str__().encode('hex')[:hex_len]
     
     def __bin__(self):
         bits = []
@@ -1412,13 +1401,6 @@ class Layer(object):
             bits.append( e.__bin__() )
         return ''.join(bits)
     
-    # I never used this crappy definition of __int__()
-    # (or I do not remember uf such a mess),
-    def __int__old(self):
-        # really silly... still can be convinient: who knows?
-        return len( str(self) )
-    
-    # but now (03/10/2013), I need a correct one
     def __int__(self):
         # big endian integer representation of the string buffer
         if self._byte_aligned:
@@ -1453,29 +1435,6 @@ class Layer(object):
     def clone(self):
         return deepcopy(self)
     
-    def clone2(self):
-        clone = self.__class__()
-        clone.CallName, clone.ReprName, clone.Len, clone.elementList = \
-            self.CallName, self.ReprName, self.Len, []
-        for e in self:
-            # TODO:
-            # when cloning dynamic elements (using PtFunc, LenFunc, 
-            # DictFunc, TransFunc), the object pointed
-            # is not updated in the clone...
-            if isinstance(e, Element):
-                if self.dbg >= WNG:
-                    log(WNG, '(Layer - %s) cloning element %s does not update' \
-                        ' dynamic elements' % (self.__class__, e.CallName))
-                clone.append(e.clone())
-            elif isinstance(e, Layer):
-                if self.dbg >= WNG:
-                    log(WNG, '(Layer - %s) cloning layer %s in layer is ' \
-                        'actually only done by reference, no copy' \
-                        % (self.__class__, e.CallName))
-                clone.append(e)
-        clone.set_hierarchy(self.hierarchy)
-        return clone
-    
     def is_transparent(self):
         if self.Trans:
             return True
@@ -1493,14 +1452,6 @@ class Layer(object):
             tr = ' - transparent'
         # Layer content
         str_lst = [e.show().replace('\n', '\n ') for e in self]
-        #str_lst = []
-        #for e in self:
-        #    if not e.is_transparent() and hasattr(e, 'Pt') \
-        #    and isinstance(e.Pt, Layer):
-        #        str_lst.append(e.Pt.show(with_trans).replace('\n', '\n '))
-        #    else:
-        #        str_lst.append(e.show(with_trans).replace('\n', '\n '))
-        #
         # insert spaces for nested layers and filter out empty content
         str_lst = [' %s\n' % s for s in str_lst if s]
         # insert layer's title
@@ -1517,7 +1468,7 @@ class Layer(object):
         # dispatch to the right method depending of byte alignment
         if self._byte_aligned is True:
             self.__map_aligned(string)
-        elif self._byte_aligned is False:
+        else:
             self.__map_unaligned(string)
     
     def __map_unaligned(self, string=''):
@@ -1716,14 +1667,16 @@ class Layer(object):
 
 class RawLayer(Layer):
     constructorList = [
-        Str(CallName="s", Pt="", Len=None),
+        Str(CallName='s', Pt='', Len=None),
         ]
     
-    def __init__(self, s=""):
-        Layer.__init__(self, CallName="raw")
+    def __init__(self, s=''):
+        Layer.__init__(self, CallName='raw')
         self.s.Pt = s
 
-
+#------------------------------------------------------------------------------#
+# Block definition
+#------------------------------------------------------------------------------#
 class Block(object):
     '''
     class to build a block composed of "Layer" objects
@@ -1744,7 +1697,7 @@ class Block(object):
     
     def __init__(self, Name=''):
         if type(Name) is not str:
-            raise AttributeError("CallName must be a string")
+            raise AttributeError('CallName must be a string')
         self.CallName = Name
         self.layerList = []
         self.set_hierarchy(0)
@@ -1854,17 +1807,10 @@ class Block(object):
         return s
     
     def shtr(self):
-        return shtr(str(self))
+        return shtr(self.__str__())
     
     def __len__(self):
-        return len( str(self) )
-    
-    # I never used this crappy definition of __int__()
-    # (or I do not remember uf such a mess),
-    # but now (03/10/2013), I need a correct one
-    def __int__old(self):
-        # really silly... still can be convinient: how knows?
-        return len( str(self) )
+        return len(self.__str__())
     
     def __int__(self):
         # big endian integer representation of the string buffer
@@ -1916,39 +1862,39 @@ class Block(object):
             if hasattr(l, 'reautomatize'):
                 l.reautomatize()
 
-##################
-# test functions #
-##################
 
+#------------------------------------------------------------------------------#
+# testing routines 
+#------------------------------------------------------------------------------#
 class testTLV(Layer):
     constructorList = [
-        Int(CallName="T", ReprName="Tag", Type="uint8", \
-            Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
-        Bit(CallName='F1', ReprName="Flag1", Pt=0, BitLen=1),
-        Bit(CallName='F2', ReprName="Flag2", Pt=1, BitLen=1),
-        Bit(CallName='res', ReprName='Reserved', Pt=0, BitLen=14),
-        Int(CallName="L", ReprName="Length", Type="uint8" ),
-        Str(CallName="V", ReprName="Value", Pt='default value'),
+        Int(CallName='T', ReprName='Tag', Type='uint8', \
+            Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
+        Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=1),
+        Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
+        Bit(CallName='res', ReprName='Reserved', Pt=0, BitLen=13),
+        # length in bytes (including header)
+        Int(CallName='L', ReprName='Length', Type='uint8' ),
+        Str(CallName='V', ReprName='Value', Pt='default value'),
         ]
 
-    def __init__(self, name='test', T=5, V='blablabla'):
-        Layer.__init__(self, CallName=name)
-        self.T.Pt = T
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
         self.L.Pt = self.V
         self.L.PtFunc = lambda X: len(X)+3
-        self.V.Pt = V
         self.V.Len = self.L
         self.V.LenFunc = lambda X: int(X)-3
 
 class testA(Layer):
     _byte_aligned = False
     constructorList = [
-        Bit(CallName="T", ReprName="Tag", BitLen=6, Repr='hum', \
-            Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
-        Bit(CallName='F1', ReprName="Flag1", Pt=0, BitLen=4),
-        Bit(CallName='F2', ReprName="Flag2", Pt=1, BitLen=2),
-        Int(CallName="L", ReprName="Length", Type="uint8", Repr='hum'),
-        Str(CallName="V", ReprName="Value", Pt='default value'),
+        Bit(CallName='T', ReprName='Tag', BitLen=6, Repr='hum',
+            Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
+        Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=4),
+        Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
+        # length in bytes
+        Int(CallName='L', ReprName='Length', Type='uint8', Repr='hum'),
+        Str(CallName='V', ReprName='Value', Pt='default value'),
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
@@ -1960,13 +1906,14 @@ class testA(Layer):
 class testB(Layer):
     _byte_aligned = False
     constructorList = [
-        Bit(CallName="T", ReprName="Tag", BitLen=6, Repr='hum', \
-            Dict={0:"Reserved", 1:"Tag1", 2:"Tag2", 5:"Tag5"}),
-        Bit(CallName='F1', ReprName="Flag1", Pt=0, BitLen=4),
-        Bit(CallName='F2', ReprName="Flag2", Pt=1, BitLen=2),
-        Int(CallName="L", Pt=0, ReprName="Length", Type="uint16", Repr='bin'),
-        testA(V='super mega default value'),
-        testA(V='ultra colored'),
+        Bit(CallName='T', ReprName='Tag', BitLen=6, Repr='hum', \
+            Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
+        Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=4),
+        Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
+        # length in bits
+        Int(CallName='L', Pt=0, ReprName='Length', Type='uint16', Repr='hum'),
+        testA(T=1, V='super mega default value'),
+        testA(T=2, V='ultra colored'),
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
