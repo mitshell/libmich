@@ -1,0 +1,63 @@
+Test1 DEFINITIONS AUTOMATIC TAGS ::=
+BEGIN
+    
+    TestInt ::= INTEGER {un(1), deux(2)} (0..100, ...)
+    TestEnum ::= ENUMERATED {un , deux, trois}
+    TestBitStr ::= BIT STRING (SIZE(12..24, ...))
+    TestOctetStr ::= OCTET STRING (SIZE(4..10))
+    TestChoice ::= CHOICE {
+        a TestInt,
+        b TestEnum,
+        c TestBitStr
+        }
+    TestSeqOf ::= SEQUENCE SIZE (1..4) OF TestInt
+    TestSeq ::= SEQUENCE {
+        a TestInt,
+        b TestEnum OPTIONAL,
+        c TestBitStr
+        }
+    TestSeqSeq ::= SEQUENCE {
+        a TestSeq,
+        b SEQUENCE OF TestSeq,
+        c TestChoice
+        }
+
+END
+
+Test2 DEFINITIONS AUTOMATIC TAGS ::=
+BEGIN
+    
+    F ::= INTEGER
+    f1 F ::= 13
+    f2 F ::= f1
+    
+    A {INTEGER:i1, INTEGER:i2, INTEGER:i3} ::= SEQUENCE (SIZE(i1..i2)) OF INTEGER (0..i3, ...)
+    AA ::= A {0, 1, 2}
+    B {INTEGER:i3} ::= A {1, f2, i3}
+    BB ::= B {100}
+    C {INTEGER:j1, INTEGER:i3} ::= SEQUENCE (SIZE(j1..20)) OF A {f2, 2, i3}
+    CC {INTEGER:j1} ::= C {j1, 200}
+    CCC ::= CC {f2}
+    D ::= SEQUENCE {
+        d1 CC { 3 },
+        d2 BOOLEAN
+        }
+    E {INTEGER:k1} ::= SEQUENCE {
+        e1 INTEGER (0..f2),
+        e2 BOOLEAN
+        }
+    
+    M ::= CLASS {
+        &id INTEGER (0..10, ...) UNIQUE,
+        &Value
+        } WITH SYNTAX {
+        ID &id
+        VAL &Value
+        }
+    m1 M ::= { ID 1 VAL AA }
+    M2 M ::= { m1 | {ID 2 VAL BB} | {ID 5 VAL CCC} }
+    N ::= SEQUENCE {
+        ident M.&id ({M2}),
+        val M.&Value ({M2}@{ident})
+        }
+END
