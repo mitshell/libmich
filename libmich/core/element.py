@@ -1918,4 +1918,58 @@ class testB(Layer):
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
         self.L.PtFunc = lambda X: self[4].bit_len() + self[5].bit_len()
+
+def test0():
+    Int._endian = 'big'
+    # aligned
+    buf = '\x02\x22\xBB\x0Aabcdefg'
+    T0 = testTLV()
+    rest = T0.map_ret(buf)
+    if str(T0) != buf:
+        raise(Exception)
+    T0.reautomatize()
+    if str(T0) != buf:
+        raise(Exception)
+
+def test1():
+    Int._endian = 'big'
+    # non-aligned
+    buf = '\xB0B\x07abcdefg'*4
+    T1 = testA()
+    rest = T1.map_ret(buf)
+    if str(T1) != '\xb0B\x07abcdefg\xb0B\x07abcdefg\xb0B\x07abcdefg\xb0B\x07a`':
+        raise(Exception)
+    if str(rest)[:6] != '&6FVfp':
+        raise(Exception)
+    T1.reautomatize()
+    if str(T1) != '\xb0B\x07abcdefg\xb0B\x07abcdefg\xb0B\x07abcdefg\xb0B\x07a`':
+        raise(Exception)
+
+def test2():
+    Int._endian = 'big'
+    # non-aligned
+    T2 = testB()
+    if str(T2) != '\x00\x10\x15\x00A\x18super mega default value\x08\x10\xd7'\
+                  'V\xc7G&\x12\x066\xf6\xc6\xf7&V@':
+        raise(Exception)
+    buf = '\xc9\xd0B\x84v \xf2\x84\r*\xe0\xcc_\x8f\xfb\xc0\xcb\xc5\x8f\xdf\x88%\xb3'\
+    'I\xc0\xe5*}]\xd7;R\x13\x87}\xa2E\xb1(\xb6\x03W`\x84&Z\x8a:eTv\xa6C\xb8\xd1'\
+    '\xc48W\xa9\x82\xb1\xb89%\xc8\x18\x0b\x9e\xb7\xd6\x02\xb4\xaf\xc3J];k\x12\xf6'\
+    '\xf9\x89\xb5\xdf\x92\xf8\xf0\xe7\t.0\xc2\x9c\xcd\xcb\xff1\xbd\x16K7\x1f\x95'\
+    '\xbe\xbb\xda\xa8\xda\xb2\xe1x\x91U{\xf8\x06\xc1\x14\xc4%\xab\xe7S.\xac`[c'\
+    '\xa8H/\x92\x8cRw\xfcpAAAA'
+    rest = T2.map_ret(buf)
+    if str(T2) != buf[:-4]:
+        raise(Exception)
+    if str(rest)[:5] != '\x04\x14\x14\x14\x10':
+        raise(Exception)
+    T2.reautomatize()
+    if str(T2) != buf[:-4]:
+        raise(Exception)
+
+def test():
+    test0()
+    test1()
+    test2()
+#
 #
