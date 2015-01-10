@@ -398,7 +398,7 @@ class Str(Element):
         # the right number of prefixed 0 bits
         h = hex(self)
         binary = ''
-        for i in range(0, len(h), 2):
+        for i in xrange(0, len(h), 2):
             b = format( int(h[i:i+2], 16), 'b' )
             binary += ( 8-len(b) ) * '0' + b
         return binary
@@ -688,15 +688,14 @@ class Int(Element):
         return clone
     
     def map(self, string=''):
-        # error log will be done by the Layer().map() method
-        # but do this not to throw exception
-        if len(string) < self.Len:
-            if self.dbg >= WNG:
-                log(WNG, '(%s) %s map(string) : string not long enough' \
-                    % (self.__class__, self.CallName))
-            return
-        # standard handling
         if not self.is_transparent():
+            # error log will be done by the Layer().map() method
+            # but do this not to throw exception
+            if len(string) < self.Len:
+                if self.dbg >= WNG:
+                    log(WNG, '(%s) %s map(string) : string not long enough' \
+                        % (self.__class__, self.CallName))
+                return
             self.Val = self.__unpack(string[:self.Len])
     
     def map_ret(self, string=''):
@@ -1138,7 +1137,7 @@ class Layer(object):
         if not j or j > maxj:
             j = maxj
         #
-        for k in range(i, j):
+        for k in xrange(i, j):
             l.append( self[k] )
         return l
     
@@ -1278,46 +1277,46 @@ class Layer(object):
     def __str_unaligned(self):
         # then init resulting string 
         # and bit offset needed to shift unaligned strings
-        s, off = shtr(''), 0
+        s = []
+        off = 0
         # loop on each element into the Layer
         # also on Layer into Layer...
         for e in self:
             shtr_e, bitlen_e = e.shtr(), e.bit_len()
+            rest_e = bitlen_e % 8
             if self.dbg >= DBG:
                 log(DBG, '(Layer.__str__) %s: %s, %i, offset: %i' \
                     % (e.CallName, hexlify(shtr_e), bitlen_e, off))
-            # check if s is already byte-aligned and e not transparent
+            # if s is not byte-aligned and e is not transparent
+            # update the last component of s
             if off and shtr_e:
                 # 1st update last bits of s with MSB of e, 
                 # before stacking with the rest of e
                 # (8 - off) is the room left in the LSB of s
-                s = ''.join((s[:-1], \
-                             chr(ord(s[-1]) + shtr_e.left_val(8-off)), \
-                             (shtr_e << (8-off))
-                           ))
-                # take care in case the shifting of e nullify its last byte
-                if bitlen_e%8 and (bitlen_e%8) - (8-off) <= 0:
-                    s = s[:-1]
-                # update offset (byte-disalignment)
-                if bitlen_e % 8:
+                s[-1] = ''.join((s[-1][:-1],
+                                  chr(ord(s[-1][-1]) + shtr_e.left_val(8-off)),
+                                  (shtr_e << (8-off))
+                                ))
+                # take care in case the shifting of e voids its last byte
+                if rest_e and rest_e-(8-off) <= 0:
+                    s[-1] = s[-1][:-1]
+                # update offset
+                if rest_e:
                     off += bitlen_e
-                    off = off % 8
-            # in case s is already aligned
+                    off %= 8
+            # in case s is already aligned, append a new component to s
             elif shtr_e:
-                s = ''.join((s, shtr_e))
-                # update offset (byte-disalignment)
-                if bitlen_e % 8:
-                    off += bitlen_e % 8
+                s.append(shtr_e)
+                # update offset
+                if rest_e:
+                    off += rest_e
             if self.dbg >= DBG:
                 log(DBG, '(Layer.__str__) %s' % hexlify(s))
         # well done!
-        return str(s)
-    
-    def shtr(self):
-        return shtr(str(self))
+        return ''.join(s)
     
     def __str_aligned(self):
-        s = ''
+        s = []
         BitStream = ''
         # loop on each element in the Layer
         # also on Layer into Layer...
@@ -1335,8 +1334,8 @@ class Layer(object):
                 # when arriving on a byte boundary from bitstream, 
                 # create bytes and put it into the s variable
                 if len(BitStream) >= 8:
-                    while True:
-                        s += pack('!B', int(BitStream[:8], 2))
+                    while 1:
+                        s.append( pack('!B', int(BitStream[:8], 2)) )
                         BitStream = BitStream[8:]
                         if len(BitStream) < 8:
                             break
@@ -1353,9 +1352,9 @@ class Layer(object):
                 BitStream = ''
                 if isinstance(e, Layer) and not e.Trans \
                 or isinstance(e, Element):
-                    s += str(e)
+                    s.append( str(e) )
         self.__is_aligned(BitStream)
-        return s
+        return ''.join(s)
     
     def __is_aligned(self, BitStream):
         if BitStream and self.dbg >= ERR:
@@ -1480,8 +1479,7 @@ class Layer(object):
                     % (e.CallName, e.bit_len()))
                 log(DBG, '(Layer.__map_unaligned) string: %s' % hexlify(s))
             # this is beautiful
-            e.map(s)
-            s = s << e.bit_len()
+            s = e.map_ret(s)
     
     def __map_aligned(self, string=''):
         # Bit() elements are processed intermediary: 
@@ -1580,8 +1578,7 @@ class Layer(object):
                         % (e.CallName, e.bit_len()))
                     log(DBG, '(Layer.map_ret) string: %s' % hexlify(s))
                 # this is beautiful
-                e.map(s)
-                s = s << e.bit_len()
+                s = e.map_ret(s)
             return s
     
     # define methods when Layer is in a Block:
@@ -1753,7 +1750,7 @@ class Block(object):
         if stop is None:
             self.layerList.remove( self.layerList[start] )
         else:
-            for i in range(start, stop):
+            for i in xrange(start, stop):
                 self.layerList.remove( self.layerList[start] )
     
     # method for Block hierarchy setting
@@ -1800,11 +1797,11 @@ class Block(object):
     
     # standard methods for common management with Layers
     def __str__(self):
-        s = ''
+        s = []
         for l in self:
             if not hasattr(self, 'Trans') or not l.Trans:
-                s += str(l)
-        return s
+                s.append( str(l) )
+        return ''.join(s)
     
     def shtr(self):
         return shtr(self.__str__())
