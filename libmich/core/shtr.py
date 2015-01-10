@@ -27,10 +27,10 @@
 # *--------------------------------------------------------
 #*/ 
 
-#!/usr/bin/env python
+from struct import pack, unpack
 
 # export filter
-__all__ = ['decomposer', 'shtr']
+__all__ = ['decomposer', 'decompose', 'shtr']
 
 # Utility classes to :
 # decompose and recompose integers
@@ -56,14 +56,45 @@ class decomposer(object):
         self._val_dec = []
     
     def decompose(self, val):
-        if val == self.MUL:
-            self._val_dec.extend([0, 1])
-        else:
-            self._val_dec.append( val % self.MUL )
-        if val > self.MUL:
-            val = val / self.MUL
-            self.decompose( val )
+        self._val_dec.append( int(val % self.MUL) )
+        if val >= self.MUL:
+            val = val // self.MUL
+            void = self.decompose( val )
         return self._val_dec
+
+def decompose(MUL=0x100, val=0):
+    '''
+    little utility to decompose an integer into factors from an 
+    exponential (MUL), and returns the list of remainders:
+    
+    example:
+    decompose(0x10, 53) -> [5, 3]
+    this means:
+    53 = 5 + (3 << 4), with 0x10 = 1 << 4
+    
+    more generally:
+    decomposer(1<<X, Y) -> [a, b, c, d ...]
+    means:
+    Y = a + (b << (1<<X)) + (c << (2<<X)) + (d << (3<<X)) ...
+    
+    This is faster than the recursive decomposer().decompose() method
+    '''
+    if MUL == 2:
+        dec = map(int, bin(val)[2:])
+        dec.reverse()
+        return dec
+    elif MUL == 16 and val >= 10000000000:
+        h = hex(val)[2:]
+        if h[-1] == 'L': h = h[:-1]
+        dec = map(int, h, len(h)*[16])
+        dec.reverse()
+        return dec
+    else:
+        dec = [ int(val % MUL) ]
+        while val >= MUL:
+            val //= MUL
+            dec.append( int(val % MUL) )
+        return dec
 
 class shtr(str):
     '''
