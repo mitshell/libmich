@@ -1,5 +1,4 @@
-# −*− coding: UTF−8 −*−
-#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
 
 """
  Translation from a C code posted to a forum on the Internet.

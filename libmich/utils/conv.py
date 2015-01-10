@@ -1,5 +1,4 @@
-# −*− coding: UTF−8 −*−
-#!/usr/bin/env python2
+# -*- coding: UTF-8 -*-
 
 from socket import inet_pton, inet_ntop, \
     AF_INET, AF_INET6

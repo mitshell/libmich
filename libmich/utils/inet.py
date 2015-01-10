@@ -1,5 +1,4 @@
 # −*− coding: UTF−8 −*−
-#!/usr/bin/env python2
 
 import array
 from struct import pack
