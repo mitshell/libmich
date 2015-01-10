@@ -26,4 +26,4 @@
 # *--------------------------------------------------------
 #*/ 
 
-__all__ = ['element', 'shtr', 'fuzz', 'CSN1', 'IANA_dict']
+__all__ = ['element', 'shtr', 'fuzz', 'CSN1', 'IANA_dict', 'shar']
