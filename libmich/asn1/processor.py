@@ -41,8 +41,15 @@ from libmich.utils.repr import *
 from PER import PER
 #ASN1.ASN1Obj.CODEC = PER
 
-
 PICKLE_PROTOCOL = 2
+
+MODULE_NAMES = [\
+    ('rrc3g_25331-c10.asn', 'rrc3g'),
+    ('rrclte_36331-c10.asn', 'rrclte'),
+    ('ranap_25413-c10.asn', 'ranap'),
+    ('s1ap_36413-c10.asn', 's1ap'),
+    ('x2ap_36423-c10.asn', 'x2ap')
+    ]
 
 def compile(texts, create_pickle_name=''):
     '''
@@ -95,8 +102,7 @@ def load_module(name=''):
     '''
     path = '%s%s.pck' % (get_modules_dir(), os.path.basename(name))
     if not os.path.exists(path):
-        log('invalid module name: %s' % name)
-        return
+        raise(ASN1_PROC('invalid module name: %s' % name))
     fd = open(path, 'rb')
     p = pickle.Unpickler(fd)
     try:
@@ -112,6 +118,15 @@ def load_module(name=''):
         elif obj['mode'] == 2:
             GLOBAL.SET[obj_name] = obj
     log('%s: %s objects loaded into GLOBAL' % (name, len(obj_list)))
+
+def generate_modules(mods=MODULE_NAMES):
+    for asn_name, mod_name in mods:
+        asn = '%s%s' % (get_asn_dir(), os.path.basename(asn_name))
+        fd = open(asn, 'r')
+        asntext = fd.read()
+        fd.close()
+        log('processing %s' % asn_name)
+        compile(asntext, mod_name)
 
 def inline(text=''):
     '''
