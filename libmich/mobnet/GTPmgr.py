@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich
-# * Version : 0.2.2
+# * Version : 0.3.0
 # *
 # * Copyright © 2013. Benoit Michau. ANSSI.
 # *
@@ -20,7 +20,7 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : libmich/mobnet/GTPmgr.py
+# * File Name : mobnet/GTPmgr.py
 # * Created : 2013-11-04
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
@@ -59,17 +59,24 @@ Just launch the demon, and add_mobile() / rem_mobile() to add or remove
 GTPU tunnel endpoint.
 
 >>> gsn = GTPUd()
->>> gsn.add_mobile(mobile_IP='192.168.1.201', rnc_IP='10.2.1.1', TEID_from_rnc=0x1, TEID_to_rnc=0x1):
+>>> teid_to_rnc = gsn.add_mobile(mobile_IP='192.168.1.201', rnc_IP='10.2.1.1', TEID_from_rnc=0x1):
 >>> gsn.rem_mobile(mobile_IP='192.168.1.201'):
 
 3) That's all !
 '''
 
 import os
-import signal
+#import signal
+from select import select
+from struct import pack, unpack
+from binascii import hexlify, unhexlify
+from time import time, sleep
+from random import randint
+#
 if os.name != 'nt':
     from fcntl import ioctl
-    from socket import socket, ntohs, htons, timeout, inet_aton, inet_ntoa, error, \
+    from socket import socket, timeout, error, 
+                       ntohs, htons, inet_aton, inet_ntoa, 
                        AF_PACKET, SOCK_RAW, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
 else:
     print('[ERR] GTPmgr : you\'re not on *nix system. It\'s not going to work:\n' \
@@ -78,24 +85,34 @@ else:
 from libmich.formats.GTP import *
 from libmich.mobnet.utils import *
 #
-from struct import pack, unpack
-from select import select
-from binascii import hexlify, unhexlify
-from time import time, sleep
-import thread
-
 # filtering exports
 __all__ = ['GTPUd', 'ARPd', 'DPI']
 
-# global debugging / verbosity level
+# debug level
 DBG = 1
 
 # for getting all kind of ether packets
 ETH_P_ALL = 3
 
-####
-# (un)setting eth IF in promiscuous mode
+#------------------------------------------------------------------------------#
+# GTP-U handler works with Linux PF_PACKET RAW socket on the Internet side
+# and with standard GTP-U 3GPP protocol on the RNC / eNB side
+# RNC / eNB <=== IP/UDP/GTPU/IP_mobile ===> GTPU_handler
+#                GTPU_handler <=== RawEthernet/IP_mobile ===> Internet
+#
+# This way, the complete IP interface of a mobile is exposed through 
+# this Gi interface.
+# It requires the GTPmgr to resolve ARP request on behalf of mobiles 
+# that it handles: this is the role of ARPd
+#------------------------------------------------------------------------------#
+
+#------------------------------------------------------------------------------#
+# setting / unsetting ethernet IF in promiscuous mode                          #
+#------------------------------------------------------------------------------#
 # copied from scapy
+# actually, it seems not to work as expected 
+# -> launching wireshark in promiscuous mode on the IF will do the job otherwise
+
 def set_promisc(sk):
     from fcntl import ioctl
     PACKET_ADD_MEMBERSHIP = 1
@@ -124,29 +141,20 @@ def unset_promisc(sk):
     sk.setsockopt(SOL_PACKET, PACKET_DROP_MEMBERSHIP, 
                   pack("IHH8s", ifind, PACKET_MR_PROMISC, 0, ""))
 
-###
-# GTP-U handler works with Linux PF_PACKET RAW socket on the Internet side
-# and with standard GTP-U 3GPP protocol on the RNC / eNB side
-# RNC / eNB <=== IP/UDP/GTPU/IP_mobile ===> GTPU_handler
-#           GTPU_handler <=== Ethernet/IP_mobile ===> Internet
+#------------------------------------------------------------------------------#
+# ARPd                                                                         #
+#------------------------------------------------------------------------------#
+# It resolves MAC addresses for requested IP addresses
+# and listens for incoming ARP requests to answer them with a given MAC address.
 #
-# This way, the complete IP interface of a mobile is exposed through 
-# this Gi interface.
-# It requires the GTPmgr to resolve ARP request on behalf of mobiles 
-# that it handles
-###
-
-###
-# ARPd:
-# it resolves MAC addresses for requested IP addresses
-# and listens for incoming ARP requests to answer them with a given MAC address
-###
-# when we handle mobiles' IP interfaces over the Gi GGSN interface
+# when we handle mobiles' IP interfaces over the Gi GGSN interface:
+#
 # A] for outgoing packets:
 # 1) for any IP outside of our network, e.g. 192.168.1.0/24:
 # we will provide the ROUTER_MAC_ADDR directly at the GGSN level
 # 2) for local IP address in our subnet:
 # we will resolve the MAC address thanks to ARP request / response
+#
 # B] for incoming packets:
 # we must answer the router's or local hosts' ARP requests
 # before being able to receive IP packets to be transferred to the mobiles
@@ -174,7 +182,7 @@ class ARPd(object):
     # Our GGSN ethernet parameters (IF, MAC and IP addresses)
     # (and also the MAC address to be used for any mobiles through our GGSN)
     GGSN_ETH_IF = 'eth0'
-    GGSN_MAC_ADDR = '\x08\x00\x00\x01\x02\x03'
+    GGSN_MAC_ADDR = '080000010203'.decode('hex')
     GGSN_IP_ADDR = '192.168.1.100'
     #
     # the pool of IP address to be used by our mobiles
@@ -185,7 +193,7 @@ class ARPd(object):
     SUBNET_PREFIX = '192.168.1.'
     # and 1st IP router (MAC and IP addresses)
     # this is to resolve directly any IP outside our subnet
-    ROUTER_MAC_ADDR = '\xf4\x\x00\x00\x01\02\03'
+    ROUTER_MAC_ADDR = 'f40000010203'.decode('hex')
     ROUTER_IP_ADDR = '192.168.1.1'
     
     def __init__(self):
@@ -268,27 +276,26 @@ class ARPd(object):
                 # reply to it with our MAC ADDR
                 try:
                     self.sk_arp.sendto(
-                        ''.join(('%s%s' % (buf[6:12], self.GGSN_MAC_ADDR), \
-                                 '\x08\x06\0\x01\x08\0\x06\x04\0\x02', \
-                                 '%s%s%s%s' % (self.GGSN_MAC_ADDR, buf[38:42], \
-                                               buf[6:12], buf[28:32]), \
-                                 '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')), \
-                        (self.GGSN_ETH_IF, 0x0806))
+                     '{0}{1}\x08\x06\0\x01\x08\0\x06\x04\0\x02{2}{3}{4}{5}'\
+                     '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'.format(
+                      buf[6:12], self.GGSN_MAC_ADDR, self.GGSN_MAC_ADDR,
+                      buf[38:42], buf[6:12], buf[28:32]),
+                     (self.GGSN_ETH_IF, 0x0806))
                 except:
-                    pass
+                    self._log('Exception on ARP socket sendto (ARP response)')
                 else:
                     if self.DEBUG > 1:
-                        self._log('ARP response sent for our IP %s' % ipreq)
+                        self._log('ARP response sent for IP: %s' % ipreq)
         # 2) check if it responses something useful for us
         elif arpop == 2:
             ipres = inet_ntoa(buf[28:32])
-            if ipres[:11] == self.SUBNET_PREFIX and ipres not in self.ARP_RESOLV_TABLE:
+            if ipres[:11] == self.SUBNET_PREFIX \
+            and ipres not in self.ARP_RESOLV_TABLE:
                 self.ARP_RESOLV_TABLE[ipres] = buf[22:28]
                 if self.DEBUG > 1:
                     self._log('got ARP response for new local IP %s' % ipres)
     
     def _process_ipbuf(self, buf=''):
-        #self._log('recv() IPv4')
         # this is an IPv4 packet : check if src IP is in our subnet
         ipsrc = inet_ntoa(buf[26:30])
         if ipsrc[:11] == self.SUBNET_PREFIX and ipsrc not in self.ARP_RESOLV_TABLE:
@@ -308,20 +315,25 @@ class ARPd(object):
             # else, need to request it live on the Ethernet link
             # response will be handled by .listen()
             try:
-                self.sk_arp.sendto( \
-                    ''.join(('\xFF\xFF\xFF\xFF\xFF\xFF%s' % self.GGSN_MAC_ADDR, \
-                             '\x08\x06\0\x01\x08\0\x06\x04\0\x01', \
-                             '%s%s\0\0\0\0\0\0%s' % (self.GGSN_MAC_ADDR, inet_aton(self.GGSN_IP_ADDR), \
-                                                     inet_aton(ip)), \
-                             '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')), \
-                    (self.GGSN_ETH_IF, 0x0806))
+                self.sk_arp.sendto(
+                 '\xFF\xFF\xFF\xFF\xFF\xFF{0}\x08\x06\0\x01\x08\0\x06\x04'\
+                 '\0\x01{1}{2}{3}\0\0\0\0\0\0%s\0\0\0\0\0\0\0\0\0\0\0\0\0\0'\
+                 '\0\0\0\0'.format(
+                   self.GGSN_MAC_ADDR, self.GGSN_MAC_ADDR, 
+                   inet_aton(self.GGSN_IP_ADDR), inet_aton(ip)),
+                 (self.GGSN_ETH_IF, 0x0806))
             except:
-                pass
+                self._log('Exception on ARP socket sendto (ARP request)')
             else:
                 if self.DEBUG > 1:
-                    self._log('ARP request sent for IP %s' % ip)
-            sleep(0.05)
-            if ip in self.ARP_RESOLV_TABLE:
+                    self._log('ARP request sent for our IP %s' % ip)
+            cnt = 0
+            while ip not in self.ARP_RESOLV_TABLE:
+                sleep(self.SELECT_SLEEP)
+                cnt += 1
+                if cnt >= 3:
+                    break
+            if cnt < 3:
                 return self.ARP_RESOLV_TABLE[ip]
             else:
                 return 6*'\xFF'
@@ -329,32 +341,43 @@ class ARPd(object):
             return self.ROUTER_MAC_ADDR
 
 
-################
-# GTPU handler #
-################
-# This is to be instantiated as a unique handler for all GTPU tunnels
-# by the core network signalling server (SGSN-GGSN-MME...)
-# Then, it is possible to add() or rem() GTP tunnel endpoints at will, 
-# for each mobile
+#------------------------------------------------------------------------------#
+# GTPUd                                                                        #
+#------------------------------------------------------------------------------#
+# This is to be instanciated as a unique handler for all GTPU tunnels
+# in the core network.
+# Then, it is possible to add or remove GTP tunnel endpoints at will, 
+# for each mobile:
+# add_mobile(mobile_ip, rnc_ip, teid_from_rnc)
+#   -> returns teid_to_rnc for the given mobile
+# rem_mobile(mobile_ip)
+#   -> returns None 
 #
-# When a GTP-U packet arrives, it can be transferred to the Gi interface
+# When a GTP-U packet arrives on the internal interface,
+# it is transferred to the external Gi interface.
+# When an Ethernet packet arrives in the external Gi interface,
+# it is transferred to the internal interface.
 #
-# A little traffic statistics feature can be run with class attribute .DPI = True
+# A little traffic statistics feature can be used
+# DPI = True
 # Traffic statistics are then placed into the attribute .stats
-# it is populated even if GTP trafic is not forwarded (see BLACKHOLING...)
+# It is populated even if GTP trafic is not forwarded (see BLACKHOLING...)
 #
 # A blackholing feature is integrated to possibly isolate mobiles 
-# from the whole network at the Gi interface
-# .BLACKHOLING = True
+# from the whole network
+# BLACKHOLING = True
 # or from any external network routed from the Gi ethernet interface
-# .BLACKHOLING = 'ext'
+# BLACKHOLING = 'ext'
+# disabling the feature
+# BLACKHOLING = False
 #
 # A whitelist feature (TCP/UDP, port) is also integrated, when activated
-# .WL_ACTIVE = True
+# WL_ACTIVE = True
 # only the packet for the given protocol / ports are transferred to the Gi
-# .WL_PORTS = [('UDP', 53), ('UDP', 123), ('TCP', 80), ...]
-# this whitelisting overcome the BLACKHOLING feature
+# WL_PORTS = [('UDP', 53), ('UDP', 123), ('TCP', 80), ...]
+# This is bypapssing the blackhiling feature.
 #
+
 class GTPUd(object):
     #
     # debug level
@@ -362,12 +385,12 @@ class GTPUd(object):
     #
     # packet buffer space (over MTU...)
     BUFLEN = 2048
-    # select settings
+    # select loop settings
     SELECT_TO = 0.2
     #
     # Gi interface, with GGSN ethernet IF and mobile IP address
-    EXT_IF = 'eth0' # same as ARPd.GGSN_ETH_IF
-    GGSN_MAC_ADDR = '\x08\x00\x00\x01\x02\x03' # same as ARPd.GGSN_MAC_ADDR
+    EXT_IF = ARPd.GGSN_ETH_IF
+    GGSN_MAC_ADDR = ARPd.GGSN_MAC_ADDR
     # IPv4 protocol only, to be forwarded
     EXT_PROT = 0x0800
     #
@@ -375,12 +398,16 @@ class GTPUd(object):
     INT_IP = '10.1.1.1'
     INT_PORT = 2152
     #
-    # in case we don't want mobile traffic to reach the external IF
-    #BLACKHOLING = False # all the GTP traffic is relayed to the external IF
-    #BLACKHOLING = True # no GTP traffic is relayed at all
-    BLACKHOLING = 'ext' # only GTP traffic toward dest IP through the 
-    #                     ARPd.ROUTER_MAC_ADDR is blocked, 
-    #                     e.g. external network traffic
+    # GTP TEID toward RNC / eNodeBs
+    GTP_TEID = 0
+    GTP_TEID_MAX = 2**32 - 1
+    #
+    # in case we dont want mobile traffic to reach the external IF
+    # False: all the GTP traffic is relayed to the external IF
+    # True: no GTP traffic is relayed at all
+    # 'ext': only GTP traffic toward dest IP through the ROUTER_MAC_ADDR
+    #        is blocked
+    BLACKHOLING = 'ext'
     # traffic that we want to allow, even if BLACKHOLING is activated
     WL_ACTIVE = False
     #WL_ACTIVE = True
@@ -396,6 +423,8 @@ class GTPUd(object):
         self._mobiles_ip = {}
         # take mobile TEID as key, and references mobile_IP
         self._mobiles_teid = {}
+        # global TEID to RNC value, to be incremented from here
+        self.GTP_TEID = randint(0, 20000)
         #
         # create a single GTP format decoder for input from RNC
         self._GTP_in = GTPv1()
@@ -408,11 +437,11 @@ class GTPUd(object):
         self.__prot_dict = {1:'ICMP', 6:'TCP', 17:'UDP'}
         #
         # create a RAW PF_PACKET socket on the `Internet` side
-        # python is not convenient to configure dest mac addr 
+        # python is not convinient to configure dest mac addr 
         # when using SOCK_DGRAM (or I missed something...), 
         # so we use SOCK_RAW and build our own ethernet header:
         self.ext_sk = socket(AF_PACKET, SOCK_RAW, ntohs(self.EXT_PROT))
-        # configure timeout and interface binding
+        # configure timeouting and interface binding
         self.ext_sk.settimeout(0.1)
         self.ext_sk.bind((self.EXT_IF, self.EXT_PROT))
         # put the interface in promiscuous mode
@@ -462,11 +491,11 @@ class GTPUd(object):
         if self._listening:
             self._listening = False
             sleep(self.SELECT_TO * 2)
-            # unset promiscuous mode
-            unset_promisc(self.ext_sk)
             # closing sockets
             self.int_sk.close()
             self.ext_sk.close()
+            # unset promiscuous mode
+            unset_promisc(self.ext_sk)
     
     def listen(self):
         # select() until we receive something on 1 side
@@ -512,6 +541,7 @@ class GTPUd(object):
         #
         # drop dummy packets
         if len(ipbuf) < 24:
+            self._log('dummy packet from mobile dropped: %s' % hexlify(ipbuf))
             return
         ipdst = inet_ntoa(ipbuf[16:20])
         #
@@ -546,11 +576,14 @@ class GTPUd(object):
     def _transfer_to_ext(self, macdst='', ipbuf='\0'):
         # forward to the external PF_PACKET socket, over the Gi interface
         try:
-            self.ext_sk.sendto(''.join((macdst, self.GGSN_MAC_ADDR, \
-                                       '\x08\0', ipbuf)), \
+            self.ext_sk.sendto('{0}{1}\x08\0{2}'.format(
+                                macdst, self.GGSN_MAC_ADDR,self.EXT_PROT),
                                (self.EXT_IF, self.EXT_PROT))
         except:
-            pass
+            self._log('Exception on external Ethernet socket sendto')
+        else:
+            if self.DEBUG > 1:
+                self._log('buffer transferred from GTPU to RAW')
     
     def transfer_to_int(self, buf='\0'):
         # prepend GTP-U header and forward on internal sk
@@ -563,29 +596,34 @@ class GTPUd(object):
                 # GTP header type for GTPU packet: G-PDU
                 self._GTP_out.msg > 0xFF
                 self._GTP_out.len > len(buf)
-                try:
-                    ret = self.int_sk.sendto(''.join((str(self._GTP_out), buf)),
+                self._transfer_to_int(ipdst, str(self._GTP_out)+buf)
+    
+    def _transfer_to_int(self, ipdst='', gtpbuf=''):
+        try:
+            ret = self.int_sk.sendto(gtpbuf,
                                     (self._mobiles_ip[ipdst][0], self.INT_PORT))
-                except:
-                    pass
-                else:
-                    if self.DEBUG > 1:
-                        self._log('%i bytes transfered from RAW to GTPU' % ret)
+        except:
+            self._log('Exception on internal UDP socket sendto')
+        else:
+            if self.DEBUG > 1:
+                self._log('%i bytes transferred from RAW to GTPU' % ret)
     
     ###
     # Now we can add and remove (mobile_IP, TEID_from/to_RNC),
     # to configure filters and really start forwading packets over GTP
-    def add_mobile(self, mobile_IP='192.168.1.201', rnc_IP='10.2.1.1', \
-                         TEID_from_rnc=0x1, TEID_to_rnc=0x1):
+    def add_mobile(self, mobile_IP='192.168.1.201', rnc_IP='10.1.1.1', \
+                                                    TEID_from_rnc=0x1):
         try:
             ip = inet_aton(mobile_IP)
         except error:
             self._log('mobile_IP has not the correct format: ' \
                       'cannot configure the GTPU handler')
             return
+        TEID_to_rnc = self.get_teid_to_rnc()
         self._mobiles_ip[ip] = (rnc_IP, TEID_to_rnc)
         self._mobiles_teid[TEID_from_rnc] = ip
         self._log('setting GTP tunnel for mobile with IP %s' % mobile_IP)
+        return TEID_to_rnc
     
     def rem_mobile(self, mobile_IP='192.168.1.201'):
         try:
@@ -602,6 +640,12 @@ class GTPUd(object):
                 if self._mobiles_teid[teid] == ip:
                     del self._mobiles_teid[teid]
                     return
+    
+    def get_teid_to_rnc(self):
+        if self.GTP_TEID >= self.GTP_TEID_MAX:
+            self.GTP_TEID = randint(0, 20000)
+        self.GTP_TEID += 1
+        return self.GTP_TEID
     
     def _analyze(self, ipbuf):
         #
