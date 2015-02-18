@@ -101,7 +101,8 @@ class shtr(str):
     shtr are strings that can be shifted !
     
     When a shtr is shifted (<< X or >> X), it returns the resulting string.
-    When right shifted (>> X), null bytes are appended left-side. 
+    When right shifted (>> X), null bytes are appended left-side.
+    
     Methods .left_val(X) and .right_val(X) returns the integer value corresponding to 
     the X bits left or right side of the shtr.
     '''

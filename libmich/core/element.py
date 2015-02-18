@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.3
+# * Version : 0.3.0
 # *
 # * Copyright © 2012. Benoit Michau. France Telecom.
 # *
@@ -26,7 +26,6 @@
 # *--------------------------------------------------------
 #*/ 
 
-
 #------------------------------------------------------------------------------#
 #                                   The Libmich                                #
 #------------------------------------------------------------------------------#
@@ -34,7 +33,7 @@
 # not tested with older version
 # and not going to support Python 3 (str / bytes is PITA here)
 #
-# version: 0.2
+# version: 0.3
 # author: Benoit Michau
 #
 # defines 3 kind of primary elements:
@@ -106,7 +105,7 @@ from binascii import hexlify, unhexlify
 from re import split, sub
 
 from libmich.core.shar import shar
-from libmich.core.shtr import shtr, decomposer
+from libmich.core.shtr import shtr, decomposer, decompose
 # TODO: cleanup the rest of libmich-related code to remove this import here
 from libmich.utils.repr import show, showattr
 
@@ -148,8 +147,8 @@ class Element(object):
     encapsulating class for: Str, Bit, Int
     '''
     # checking Element boundaries extensively
-    safe = True
-    #safe = False
+    #safe = True
+    safe = False
     
     # Element debugging threshold: 0, ERR, WNG, DBG
     dbg = ERR
@@ -217,7 +216,7 @@ class Element(object):
 class Str(Element):
     '''
     class defining a standard Element, 
-    managed like a stream of byte(s) or string.
+    managed like a stream of byte(s), or string.
     It is always byte-aligned (in term of length, at least)
     
     attributes:
@@ -510,6 +509,11 @@ class Str(Element):
 class Int(Element):
     '''
     class defining a standard element, managed like an integer.
+    It can be signed (int) or unsigned (uint),
+    and support arbitrary byte-length:
+        int8, int16, int24, int32, int40, int48, int56, int64, int72, ...
+        uint8, uint16, uint24, uint32, ..., uint128, ...
+        and why not int65536 !
     It is always byte-aligned (in term of length, at least).
     
     attributes:
@@ -528,28 +532,29 @@ class Int(Element):
     TransFunc: when defined, TransFunc(Trans) is used to automate the 
                transparency aspect: used e.g. for conditional element;
     '''
-    # endianness is 'little' or 'big'
+    # endianness is 'little' / 'l' or 'big' / 'b'
     _endian = 'big'
     # types format for struct library
     # 24 (16+8), 40 (32+8), 48 (32+16), 56 (32+16+8)
     _types = { 'int8':'b', 'int16':'h', 'int32':'i', 'int64':'q',
-               'int24':None, 'int40':None, 'int48':None, 'int56':None,
+               #'int24':None, 'int40':None, 'int48':None, 'int56':None,
                'uint8':'B', 'uint16':'H', 'uint32':'I', 'uint64':'Q',
-               'uint24':None, 'uint40':None, 'uint48':None, 'uint56':None }
+               #'uint24':None, 'uint40':None, 'uint48':None, 'uint56':None,
+               }
     #
     # for object representation
     _reprs = ['hex', 'bin', 'hum']
     
-    def __init__(self, CallName='', ReprName=None, 
-                 Pt=None, PtFunc=None, Val=None, 
+    def __init__(self, CallName='', ReprName=None,
+                 Pt=None, PtFunc=None, Val=None,
                  Type='int32', Dict=None, DictFunc=None,
-                 Repr='hum', 
+                 Repr='hum',
                  Trans=False, TransFunc=None):
         if CallName or not self.CallName:
             self.CallName = CallName
-        if ReprName is None: 
+        if ReprName is None:
             self.ReprName = ''
-        else: 
+        else:
             self.ReprName = ReprName
         self.Pt = Pt
         self.PtFunc = PtFunc
@@ -580,8 +585,12 @@ class Int(Element):
                 if val is not None and not isinstance(val, (int, long)):
                     raise AttributeError('Val must be an int or long')
             elif attr == 'Type':
-                if val not in self._types.keys():
-                    raise AttributeError('Type must be in: %s' % self._types)
+                cur = 0
+                if val[cur] == 'u':
+                    cur = 1
+                if val[cur:cur+3] != 'int' or int(val[cur+3:]) % 8 != 0:
+                    raise AttributeError('Type must be intX / uintX with X '\
+                    'multiple of 8 bits (e.g. int24, uint32, int264, ...)')
             elif attr == 'DictFunc':
                 if val is not None and not isinstance(val, type_funcs) :
                     raise AttributeError('DictFunc must be a function')
@@ -617,11 +626,10 @@ class Int(Element):
     def __confine(self, value):
         # unsigned
         if self.Type[0] == 'u':
-            return max(0, min(pow(2, self.Len*8)-1, value))
+            return max(0, min(2**(8*self.Len-1), value))
         # signed
         else:
-            return max(-pow(2, self.Len*8-1), \
-                       min(pow(2, self.Len*8-1)-1, value))
+            return max(-2**(8*self.Len-1), min(2**(8*self.Len-1)-1, value))
     
     def __str__(self):
         # manages Element transparency
@@ -636,51 +644,75 @@ class Int(Element):
         return self.Len
     
     def bit_len(self):
-        return len(self)*8
+        return 8*self.__len__()
     
     # map_len() is a-priori not needed in "Int" element, 
-    # but still kept for Element uniformity
+    # but still kept for Element API uniformity
     def map_len(self):
-        return len(self)
+        return self.__len__()
     
     # define integer value
     def __int__(self):
         return self()
     
     def __bin__(self):
-        # unsigned or positive signed: 
-        if self.Type[0] == 'u' or \
-        self.Type[0] == 'i' and self() >= 0 : 
-            binstr = format(self(), 'b')
-            return (len(self)*8-len(binstr))*'0' + binstr
+        # unsigned or positive signed:
+        val = self()
+        if self.Type[0] == 'u' \
+        or self.Type[0] == 'i' and val >= 0 : 
+            binstr = bin(val)[2:]
+            if self._endian[0] == 'l':
+                # little endian
+                bs = '0'*(8*self.__len__() - len(binstr)) + binstr
+                bs = [bs[i:i+8] for i in range(0, len(bs), 8)]
+                bs.reverse()
+                return ''.join(bs)
+            else:
+                # big endian
+                return '0'*(8*self.__len__() - len(binstr)) + binstr
         # negative signed
         else : 
             # takes 2' complement to the signed val
-            binstr = format(self()+pow(2, len(self)*8-1), 'b')
-            return '1' + (len(self)*8-len(binstr)-1)*'0' + binstr
+            binstr = bin(val + 2**(8*self.__len__()-1))[2:]
+            if self._endian[0] == 'l':
+                # little endian
+                bs = '1' + '0'*(8*self.__len__() - len(binstr) - 1) + binstr
+                bs = [bs[i:i+8] for i in range(0, len(bs), 8)]
+                bs.reverse()
+                return ''.join(bs)
+            else:
+                # big endian
+                return '1' + '0'*(8*self.__len__() - len(binstr) - 1) + binstr
     
     def __hex__(self):
         return hexlify(self.__pack())
     
     def __repr__(self):
-        if self.Pt is None and self.Val is None: return repr(None)
-        if self.Repr == 'hex': return '0x%s' % self.__hex__()
-        elif self.Repr == 'bin': return '0b%s' % self.__bin__()
+        if self.Pt is None and self.Val is None:
+            return repr(None)
+        if self.Repr == 'hex':
+            return '0x%s' % self.__hex__()
+        elif self.Repr == 'bin':
+            return '0b%s' % self.__bin__()
         elif self.Repr == 'hum':
             value = self()
             if self.DictFunc:
                 if self.safe:
                     assert(hasattr(self.DictFunc(self.Dict), '__getitem__'))
-                try: val = '%i : %s' % (value, self.DictFunc(self.Dict)[value])
-                except KeyError: val = value
+                try:
+                    val = '%i : %s' % (value, self.DictFunc(self.Dict)[value])
+                except KeyError:
+                    val = value
             elif self.Dict:
-                try: val = '%i : %s' % (value, self.Dict[value])
-                except KeyError: val = value
+                try:
+                    val = '%i : %s' % (value, self.Dict[value])
+                except KeyError:
+                    val = value
             else:
                 val = value
             rep = repr(val)
             if rep[-1] == 'L':
-                rep = rep[:-1]
+                return rep[:-1]
             return rep
     
     def getattr(self):
@@ -689,9 +721,9 @@ class Int(Element):
     
     def showattr(self):
         for a in self.getattr():
-            if a == "Dict" and self.Dict is not None: 
+            if a == "Dict" and self.Dict is not None:
                 print('%s : %s' % ( a, self.__getattribute__(a).__class__) )
-            else: 
+            else:
                 print('%s : %s' % ( a, repr(self.__getattribute__(a))) )
     
     def clone(self):
@@ -716,7 +748,7 @@ class Int(Element):
             self.Val = self.__unpack(string[:self.Len])
     
     def map_ret(self, string=''):
-        l = len(self)
+        l = self.__len__()
         if 0 < l <= len(string):
             self.map(string)
             return string[l:]
@@ -725,64 +757,141 @@ class Int(Element):
     
     def __pack(self):
         # manage endianness (just in case...)
-        if self._endian == 'little': e = '<'
-        else: e = '>'
-        if self.Type[-2:] in ('t8', '16', '32', '64'):
+        if self._endian[0] == 'l':
+            e = '<'
+        else:
+            e = '>'
+        if self.Len == 0:
+            return ''
+        elif self.Len in (1, 2, 4, 8):
+            # standard types for using Python struct
             return pack(e+self._types[self.Type], self())
         elif self.Type[0] == 'u':
+            # non-standard unsigned int types
             return self.__pack_uX(e)
         else:
+            # non-standard signed int types
             return self.__pack_iX(e)
     
-    def __unpack(self, string=''):
-        if self._endian == 'little': e = '<'
-        else: e = '>'
-        if self.Type[-2:] in ('t8', '16', '32', '64'):
+    def __unpack(self, string):
+        if self._endian[0] == 'l':
+            e = '<'
+        else:
+            e = '>'
+        if self.Len == 0:
+            return
+        elif self.Len in (1, 2, 4, 8):
+            # standard types for using Python struct
             return unpack(e+self._types[self.Type], string[:self.Len])[0]
         elif self.Type[0] == 'u':
+            # non-standard unsigned int types
             return self.__unpack_uX(string[:self.Len], e)
         else:
+            # non-standard signed int types
             return self.__unpack_iX(string[:self.Len], e)
     
     def __pack_uX(self, e='>'):
         if e == '<':
-            # little endian
-            return pack('<Q', self())[:self.Len]
+            # little endian, support indefinite uint (e.g. uint3072)
+            if self.Len <= 8:
+                return pack('<Q', self())[:self.Len]
+            else:
+                #'''
+                u8 = decompose(0x100, self())
+                # pad with 0 until the right length
+                if len(u8) < self.Len:
+                    u8.extend( [0]*(self.Len-len(u8)) )
+                return pack('<'+self.Len*'B', *u8)
         else:
-            return pack('>Q', self())[-self.Len:]
+            # big endian, support indefinite uint too
+            if self.Len <= 8:
+                return pack('>Q', self())[-self.Len:]
+            else:
+                u64 = decompose(0x10000000000000000, self())
+                u64_len = 8*len(u64)
+                u64_pad = 0
+                if u64_len < self.Len:
+                    rest_len = self.Len - u64_len
+                    u64_pad = rest_len // 8
+                    if rest_len % 8:
+                        u64_pad += 1
+                    u64.extend( [0]*u64_pad )
+                u64.reverse()
+                return pack('>'+len(u64)*'Q', *u64)[-self.Len:]
     
     def __pack_iX(self, e='>'):
         val = self()
+        # positive values are encoded just like uint
         if val >= 0:
             return self.__pack_uX(e)
-        else:
-            X = int(self.Type[-2:])
-            if e == '<':
-                # little endian
-                return pack('<Q', 2**X - abs(val))[:self.Len]
-            else:
-                return pack('>Q', 2**X - abs(val))[-self.Len:]
-    
-    def __unpack_uX(self, string='\0\0\0', e='>'):
-        add = 8 - self.Len
+        #
+        # negative values, 2's complement encoding
         if e == '<':
             # little endian
-            return unpack('<Q', string + add*'\0')[0]
-        else:
-            return unpack('>Q', add*'\0' + string)[0]
-    
-    def __unpack_iX(self, string='\0\0\0', e='>'):
-        add = 8 - self.Len
-        X = int(self.Type[-2:])
-        if e == '<':
-            # TODO
-            pass
-        else:
-            ret = unpack('>Q', add*'\0' + string)[0]
-            if 0 <= ret < 2**(X-1):
-                return ret
+            if self.Len <= 8:
+                return pack('<Q', 2**(self.Len*8) - abs(val))[:self.Len]
             else:
-                return ret-2**X
+                i8 = decompose(0x100, 2**(self.Len*8) - abs(val))
+                if len(i8) < self.Len:
+                    i8.extend( [0]*(self.Len-len(i8)) )
+                return pack('<'+self.Len*'B', *i8)
+        else:
+            # big endian
+            if self.Len <= 8:
+                return pack('>Q', 2**(self.Len*8) - abs(val))[-self.Len:]
+            else:
+                i8 = decompose(0x100, 2**(self.Len*8) - abs(val))
+                if len(i8) < self.Len:
+                    i8.extend( [0]*(self.Len-len(i8)) )
+                i8.reverse()
+                return pack('>'+self.Len*'B', *i8)
+    
+    def __unpack_uX(self, string, e='>'):
+        if e == '<':
+            # little endian, support indefinite uint (e.g. uint3072)
+            if self.Len <= 8:
+                return unpack('<Q', string + '\0'*(8 - self.Len))[0]
+            else:
+                u8 = unpack('<'+self.Len*'B', string)
+                u8.reverse()
+                return reduce(lambda x,y: (x<<8)+y, u8)
+        else:
+            # big endian, support indefinite uint (e.g. uint3072)
+            if self.Len <= 8:
+                return unpack('>Q', '\0'*(8 - self.Len) + string)[0]
+            else:
+                #'''
+                u64_len, u64_pad = self.Len // 8, self.Len % 8
+                if u64_pad:
+                    u64_len += 1
+                    string = '\0'*u64_pad + string
+                u64 = unpack('>'+u64_len*'Q', string)
+                return reduce(lambda x,y:(x<<64)+y, u64)
+    
+    def __unpack_iX(self, string, e='>'):
+        if e == '<':
+            # little endian
+            if ord(string[-1]) & 0x80 == 0:
+                # check if it is a positive value
+                return self.__unpack_uX(string, e)
+            elif self.Len <= 8:
+                return unpack('<Q', string + '\0'*(8 - self.Len))[0] \
+                       - 2**(self.Len*8)
+            else:
+                i8 = unpack('<'+self.Len*'B', string)
+                i8.reverse()
+                return reduce(lambda x,y:(x<<8)+y, i8) - 2**(self.Len*8)
+        else:
+            # big endian
+            if ord(string[0]) & 0x80 == 0:
+                # check if it is a positive value
+                return self.__unpack_uX(string, e)
+            elif self.Len <= 8:
+                return unpack('>Q', '\0'*(8 - self.Len) + string)[0] \
+                       - 2**(self.Len*8)
+            else:
+                i8 = unpack('>'+self.Len*'B', string)
+                return reduce(lambda x,y:(x<<8)+y, i8) - 2**(self.Len*8)
     
     # shar manipulation interface
     def to_shar(self):
@@ -803,7 +912,7 @@ class Int(Element):
 class Bit(Element):
     '''
     class defining a standard element, managed like a bit (e.g. a flag)
-    or stream of variable bit length
+    or bit-stream of variable bit length
     Values are corresponding to unsigned integer: from 0 to pow(2, bit_len)-1.
     It does not require to be byte-aligned.
     
@@ -907,6 +1016,14 @@ class Bit(Element):
             return ''
         if len(h) % 2: h = ''.join(('0', h))
         return str(shtr(unhexlify(h)) << (8-(self.bit_len()%8))%8)
+    
+    def _shar__str__(self):
+        bitlen = self.bit_len()
+        if bitlen == 0:
+            return ''
+        ret = shar()
+        ret.set_uint(self(), bitlen)
+        return ret.to_buf()
     
     def __len__(self):
         # just for fun here, 
@@ -1067,8 +1184,8 @@ class Layer(object):
     # debugging threshold for Layer:
     dbg = ERR
     # add some sanity checks
-    safe = True
-    #safe = False
+    #safe = True
+    safe = False
     # define the type of str() and map() method
     _byte_aligned = True
     # reserved attributes:
@@ -1189,11 +1306,10 @@ class Layer(object):
         self.elementList[num].Val = value
     
     def append(self, element):
-        CallNames = self.getattr()
         #if isinstance(element, Element):
         # make Layer recursive:
         if isinstance(element, (Element, Layer)):
-            if self.dbg >= WNG and element.CallName in CallNames:
+            if self.dbg >= WNG and element.CallName in self.getattr():
                 log(WNG, '(Layer - %s) different elements have the same '\
                          'CallName %s' % (self.__class__, element.CallName))
             self.elementList.append(element)
@@ -1245,17 +1361,16 @@ class Layer(object):
     # 
     # list facilities can be preferred in this case
     def __getattr__(self, name):
-        for e in self:
-            if name in (e.CallName, e.ReprName):
-                return e
-            #l = []
-            #if name == e.CallName or name == e.ReprName: 
-            #    l.append( e )
-        #if len(l) == 1: return l[0]
-        #else: return l
+        names = [x.CallName for x in self.elementList]
+        if name in names:
+            return self.elementList[ names.index(name) ]
+        names = [x.ReprName for x in self.elementList]
+        if name in names:
+            return self.elementList[ names.index(name) ]
+        #
         return object.__getattribute__(self, name)
-        raise AttributeError( '"Layer" has no "%s" attribute: %s' \
-              % (name, self.getattr()) )
+        #return self.__getattribute__(name)
+        #return getattr(self, name)
     
     def __setattr__(self, name, value):
         # special handling here: use to override the element value 
@@ -1463,10 +1578,7 @@ class Layer(object):
         return len(self)
     
     def getattr(self):
-        CallNames = []
-        for e in self:
-            CallNames.append(e.CallName)
-        return CallNames
+        return [e.CallName for e in self.elementList]
     
     def showattr(self):
         for a in self.getattr():
@@ -1927,6 +2039,7 @@ class Block(object):
 # testing routines 
 #------------------------------------------------------------------------------#
 class testTLV(Layer):
+    _byte_aligned = True
     constructorList = [
         Int(CallName='T', ReprName='Tag', Type='uint8', \
             Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
