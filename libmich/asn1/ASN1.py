@@ -20,7 +20,7 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : asn1/utils.py
+# * File Name : asn1/ASN1.py
 # * Created : 2014-10-28
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
@@ -68,8 +68,8 @@ class ASN1Obj(object):
     - tag: 3-tuple, or None; contains the explicit tagging of the ASN.1 type.
         It has the following format:
         (unsigned integer value,
-         str (class 'IMPLICIT' / 'EXPLICIT'),
-         str (mode 'CONTEXT-SPECIFIC' / 'PRIVATE' / 'APPLICATION' / 'UNIVERSAL'))
+         str (mode 'IMPLICIT' / 'EXPLICIT'),
+         str (class 'CONTEXT-SPECIFIC' / 'PRIVATE' / 'APPLICATION' / 'UNIVERSAL'))
     
     - typeref: ASN1Obj, or None;  provides the subtype of the object in case 
         it derives from a user-defined one (and not a basic one).
@@ -86,13 +86,14 @@ class ASN1Obj(object):
         - INTEGER: OrderedDict (str (named number): int (value)) or None
         - ENUMERATED: OrderedDict (str (enum): int (index)) or None
         - BIT STRING: OrderedDict (str (named bit): int (position)) or None
-        - OCTET STRING / PrintableString / IA5String: None
+        - OCTET STRING / PrintableString / IA5String / NumericString: None
         - OBJECT IDENTIFIER: None
         - SEQUENCE / SET / CHOICE: OrderedDict (str (name): ASN1Obj) or None
         - SEQUENCE OF / SET OF: ASN1Obj
         - CLASS: OrderedDict (str (name): ASN1Obj) or None
-        - OPEN / ANY: None (cont is used when assigning an ASN1Obj value to an
-            OPEN object, to host the ASN1Obj instance with its own value)
+        - OPEN / ANY: None (cont is temporarily used when assigning an ASN1Obj 
+            value to an OPEN / ANY object, to host the ASN1Obj instance with 
+            its own value)
         - user-defined subtype: the content is processed to fill-in parameters' 
             referrers (see attribute 'param')
     
@@ -113,7 +114,9 @@ class ASN1Obj(object):
         - VALUE RANGE, with specific keys:
             ('lb':int or None, 'ub':int or None, 'ext':bool)
         for BIT STRING and OCTET STRING:
-        - CONTAINING, with specific keys: ('obj': ASN1Obj)
+        - CONTAINING, with specific key: ('obj': ASN1Obj)
+        for IA5String, PrintableString and NumericString:
+        - FROM, with specific key: ('alpha': list of str of len 1)
         for all types (especially OPEN / ANY):
         - SET REFERENCE, with specific keys: ('obj': ASN1Obj, 'at':str or None)
     
@@ -126,7 +129,7 @@ class ASN1Obj(object):
             - BIT STRING: 2-tuple (int (BE value), int (bit length)), 
                 or ASN1Obj (according to CONTAINING constraint)
             - OCTET STRING: str, or ASN1Obj (according to CONTAINING constraint)
-            - PrintableString / IA5String: str
+            - PrintableString / IA5String / NumericString: str
             - OBJECT IDENTIFIER: list of int
             - CHOICE: 2-tuple (str (name), single_value (type-dependent))
             - SEQUENCE / SET: dict {str (name): single_value (type-dependent)}
@@ -149,28 +152,36 @@ class ASN1Obj(object):
     - group: int, or None; indicates the grouping of extended ASN1 objects
         within constructed types extension only.
     
-    - syntax: OrderedDict {str (syntax): str (name)}, or None; used only for 
-        classes.
+    - syntax: OrderedDict {str (name): (str (syntax), list (optional group)},
+        or None; used only for classes that have WITH SYNTAX directive.
     
-    SEQUENCE and SET objects have specific attributes, in addition:
+    CHOICE, SEQUENCE, SET and CLASS objects have specific attributes,
+    in addition:
     
     - root_comp: list of str, lists all root components by name
     
     - root_opt: list of str, lists all OPTIONAL and DEFAULT root components
         by name.
     
-    - ext_flat: list of str, flattened list of extended components by name.
+    - ext_flat: list of str, flattened list of extended components by name
+        (built from ext attribute).
     
     - ext_group: dict {int: list of str}, referencing extended components
         by group:
         -1 is for stand-alone extension,
-        0 and mode are for group of extensions, to be sequenced
+        0 and more are for group of extensions, to be sequenced
+    
+    - cont_tags: index of all possible tags for contained components
+        for SEQUENCE:
+        list of [ (2-tuple(tag class, tag value), list of str), ...]
+        for CHOICE and SET:
+        dict of { 2-tuple(tag class, tag value): str, ...}
     
     Moreover, when encoding / decoding ASN1Obj objects, the following attributes
     are used:
     
     - codec: ASN1Codec, or None; it is used to encode / decode the transfer
-        message.
+        messages.
     
     - msg: libmich Layer, or None; it stores the transfer message structure,
         ready to be sent over the wire.
@@ -183,7 +194,7 @@ class ASN1Obj(object):
     
     # when set, shuts down codec error and tries to return without error
     # (however, the message will certainly be malformed)
-    _RAISE_SILENTLY = True
+    _RAISE_SILENTLY = False
     # when set, returns the libmich message structure set in ._msg attribute
     # after encode()ing / decode()ing
     _RET_STRUCT = False
@@ -222,7 +233,7 @@ class ASN1Obj(object):
             type = '%s %s' % (type, self._cont._type)
         if self._parent and self._typeref:
             type = '[%s] %s' % (self._typeref._name, type)
-        if self._val:
+        if self._val is not None:
             if self._mode in (0, 1):
                 val = repr(self())
                 if len(val) > 50:
@@ -236,12 +247,12 @@ class ASN1Obj(object):
                 val = '{%s}' % ', '.join(map(repr, val))
                 if len(val) > 50:
                     val = val[:50] + ' ...}'
-            return '<%s (%s %s): %s>' % (self._name,
+            return '<%s (%s %s): %s>' % (self.get_name(),
                                          type,
                                          ['type', 'value', 'set'][self._mode],
                                          val.replace('\n', ', '))
         else:
-            return '<%s (%s %s)>' % (self._name,
+            return '<%s (%s %s)>' % (self.get_name(),
                                      type,
                                      ['type', 'value', 'set'][self._mode])
     
@@ -329,7 +340,7 @@ class ASN1Obj(object):
                 # is done by _val_basic_in_const()
                 return True
             return isinstance(val, str)
-        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR):
+        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
             return isinstance(val, str)
         elif self._type == TYPE_OID:
             return isinstance(val, list) \
@@ -354,7 +365,8 @@ class ASN1Obj(object):
                 elif lb is not None and val[1] < lb:
                     raise(ASN1_OBJ('%s: BIT STRING size underflow (MIN: %s): %s'\
                           % (self.get_fullname(), lb, val[1])))
-        elif self._type in (TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR) \
+        elif self._type in (TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR, 
+                            TYPE_NUM_STR) \
         and isinstance(val, str):
             lb, ub, ext = self.get_const_int()
             if not ext:
@@ -387,12 +399,21 @@ class ASN1Obj(object):
     
     def _set_val_open(self, val):
         if isinstance(val, str):
+            # passing a raw string
             self._val = val
         elif isinstance(val, tuple) and len(val) == 2 and val[0] in GLOBAL.TYPE:
-            self._cont = GLOBAL.TYPE[val[0]]
+            # passing a reference to an ASN1Obj internal structure:
+            # ASN1Obj name as val[0]
+            # ASN1Obj value as val[1]
+            self._cont = GLOBAL.TYPE[val[0]].clone_light()
             self._cont.set_val(val[1])
             self._val = (val[0], self._cont._val)
             self._cont._val = None
+        #elif isinstance(self._cont, ASN1Obj):
+        #    # using a fixed ASN1Obj set in the OPEN type
+        #    self._cont.set_val(val)
+        #    self._val = self._cont._val
+        #    self._cont._val = None
         elif self._SAFE:
             raise(ASN1_OBJ('%s: invalid %s value: %s'\
                   % (self.get_fullname(), self._type, val)))
@@ -566,7 +587,7 @@ class ASN1Obj(object):
         if self._SAFE:
             if self.CODEC is None \
             or not hasattr(self.CODEC, '_name') \
-            or self.CODEC._name not in ('PER', ) \
+            or self.CODEC._name not in ('PER', 'BER') \
             or not issubclass(self.CODEC, ASN1Codec):
                 raise(ASN1_OBJ('%s: invalid encoder defined: %s' 
                       % (self.get_fullname(), self.CODEC)))
@@ -577,7 +598,8 @@ class ASN1Obj(object):
             return self._msg
     
     def _encode(self, **kwargs):
-        self._msg = Layer(self._name)
+        #self._msg = Layer(self._name)
+        self._msg = Layer(self.get_name())
         #
         # do not encode ASN.1 objects which are set with their DEFAULT value
         if self._flags is not None and FLAG_DEF in self._flags \
@@ -604,7 +626,7 @@ class ASN1Obj(object):
         if self._SAFE:
             if self.CODEC is None \
             or not hasattr(self.CODEC, '_name') \
-            or self.CODEC._name not in ('PER', ) \
+            or self.CODEC._name not in ('PER', 'BER') \
             or not issubclass(self.CODEC, ASN1Codec):
                 raise(ASN1_OBJ('%s: invalid decoder defined: %s' 
                       % (self.get_fullname(), self.CODEC)))
@@ -613,7 +635,8 @@ class ASN1Obj(object):
             return self._msg
     
     def _decode(self, buf, **kwargs):
-        self._msg = Layer(self._name)
+        #self._msg = Layer(self._name)
+        self._msg = Layer(self.get_name())
         self._codec = self.CODEC()
         if self._RAISE_SILENTLY:
             if not RAISED.set:
@@ -684,6 +707,25 @@ class ASN1Obj(object):
         path.reverse()
         return path
     
+    def get_tag(self):
+        if self._tag is not None:
+            return self._tag
+        # if no tag is specially defined, returns the UNIVERSAL one
+        # excepted for CHOICE, OPEN / ANY, which do not have any UNIVERSAL tag
+        elif self._type in (TYPE_CHOICE, TYPE_OPEN, TYPE_ANY):
+            return None
+        else:
+            return (TAG_UNIV_TYPETOVAL[self._type], TAG_EXPLICIT, TAG_UNIVERSAL)
+    
+    def get_tag_val(self):
+        # return a 2-tuple of int (or None), for the setting of Tag in BER
+        # (class, tag value)
+        t = self.get_tag()
+        if t is None:
+            return None
+        cla = TAG_CLASS_BER[t[2]]
+        return cla, t[0]
+    
     def get_param(self):
         # returns the parameters, which can be associated to the parent
         # and not the ASN1Obj itself
@@ -692,32 +734,39 @@ class ASN1Obj(object):
         else:
             return self._param
     
-    def get_fullname(self):
+    def get_name(self):
         if self._name is None:
-            name = '_cont_'
+            if self._typeref is not None and self._typeref._name is not None:
+                name = '_item_%s' % self._typeref._name
+            else:
+                name = '_item_%s' % self._type
         else:
             name = self._name
+        return name
+    
+    def get_fullname(self):
         if self._parent is None:
-            return name
+            return self.get_name()
         else:
-           return '%s.%s' % (self._parent.get_fullname(), name)
+           return '%s.%s' % (self._parent.get_fullname(), self.get_name())
     
     def get_typename(self):
         typeref = self._typeref
         if typeref is None:
-            return self._name
+            return self.get_name()
         while typeref:
             typeref_more = typeref._typeref
             if typeref_more is None:
-                return typeref._name
+                return typeref.get_name()
             else:
                 typeref = typeref_more
     
     def get_const_int(self):
         if self._type == TYPE_INTEGER:
             lb, ub, ext = None, None, False
-        elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR, TYPE_IA5_STR, 
-        TYPE_PRINT_STR, TYPE_SEQ_OF, TYPE_SET_OF):
+        elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR, TYPE_IA5_STR,
+                            TYPE_PRINT_STR, TYPE_NUM_STR, TYPE_SEQ_OF,
+                            TYPE_SET_OF):
             lb, ub, ext = 0, None, False
         else:
             return None, None, None
@@ -791,7 +840,8 @@ class ASN1Obj(object):
                 # there is no additional content possible when typeref is used
                 return text
         elif self._type in (TYPE_NULL, TYPE_BOOL, TYPE_OID, TYPE_OPEN, TYPE_ANY,
-                            TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR):
+                            TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR, 
+                            TYPE_NUM_STR):
             # there is no content for those types
             return text
         elif self._type == TYPE_INTEGER:
@@ -825,21 +875,25 @@ class ASN1Obj(object):
     
     def _parse_content_constructed(self, text=''):
         text = parsers.parse_content_constructed(self, text)
-        if self._type in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
+        if self._type in (TYPE_SEQ, TYPE_SET, TYPE_CHOICE):
             self._build_constructed_rootext()
         return text
     
     def _build_constructed_rootext(self):
+        # build _root_comp: a static list of root components
         if self._ext is not None:
             self._root_comp = [c for c in self._cont if c not in self._ext]
         else:
             self._root_comp = [c for c in self._cont]
+        # build _root_opt: a static list of optional root components
         self._root_opt = []
         for name in self._root_comp:
             if self._cont[name]._flags is not None \
             and (FLAG_OPT not in self._cont[name]._flags \
              or FLAG_DEF not in self._cont[name]._flags):
                 self._root_opt.append(name)
+        # build _ext_flat: a static list of flattened extensions
+        #       _ext_group: a static dict of {group : extensions}
         if self._ext is not None:
             self._ext_flat = flatten(self._ext)
             self._ext_group = {}
@@ -848,6 +902,69 @@ class ASN1Obj(object):
                     if self._cont[name]._group not in self._ext_group:
                         self._ext_group[self._cont[name]._group] = []
                     self._ext_group[self._cont[name]._group].append(name)
+        # build _cont_tag: a static dict of {tag : component}
+        if self._type in (TYPE_SET, TYPE_CHOICE):
+            self._cont_tags = {}
+            self._build_set_cont_tags(self._cont_tags)
+        elif self._type == TYPE_SEQ:
+            self._cont_tags = []
+            self._build_seq_cont_tags(self._cont_tags, None)
+    
+    def _build_set_cont_tags(self, tags={}, name_chain=[]):
+        # _cont_tags is a dict
+        # go over all components, and store each component's tag as key
+        for name in self._cont:
+            tag = self._cont[name].get_tag_val()
+            if tag is None:
+                if self._cont[name]._type == TYPE_CHOICE:
+                    # for untagged CHOICE, store tags of CHOICE's components
+                    self._cont[name]._build_set_cont_tags(tags,
+                                                          name_chain+[name])
+                elif self._cont[name]._type in (TYPE_OPEN, TYPE_ANY):
+                    # for untagged OPEN / ANY types, use (-1, -1) as tag value
+                    tag = (-1, -1)
+                else:
+                    raise(ASN1_PROC_TEXT('%s: untagged component %s' \
+                          % (self.get_fullname(), name_chain+[name])))
+            # no duplicated tags are allowed at all
+            if tag is not None:
+                if tag in tags:
+                    raise(ASN1_PROC_TEXT('%s: duplicated tag %s for component %s'\
+                          % (self.get_fullname(), tag, name_chain+[name])))
+                tags[tag] = name_chain+[name]
+    
+    def _build_seq_cont_tags(self, tags=[], prev_opt=None, name_chain=[]):
+        # _cont_tags is a list
+        # go over all components, and store each component's tag
+        for name in self._cont:
+            tag = self._cont[name].get_tag_val()
+            if tag is None:
+                if self._cont[name]._type == TYPE_CHOICE:
+                    # for untagged CHOICE, store tags of CHOICE's components
+                    self._cont[name]._build_seq_cont_tags(tags,
+                                                          prev_opt,
+                                                          name_chain+[name])
+                elif self._cont[name]._type in (TYPE_OPEN, TYPE_ANY):
+                    # for untagged OPEN / ANY types, use (-1, -1) as tag value
+                    tag = (-1, -1)
+                else:
+                    raise(ASN1_PROC_TEXT('%s: untagged component %s' \
+                          % (self.get_fullname(), name_chain+[name])))
+            # identical tag to previous component is not allowed
+            # in case the previous one is OPTIONAL / DEFAULT
+            if tag is not None:
+                if tag == prev_opt:
+                    raise(ASN1_PROC_TEXT('%s: duplicated tag %s for component %s'\
+                          % (self.get_fullname(), tag, name_chain+[name])))
+                tags.append( (tag, name_chain+[name]) )
+                #
+                if (self._cont[name]._flags is not None \
+                 and (FLAG_OPT not in self._cont[name]._flags \
+                   or FLAG_DEF not in self._cont[name]._flags)) \
+                or (self._ext is not None and name in self._ext):
+                    prev_opt = tag
+                else:
+                    prev_opt = None
     
     def _parse_content_class(self, text=''):
         text = parsers.parse_content_class(self, text)
@@ -870,7 +987,7 @@ class ASN1Obj(object):
         elif self._type == TYPE_INTEGER:
             return self._parse_constraint_integer(text)
         elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR, TYPE_PRINT_STR, 
-                            TYPE_IA5_STR):
+                            TYPE_IA5_STR, TYPE_NUM_STR):
             return self._parse_constraint_str(text)
         return text
     
@@ -905,12 +1022,15 @@ class ASN1Obj(object):
                 return self._parse_value_enum(text)
             elif self._type == TYPE_BIT_STR:
                 return self._parse_value_bitstr(text)
-            elif self._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR):
+            elif self._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR,
+                                TYPE_NUM_STR):
                 return self._parse_value_str(text)
             elif self._type == TYPE_OID:
                 return self._parse_value_oid(text)
             elif self._type == TYPE_CLASS:
                 return self._parse_value_class(text)
+            elif self._type == TYPE_CHOICE:
+                return self._parse_value_choice(text)
             else:
                 # TODO: support constructed type value parsing
                 raise(ASN1_PROC_NOSUPP('%s: unsupported ASN.1 value for type %s: %s'\
@@ -946,12 +1066,17 @@ class ASN1Obj(object):
     def _parse_value_class(self, text=''):
         return parsers.parse_value_class(self, text)
     
+    def _parse_value_choice(self, text=''):
+        return parsers.parse_value_choice(self, text)
+    
     def parse_set(self, text=''):
         return parsers.parse_set(self, text)
     
     #--------------------------------------------------------------------------#
     # deep copy recursive routine
     #--------------------------------------------------------------------------#
+    # TODO: handle properly CLASS value / set
+    
     def to_dict(self):
         ASN1ObjDict = { \
             'name':None,
@@ -976,7 +1101,7 @@ class ASN1Obj(object):
         ASN1ObjDict['type'] = str(self._type)
         if self._parent:
             # WNG: the parent is set by _from_dict_cont() as the parent object
-            # is unpicklable (it references self -> infinite loop)
+            # because this is unpicklable (it references self -> infinite loop)
             pass
         if self._param:
             ASN1ObjDict['param'] = self._to_dict_param()
@@ -1041,7 +1166,12 @@ class ASN1Obj(object):
         elif self._type in (TYPE_CHOICE, TYPE_SEQ, TYPE_SET, TYPE_CLASS):
             cont_dict = OD()
             for name in self._cont:
-                cont_dict[str(name)] = self._cont[name].to_dict()
+                if isinstance(self._cont[name]._typeref, ASN1ObjSelf) \
+                or self._cont[name]._typeref == self:
+                    # special processing for self-referencing component
+                    cont_dict[str(name)] = '_SELF_REF_'
+                else:
+                    cont_dict[str(name)] = self._cont[name].to_dict()
             return cont_dict
         elif self._type in (TYPE_SEQ_OF, TYPE_SET_OF):
             return self._cont.to_dict()
@@ -1110,7 +1240,7 @@ class ASN1Obj(object):
                 return str(self._val)
             elif isinstance(self._val, ASN1Obj):
                 return self._val.to_dict()
-        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR):
+        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
             return str(self._val)
         elif self._type == TYPE_OID:
             return [int(i) for i in self._val]
@@ -1166,21 +1296,25 @@ class ASN1Obj(object):
         return {'root':val_root_clone, 'ext':val_ext_clone}
     
     def _to_dict_flags(self):
+        flag_clone = {}
+        if FLAG_UNIQ in self._flags:
+            flag_clone[FLAG_UNIQ] = None
         if FLAG_OPT in self._flags:
-            return {FLAG_OPT:None}
-        elif FLAG_UNIQ in self._flags:
-            return {FLAG_UNIQ:None}
+            flag_clone[FLAG_OPT] = None
+            return flag_clone
         elif FLAG_DEF in self._flags:
             # use the ASN1Obj to serialize the DEFAULT value
             val = self._val
             self._val = self._flags[FLAG_DEF]
-            flag_clone = {FLAG_DEF: self._to_dict_val()}
+            flag_clone[FLAG_DEF] = self._to_dict_val()
             self._val = val
             return flag_clone
     
     #--------------------------------------------------------------------------#
     # deep copy reverse recursive routine
     #--------------------------------------------------------------------------#
+    # TODO: handle properly CLASS value / set
+    
     def from_dict(self, ASN1ObjDict):
         self.__init__()
         if ASN1ObjDict['name']:
@@ -1248,11 +1382,19 @@ class ASN1Obj(object):
             cont_dict = OD()
             for name in DictCont:
                 cont_dict[str(name)] = ASN1Obj()
-                cont_dict[name].from_dict( DictCont[name] )
-                cont_dict[name]['parent'] = self
+                if DictCont[name] == '_SELF_REF_':
+                    cont_dict[name]._typeref = ASN1ObjSelf(name=self._name)
+                    if self not in GLOBAL.SELF:
+                        GLOBAL.SELF.append( self )
+                else:
+                    cont_dict[name].from_dict( DictCont[name] )
+                    cont_dict[name]['parent'] = self
             self._cont = cont_dict
-            if self._type in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
+            if self._type in (TYPE_SEQ, TYPE_SET, TYPE_CHOICE):
                 self._build_constructed_rootext()
+            elif self._type == TYPE_CLASS:
+                self._root_comp = self._cont.keys()
+                self._root_opt = []
         elif self._type in (TYPE_SEQ_OF, TYPE_SET_OF):
             self._cont = ASN1Obj()
             self._cont.from_dict(DictCont)
@@ -1305,7 +1447,7 @@ class ASN1Obj(object):
             elif isinstance(DictVal, dict):
                 self._val = ASN1Obj()
                 self._val.from_dict( DictVal )
-        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR):
+        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
             self._val = str(DictVal)
         elif self._type == TYPE_OID:
             self._val = [int(i) for i in DictVal]
@@ -1358,15 +1500,19 @@ class ASN1Obj(object):
         self._val = {'root':val_root_clone, 'ext':val_ext_clone}
     
     def _from_dict_flags(self, DictFlags):
-        if FLAG_OPT in DictFlags:
-            self._flags = {FLAG_OPT:None}
-        elif FLAG_UNIQ in DictFlags:
+        if FLAG_UNIQ in DictFlags:
             self._flags = {FLAG_UNIQ:None}
+        if FLAG_OPT in DictFlags:
+            if self._flags is None:
+                self._flags = {}
+            self._flags[FLAG_OPT] = None
         elif FLAG_DEF in DictFlags:
             # use the ASN1Obj to serialize the DEFAULT value
             val = self._val
             self._val = DictFlags[FLAG_DEF]
-            self._flags = {FLAG_DEF: self._to_dict_val()}
+            if self._flags is None:
+                self._flags = {}
+            self._flags[FLAG_DEF] = self._to_dict_val()
             self._val = val
     
     #--------------------------------------------------------------------------#
@@ -1377,13 +1523,16 @@ class ASN1Obj(object):
         # global value / set, ...) as it is a complete hard copy of all objects
         clone = ASN1Obj()
         clone.from_dict( self.to_dict() )
-        if clone._type in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
+        if clone._type in (TYPE_SEQ, TYPE_SET, TYPE_CHOICE):
             clone._build_constructed_rootext()
+        elif clone._type == TYPE_CLASS:
+            self._root_comp = self._cont.keys()
+            self._root_opt = []
         return clone
     
     def clone_light(self):
         # cloning lightly keeps all references from the original ASN1Obj
-        # until they are changed explicitly in the clone
+        # until they are changed (rebounded) explicitly in the clone
         clone = ASN1Obj()
         clone._name = self._name
         clone._mode = self._mode
@@ -1399,14 +1548,31 @@ class ASN1Obj(object):
         clone._flags = self._flags
         clone._group = self._group
         clone._syntax = self._syntax
-        if clone._type in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
+        if clone._type in (TYPE_SEQ, TYPE_SET, TYPE_CHOICE):
             clone._build_constructed_rootext()
+        elif clone._type == TYPE_CLASS:
+            self._root_comp = self._cont.keys()
+            self._root_opt = []
         return clone
     
     def clone_const(self):
+        # clone lightly the ASN1Obj, except for its constraints
         clone = self.clone_light()
         clone._from_dict_const( self._to_dict_const() )
         return clone
+
+# this is a trick to handle ASN.1 object self-reference:
+# only the name of the object is kept, so the original object can be retrieved 
+# at runtime
+# flag must be handle in the same way as ASN1Obj
+class ASN1ObjSelf(ASN1Obj):
+    def __init__(self, name=''):
+        if not name:
+            raise(ASN1_PROC('Invalid name for self-referencing object: %s'\
+                  % name))
+        self._name = name
+        ASN1Obj.__init__(self)
+        self._type = '_SELF_REF_'
 
 # this is to encapsulate any ASN.1 CODEC
 class ASN1Codec(object):

@@ -40,6 +40,8 @@ def test_def(print_info=True):
     ASN1.ASN1Obj._SAFE = True
     ASN1.ASN1Obj._RET_STRUCT = True
     
+    MODULE_OPT.TAG = TAG_AUTO
+    
     if print_info: print('testing NULL definition')
     A = ASN1.ASN1Obj(name='A', type=TYPE_NULL)
     A.set_val(None)
@@ -864,8 +866,8 @@ def test_all(print_info=False):
     test_per_integer(print_info)
     test_per_choice(print_info)
     test_per_sequence(print_info)
-    #test_s1ap()
-    #test_rrc3g()
+    test_s1ap()
+    test_rrc3g()
     
 if __name__ == '__main__':
     test_all()

@@ -4,7 +4,6 @@
 # * Version : 0.2.3
 # *
 # * Copyright © 2014. Benoit Michau. ANSSI.
-# * Copyright © 2014. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -21,7 +20,7 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : asn1/CODEC_PER.py
+# * File Name : asn1/PER.py
 # * Created : 2014-09-15
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
@@ -30,11 +29,8 @@
 # export filter
 __all__ = ['PER']
 
-from types import NoneType
-#
 from libmich.core.element import Str, Int, Bit, Layer, show
 from libmich.core.shtr import shtr
-from libmich.core.shar import shar
 from libmich.utils.IntEncoder import *
 #
 import ASN1
@@ -277,7 +273,6 @@ class _PER_NSVAL(Layer):
 #------------------------------------------------------------------------------#
 
 class PER(ASN1.ASN1Codec):
-    _shar = True
     #
     # used by ASN1Obj types
     _name = 'PER'
@@ -398,7 +393,8 @@ class PER(ASN1.ASN1Codec):
             if ub is not None and obj._val > ub:
                 # if INTEGER is extensible, this works
                 if ext:
-                    obj._msg.E > 1
+                    obj._msg[0].Pt = 1
+                    #obj._msg.E > 1
                     self._encode_int_unconst(obj, obj._val)
                     return
                 else:
@@ -413,7 +409,8 @@ class PER(ASN1.ASN1Codec):
         if obj._val < lb:
             # if INTEGER is extensible, this works
             if ext:
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_int_unconst(obj, obj._val)
                 return
             # this is handled by ASN1Obj._val_in_const()
@@ -438,7 +435,8 @@ class PER(ASN1.ASN1Codec):
                 return
             # excepted if INTEGER is extensible
             elif ext:
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_int_unconst(obj, obj._val)
                 return
             # this is handled by ASN1Obj._val_in_const()
@@ -449,7 +447,8 @@ class PER(ASN1.ASN1Codec):
         # if INTEGER needs to be extended anyway
         if obj._val > ub:
             if ext:
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_int_unconst(obj, obj._val)
                 return
             # this is handled by ASN1Obj._val_in_const()
@@ -572,7 +571,8 @@ class PER(ASN1.ASN1Codec):
             # check if value to encode is in the extension (_ext)
             if obj._val in obj._ext:
                 # 2) if value is in the extension
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 # encoding with Normally Small Value (7 bits, no padding)
                 # value is the index (starting from 0) of the identifier assigned,
                 # without using its explicit tagging
@@ -624,6 +624,7 @@ class PER(ASN1.ASN1Codec):
             obj._val._codec._add_P(obj._val)
             val = obj._val._msg
             size = val.bit_len()
+            obj._val._msg = None
         else:
             size = obj._val[1]
             val = Bit('C', Pt=obj._val[0], BitLen=size, Repr=self._REPR_BIT_STR)
@@ -634,7 +635,8 @@ class PER(ASN1.ASN1Codec):
             self._add_E(obj)
             # check if value to encode has an extended SIZE
             if size < lb or (ub and size > ub):
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_bit_str_noub(obj, val, size)
                 return
         #
@@ -717,7 +719,8 @@ class PER(ASN1.ASN1Codec):
             self._add_E(obj)
             # check if value to encode has an extended SIZE
             if size < lb or (ub and size > ub):
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_oct_str_noub(obj, val, size)
                 return
         #
@@ -793,7 +796,8 @@ class PER(ASN1.ASN1Codec):
             root_names = [i for i in obj._cont if i not in obj._ext]
             # check if CHOICE to encode is an extended one
             if obj._val[0] in obj._ext:
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_choice_ext(obj)
                 return
         else:
@@ -914,7 +918,8 @@ class PER(ASN1.ASN1Codec):
             self._add_E(obj)
             if any([name in obj._ext_flat for name in obj._val]):
                 extended = True
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
         #
         # 3) build en empty bitmap preamble for OPTIONAL / DEFAULT components
         bm_len = len(obj._root_opt)
@@ -1043,7 +1048,8 @@ class PER(ASN1.ASN1Codec):
             self._add_E(obj)
             # check if values to encode count is over the bounds
             if count < lb or (ub and count > ub):
-                obj._msg.E > 1
+                obj._msg[0].Pt = 1
+                #obj._msg.E > 1
                 self._encode_seq_of_noub(obj, count)
                 return
         #
@@ -1095,7 +1101,8 @@ class PER(ASN1.ASN1Codec):
     # OPEN TYPE
     #--------------------------------------------------------------------------#
     def encode_open_type(self, obj):
-        if isinstance(obj._val, tuple):
+        if isinstance(obj._cont, ASN1.ASN1Obj) and isinstance(obj._val, tuple) \
+        and obj._val[0] == obj._cont._name:
             obj._cont._val = obj._val[1]
             self._wrap_open_type(obj, obj._cont)
             obj._cont._val = None
@@ -1198,7 +1205,8 @@ class PER(ASN1.ASN1Codec):
         if ext:
             buf = self._get_E(obj, buf)
             # if INTEGER is extended
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 return self._decode_int_unconst(obj, buf)
         #
         # 3) no lower bound
@@ -1348,7 +1356,8 @@ class PER(ASN1.ASN1Codec):
         # 1) decode potential extensibility marker
         if obj._ext is not None:
             buf = self._get_E(obj, buf)
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 # 2) value is in the extension
                 c = _PER_NSVAL('C', Repr=self._REPR_ENUM)
                 buf = c.map_ret(buf)
@@ -1362,8 +1371,10 @@ class PER(ASN1.ASN1Codec):
                     obj._val = obj._ext[val]
                 # if extended index value is unknown,
                 # the decoded value cannot be retrieved
-                # WNG: this is silently handled here, 
-                # as no concrete value is set for within obj._val
+                # WNG: we put a dummy string here as value 
+                else:
+                    obj._val = '_ext_%i' % val
+                #
                 return buf
             else:
                 # 3) value is in the root
@@ -1410,7 +1421,8 @@ class PER(ASN1.ASN1Codec):
         # 2) decode potential extensibility marker
         if ext:
             buf = self._get_E(obj, buf)
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 # 3) BIT STRING SIZE is extended
                 return self._decode_bit_str_noub(obj, buf)
         #
@@ -1485,7 +1497,8 @@ class PER(ASN1.ASN1Codec):
         # 2) decode potential extensibility marker
         if ext:
             buf = self._get_E(obj, buf)
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 # 3) OCTET STRING SIZE is extended
                 return self._decode_oct_str_noub(obj, buf)
         #
@@ -1576,7 +1589,8 @@ class PER(ASN1.ASN1Codec):
             buf = self._get_E(obj, buf)
             root_names = [i for i in obj._cont if i not in obj._ext]
             # check if extended
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 return self._decode_choice_ext(obj, buf)
         else:
             root_names = obj._cont.keys()
@@ -1638,7 +1652,7 @@ class PER(ASN1.ASN1Codec):
             cho = None
         else:
             cho_name = obj._ext[ind()]
-            cho = obj._cont[cho_name]
+            cho = obj._cont[cho_name].clone_light()
         #
         # 4) potential padding
         if self.is_aligned:
@@ -1707,7 +1721,8 @@ class PER(ASN1.ASN1Codec):
         extended = False
         if obj._ext is not None:
             buf = self._get_E(obj, buf)
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 extended = True
         #
         # 3) get the bitmap preamble for OPTIONAL / DEFAULT components
@@ -1740,22 +1755,21 @@ class PER(ASN1.ASN1Codec):
             #
             if comp is not None:
                 if comp._type in (TYPE_OPEN, TYPE_ANY):
-                    # 4bis) get potential padding before OPEN TYPE
+                    # 4.1) get potential padding before OPEN TYPE
                     if self.is_aligned():
                         buf = self._get_P(obj, buf)
-                    buf = comp._decode(buf, offset=0)
-                    # 4ter) decode further OPEN TYPE with reference constraint
-                    # CONST_SET_REF
+                    # comp._cont is None or ASN1Obj
+                    # 4.2) if a reference constraint CONST_SET_REF is provided
+                    # this overwrites previous content
                     const = comp.get_const_ref()
                     if const:
-                        comp_ref, done = self._decode_open_ref(obj, comp, const)
+                        done, ref = self._get_open_ref(obj, comp, const)
                         if done:
-                            # further decoding was done correctly
-                            comp._msg = comp_ref._msg
-                            comp._val = (comp_ref._name, comp_ref._val)
-                else:
-                    # 5) decode standard ASN1 object
-                    buf = comp._decode(buf, offset=self._off)
+                            #log('CONST_SET_REF, ref: %s' % ref._name)
+                            comp._cont = ref
+                    #log('_decode_seq, type OPEN: %s, %s' % (comp._name, comp._cont))
+                # 5) decode standard ASN1 object
+                buf = comp._decode(buf, offset=self._off)
                 #
                 obj._msg.append(comp._msg)
                 self._off += comp._msg.bit_len()
@@ -1772,7 +1786,7 @@ class PER(ASN1.ASN1Codec):
             obj._val = None
         return buf
     
-    def _decode_open_ref(self, obj, comp, const):
+    def _get_open_ref(self, obj, comp, const):
         if not const['at']:
             raise(ASN1_OBJ('%s: invalid SET_REF constraint'\
                   % obj.get_fullname()))
@@ -1783,34 +1797,22 @@ class PER(ASN1.ASN1Codec):
             # -> terrible protocol design !
             #raise(ASN1_OBJ('%s: not able to retrieve value for @ '\
             #      'component %s' % (obj.get_fullname(), const['at'])))
-            return (comp, False)
+            return (False, None)
         #
         at_val = obj._val[const['at']]
+        #log('_get_open_ref, at: %s, at_val: %s' % (const['at'], at_val))
         try:
-            obj_ref = const['ref'](const['at'], at_val)
+            ref = const['ref'](const['at'], at_val)
         except:
             # invalid value passed against object info value set
-            return (comp, False)
+            return (False, None)
         #
         comp_typename = comp.get_typename()
-        if comp_typename not in obj_ref:
+        #log('_get_open_ref, comp_typename: %s' % comp_typename)
+        if comp_typename not in ref:
             raise(ASN1_OBJ('%s: not able to retrieve %s within '\
                   'object info set' % (obj.get_fullname(), comp_typename)))
-        comp_ref = obj_ref[comp_typename].clone_light()
-        #
-        # decode the raw OPEN TYPE buf with the new ASN1 object
-        try:
-            buf = comp_ref._decode(str(comp._msg[-1]), offset=0)
-            comp_ref._codec._get_P(comp_ref, buf)
-        except:
-            # in case the decoder did some bullshit
-            return (comp, False)
-        # TODO: this assertion should be removed after enough testing
-        if self._SAFE:
-            assert( str(comp_ref) == str(comp._msg[-1]) )
-        # comp_ref must get the Length prefix from comp LV structure
-        comp_ref._msg.insert(0, comp._msg[0])
-        return (comp_ref, True)
+        return (True, ref[comp_typename].clone_light()) 
     
     def _decode_seq_ext(self, obj, buf):
         # 1) get the bitmap preamble for extended fields
@@ -1838,7 +1840,7 @@ class PER(ASN1.ASN1Codec):
                     if isinstance(comp, str):
                         # single field
                         name = comp
-                        comp_obj = obj._cont[name]
+                        comp_obj = obj._cont[name].clone_light()
                         if comp_obj._type in (TYPE_OPEN, TYPE_ANY):
                             # TODO: decode further OPEN TYPE with CONST_SET_REF
                             pass
@@ -1851,7 +1853,7 @@ class PER(ASN1.ASN1Codec):
                         comp_obj = ASN1.ASN1Obj(name=repr(comp), type=TYPE_SEQ)
                         comp_obj._cont = OD()
                         for name in comp:
-                            comp_obj._cont[name] = obj._cont[name]
+                            comp_obj._cont[name] = obj._cont[name].clone_light()
                             if obj._cont[name]._type in (TYPE_OPEN, TYPE_ANY):
                                 # TODO: decode further OPEN TYPE with CONST_SET_REF
                                 pass
@@ -1879,7 +1881,8 @@ class PER(ASN1.ASN1Codec):
         # 2) decode potential count extensibility
         if ext:
             buf = self._get_E(obj, buf)
-            if obj._msg.E():
+            #if obj._msg.E():
+            if obj._msg[0]():
                 # 3) SEQUENCE OF SIZE is extended
                 return self._decode_seq_of_noub(obj, buf)
         #
@@ -1920,13 +1923,14 @@ class PER(ASN1.ASN1Codec):
     
     def _decode_seq_of_obj(self, obj, buf, count):
         obj._val = []
+        cont = obj._cont.clone_light()
         for i in xrange(count):
-            buf = obj._cont._decode(buf, offset=self._off)
-            self._off += obj._cont._msg.bit_len()
-            obj._msg.append(obj._cont._msg)
-            obj._val.append(obj._cont._val)
+            buf = cont._decode(buf, offset=self._off)
+            self._off += cont._msg.bit_len()
+            obj._msg.append(cont._msg)
+            obj._val.append(cont._val)
         # clean up content object
-        obj._cont._val = None
+        cont._val = None
         #
         return buf
     
@@ -1934,5 +1938,16 @@ class PER(ASN1.ASN1Codec):
     # OPEN TYPE
     #--------------------------------------------------------------------------#
     def decode_open_type(self, obj, buf):
-        return self._unwrap_open_type(obj, buf, None)
+        if isinstance(obj._cont, ASN1.ASN1Obj):
+            buf = self._unwrap_open_type(obj, buf, obj._cont)
+            if obj._cont._name in GLOBAL.TYPE:
+                obj._val = (obj._cont._name, obj._cont._val)
+            else:
+                obj._val = obj._cont._val
+            obj._cont._val = None
+            return buf
+        else:
+            buf = self._unwrap_open_type(obj, buf, None)
+            obj._val = str(obj._msg[-1])
+            return buf
 #

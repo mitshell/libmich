@@ -26,5 +26,5 @@
 # *--------------------------------------------------------
 #*/
 
-__all__ = ['ASN1', 'PER', 'utils', 'parsers', 'processor', 'modules']
+__all__ = ['ASN1', 'PER', 'BER', 'utils', 'parsers', 'processor', 'modules']
 #

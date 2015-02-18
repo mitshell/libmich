@@ -27,7 +27,8 @@
 #*/
 
 import re
-from collections import OrderedDict
+from struct import pack
+from libmich.core.shtr import decompose
 
 #------------------------------------------------------------------------------#
 # library-wide Python routines
@@ -137,7 +138,9 @@ class RAISED:
 
 # global configuration options set from the module header
 class MODULE_OPT(object):
-    TAGS = 'EXPLICIT' # 'EXPLICIT', 'IMPLICIT', 'AUTOMATIC'
+    # tagging mode: default is EXPLICIT mode (also when not set)
+    TAG = 'EXPLICIT' # 'EXPLICIT', 'IMPLICIT', 'AUTOMATIC'
+    # extensibility mode: can be implied, or not
     EXT = None # None, 'IMPLIED'
 
 # specific ASN.1 global tables
@@ -145,13 +148,16 @@ class GLOBAL(object):
     #
     # stores all user-defined ASN.1 subtypes
     TYPE = OD()
-    # stores all user-defined ASN.1 value and set assigned to ASN.1 type
+    # stores all user-defined ASN.1 values and sets
     VALUE = OD()
     SET = OD()
     #
     # for all ASN.1 initialized objects that are user-defined but
     # still needs to be processed
     OBJ = []
+    # for ASN.1 initialized objects that are user-defined and have a component
+    # that is self-referencing, and needs to be re-processed afterwards
+    SELF = []
     
     @classmethod
     def clear(cla):
@@ -163,6 +169,7 @@ class GLOBAL(object):
     @classmethod
     def clear_tmp(cla):
         del cla.OBJ[:]
+        del cla.SELF[:]
 
 # list ASN.1 ISO OID required to be known by the compiler
 ASN1_OID_ISO = {
@@ -196,6 +203,7 @@ TYPE_BIT_STR        = 'BIT STRING'
 TYPE_OCTET_STR      = 'OCTET STRING'
 TYPE_IA5_STR        = 'IA5String'
 TYPE_PRINT_STR      = 'PrintableString'
+TYPE_NUM_STR        = 'NumericString'
 # constructed types
 TYPE_CHOICE         = 'CHOICE'
 TYPE_SEQ            = 'SEQUENCE'
@@ -214,19 +222,79 @@ TYPE_CONSTRUCTED    = (TYPE_CLASS, TYPE_CHOICE, TYPE_SEQ,
 # tag type listing
 TAG_IMPLICIT        = 'IMPLICIT'
 TAG_EXPLICIT        = 'EXPLICIT'
+TAG_AUTO            = 'AUTOMATIC'
 TAG_CONTEXT_SPEC    = 'CONTEXT-SPECIFIC'
 TAG_PRIVATE         = 'PRIVATE'
-TAG_APPLICATION     =  'APPLICATION'
+TAG_APPLICATION     = 'APPLICATION'
 TAG_UNIVERSAL       = 'UNIVERSAL'
+#
+TAG_CLASS_BER = {
+    TAG_UNIVERSAL : 0,
+    TAG_APPLICATION : 1,
+    TAG_CONTEXT_SPEC : 2,
+    TAG_PRIVATE : 3
+}
+#
+TAG_UNIV_TYPETOVAL = {
+    TYPE_BOOL : 1,
+    TYPE_INTEGER : 2,
+    TYPE_BIT_STR : 3,
+    TYPE_OCTET_STR : 4,
+    TYPE_NULL : 5,
+    TYPE_OID : 6,
+    TYPE_REAL : 9,
+    TYPE_ENUM : 10,
+    TYPE_SEQ : 16,
+    TYPE_SEQ_OF : 16,
+    TYPE_SET : 17,
+    TYPE_SET_OF : 17,
+    TYPE_NUM_STR : 18,
+    TYPE_PRINT_STR : 19,
+    TYPE_IA5_STR : 22,
+}
+TAG_UNIV_VALTOTYPE = {
+    0 : 'reserved for BER',
+    1 : TYPE_BOOL,
+    2 : TYPE_INTEGER,
+    3 : TYPE_BIT_STR,
+    4 : TYPE_OCTET_STR,
+    5 : TYPE_NULL,
+    6 : TYPE_OID,
+    7 : 'ObjectDescriptor',
+    8 : 'EXTERNAL',
+    9 : TYPE_REAL, # actually unsupported, yet
+    10 : TYPE_ENUM,
+    11 : 'EMBEDDED PDV', 
+    12 : 'UTF8String',
+    13 : 'RELATIVE-OID',
+    14 : 'reserved ffu',
+    15 : 'reserved ffu',
+    16 : TYPE_SEQ, # but also TYPE_SEQ_OF
+    17 : TYPE_SET, # but also TYPE_SET_OF
+    18 : TYPE_NUM_STR,
+    19 : TYPE_PRINT_STR,
+    20 : 'TeletexString',
+    21 : 'VideotexString',
+    22 : TYPE_IA5_STR,
+    23 : 'UTCTime',
+    24 : 'GeneralizedTime',
+    25 : 'GraphicString',
+    26 : 'GraphicString',
+    27 : 'GeneralString',
+    28 : 'UniversalString',
+    29 : 'CHARACTER STRING',
+    30 : 'BMPString',
+    31 : 'reserved ffu'
+}
 
 # constraints type listing
 CONST_SINGLE_VAL    = 'CONST_SINGLE_VAL' # keys: ('val':int, 'ext':bool)
 CONST_VAL_RANGE     = 'CONST_VAL_RANGE' # keys: ('lb':int, 'ub':int, 'ext':bool)
 CONST_CONTAINING    = 'CONST_CONTAINING' # keys: ('obj':ASN1Obj)
 CONST_SET_REF       = 'CONST_SET_REF' # keys: ('obj':ASN1Obj, 'at':str)
+CONST_ALPHABET      = 'CONST_ALPHABET' # keys:
 # unsupported ones (currently not used)
 CONST_TYPE_INCL     = 'CONST_TYPE_INCL'
-CONST_ALPHABET      = 'CONST_ALPHABET'
 CONST_REGEXP        = 'CONST_REGEXP'
 CONST_ENCODE_BY     = 'CONST_ENCODE_BY'
 
@@ -251,7 +319,7 @@ SYNT_RE_FIELD_IDENT = re.compile( \
 SYNT_RE_TYPEREF = re.compile( \
     '(?:^|\s{1})(%s)' % _RE_TYPEREF)
 SYNT_RE_CLASSREF = re.compile( \
-    '(?:^|\s{1})((%s)\.\&([a-zA-Z0-9\-]{1,}))' % _RE_TYPEREF)
+    '(?:^|\s{1})((%s)\s{0,}\.\&([a-zA-Z0-9\-]{1,}))' % _RE_TYPEREF)
 SYNT_RE_REMAINING = re.compile( \
     '[a-zA-Z0-9\(\)\[\{\}\-\!\.\:\?\^\&,;]')
 
@@ -288,6 +356,9 @@ SYNT_RE_SET_ELT = re.compile( \
     '(?:^\s{0,})(?:(%s)|(%s))(?:\s{0,}$)' % (_RE_TYPEREF, _RE_IDENT))
 SYNT_RE_CONTAINING = re.compile( \
     '(?:^\s{0,})(?:CONTAINING\s{1,}(%s))(?:\s{0,}$)' % (_RE_TYPEREF))
+SYNT_RE_FLAG = re.compile('(?:^\s{0,})(OPTIONAL|UNIQUE|DEFAULT)')
+SYNT_RE_ALPHABET_LETTER = re.compile('^(?:\"(.)\"\|){0,}?(?:\"(.)\"){1}$')
+SYNT_RE_ALPHABET_WORD = re.compile('^\"(.*)\"$')
 
 # list of all ASN.1 keywords
 SYNT_KEYWORDS = [ \
@@ -316,6 +387,13 @@ SYNT_BASIC_TYPES = [ \
 'SEQUENCE', 'SEQUENCE OF', 'SET', 'SET OF', 'CHOICE',
 'EXTERNAL', 'EMBEDDED PDV', 'CHARACTER STRING',
 'CLASS', 'ANY', 'OPEN_TYPE']
+
+# list of all ASN.1 keywords that cannot be used in a WITH SYNTAX statement
+SYNT_SYNTAX_BL = [ \
+'BIT', 'BOOLEAN', 'CHARACTER', 'CHOICE', 'EMBEDDED', 'END', 'ENUMERATED', 
+'EXTERNAL', 'FALSE', 'INSTANCE', 'INTEGER', 'INTERSECTION', 'MINUS-INFINITY', 
+'NULL', 'OBJECT', 'OCTET', 'PLUS-INFINITY', 'REAL', 'RELATIVE-OID', 'SEQUENCE', 
+'SET', 'TRUE', 'UNION']
 
 def match_basic_type(text=''):
     for t in SYNT_BASIC_TYPES:
@@ -501,7 +579,7 @@ def convert_bstr(bstr=''):
 def convert_hstr(hstr=''):
     '''
     returns a 2-tuple (unsigned integral value, bit length) from a hstring,
-    e.g. convert_hstr("'0abcd1234'B") -> (2882343476, 32)
+    e.g. convert_hstr("'0ABCD1234'H") -> (2882343476, 32)
     '''
     return (int(hstr[1:-2], 16), len(hstr[1:-2])*4)
 
@@ -517,6 +595,16 @@ def flatten(l=[]):
         elif isinstance(e, (list, tuple)):
             r.extend(flatten(e))
     return r
+
+def nest(l=[], val=0):
+    '''
+    returns a nested 2-tuple of all elements from the list l, 
+    ultimately associated with val 
+    '''
+    if len(l) == 1:
+        return (l[0], val)
+    else:
+        return nest(l[:-1], (l[-1], val))
 
 #------------------------------------------------------------------------------#
 # integral value processing routines

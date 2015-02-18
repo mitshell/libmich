@@ -108,10 +108,10 @@ def parse_definition(Obj, text=''):
 def parse_tag(Obj, text=''):
     '''
     parses the potential tag within "[" and "]" 
-    with potential class directive inside (UNIVERSAL, APPLICATION, ...)
-    and potential inlined tagging mode (IMPLICIT / EXPLICIT)
+    with tagging mode (IMPLICIT / EXPLICIT)
+    and tagging class (CONTEXT-SPECIFIC, PRIVATE, APPLICATION)
     
-    sets a 3-tuple (value, class, mode), or None, in Obj['tag']
+    sets a 3-tuple (value, mode, class), or None, in Obj['tag']
     
     returns the rest of the text
     '''
@@ -120,7 +120,7 @@ def parse_tag(Obj, text=''):
         # no tag specified
         Obj['tag'] = None
         return text
-    cla, val_num, val_ref = m.group(1), m.group(2)
+    cla, val_num, val_ref = m.group(1), m.group(2), m.group(3)
     if cla is None:
         cla = TAG_CONTEXT_SPEC
     if val_ref:
@@ -129,12 +129,15 @@ def parse_tag(Obj, text=''):
             raise(ASN1_PROC_LINK('%s: undefined value %s for tag'\
                   % (Obj.get_fullname(), val_ref)))
         val_num = GLOBAL.VALUE[val_ref]['val']
+    else:
+        val_num = int(val_num)
     text = text[m.end():].strip()
     m = re.match('IMPLICIT|EXPLICIT', text)
     if not m:
-        Obj['tag'] = (val_num, cla, None)
+        # get the mode from the whole module
+        Obj['tag'] = (val_num, MODULE_OPT.TAG, cla)
     else:
-        Obj['tag'] = (val_num, cla, m.group())
+        Obj['tag'] = (val_num, m.group(), cla)
         text = text[m.end():].strip()
     #
     return text
@@ -173,7 +176,6 @@ def parse_type(Obj, text=''):
                 else:
                     text = text[4:].strip()
                     text = parse_constraint_integer(Obj, text)
-                    #Obj['const'][-1]['type'] = CONST_SIZE
                 if text[:2] != 'OF':
                     # SIZE constraint only for SEQ / SET OF
                     raise(ASN1_PROC_TEXT('%s: invalid SEQUENCE / SET with SIZE: %s'\
@@ -195,58 +197,60 @@ def parse_type(Obj, text=''):
         if cla not in GLOBAL.TYPE:
             # TODO: this could be a CLASS type parameterization
             # lookup against parameters should be implemented
-            raise(ASN1_PROC_LINK('%s: undefined CLASS %s' % (obj['name'], cla)))
+            raise(ASN1_PROC_LINK('%s: undefined CLASS %s'\
+                  % (Obj.get_fullname(), cla)))
         # check for class field existence
         elif cla_field not in GLOBAL.TYPE[cla]['cont']:
             raise(ASN1_PROC_TEXT('%s: CLASS %s, invalid field %s'\
-                  % (obj['name'], cla, cla_field)))
+                  % (Obj.get_fullname(), cla, cla_field)))
         # if typeref is referring to a parameterized type, a clone is required
         typeref = GLOBAL.TYPE[cla]['cont'][cla_field]
-        if typeref.get_param() is not None:
-            Obj['typeref'] = typeref.clone()
-        else:
-            Obj['typeref'] = typeref.clone_const()
-        Obj['type'] = Obj['typeref']['type']
-        #Obj['tag'] = Obj['typeref']['tag'] # TODO: to be verified
-        Obj['ext'] = Obj['typeref']['ext']
-        Obj['cont'] = Obj['typeref']['cont']
-        Obj['const'] = Obj['typeref']['const']
-        # WNG: seems OK to not copy flags, as it is specific to components
-        #Obj['flags'] = Obj['typeref']['flags']
-        Obj['syntax'] = Obj['typeref']['syntax']
-        if Obj['type'] in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
-            Obj._build_constructed_rootext()
+        get_typeref_infos(Obj, typeref)
         return text[m.end():].strip()
     #
     # 3) reference to a user-defined Type
     m = SYNT_RE_TYPEREF.match(text)
     if m:
         typeref = m.group(1)
-        # check for Type existence
-        if typeref not in GLOBAL.TYPE:
+        #
+        # WNG: attempt at supporting self-referencing
+        if Obj['parent'] is not None and typeref == Obj['parent']['name']:
+            #log('%s: self-referencing' % typeref)
+            Obj['typeref'] = ASN1.ASN1ObjSelf(typeref)
+            if Obj['parent'] not in GLOBAL.SELF:
+                GLOBAL.SELF.append( Obj['parent'] )
+            return text[m.end():].strip()
+        #
+        elif typeref not in GLOBAL.TYPE:
             # TODO: this could be a Type parameterization
             # lookup against parameters should be implemented
             raise(ASN1_PROC_LINK('%s: undefined Type %s'\
                   % (Obj.get_fullname(), typeref)))
-        # if typeref is referring to a parameterized type, a clone is required
+        #
         typeref = GLOBAL.TYPE[typeref]
-        if typeref.get_param() is not None:
-            Obj['typeref'] = typeref.clone()
-        else:
-            Obj['typeref'] = typeref.clone_const()
-        Obj['type'] = Obj['typeref']['type']
-        #Obj['tag'] = Obj['typeref']['tag'] # TODO: to be verified
-        Obj['ext'] = Obj['typeref']['ext']
-        Obj['cont'] = Obj['typeref']['cont']
-        Obj['const'] = Obj['typeref']['const']
-        # WNG: seems OK to not copy flags, as it is specific to components
-        #Obj['flags'] = Obj['typeref']['flags']
-        Obj['syntax'] = Obj['typeref']['syntax']
-        if Obj['type'] in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
-            Obj._build_constructed_rootext()
+        get_typeref_infos(Obj, typeref)
         return text[m.end():].strip()
     #
     raise(ASN1_PROC_TEXT('%s: invalid ASN.1 type %s' % (Obj.get_fullname(), text)))
+
+def get_typeref_infos(Obj, ref):
+    if ref.get_param() is not None:
+        # if referred object is parameterized, it needs to be cloned entirely
+        Obj['typeref'] = ref.clone()
+    else:
+        # otherwise, only constraints can diverge and need to be cloned
+        Obj['typeref'] = ref.clone_const()
+    #
+    Obj['type'] = Obj['typeref']['type']
+    #Obj['tag'] = Obj['typeref']['tag'] # TODO: to be verified
+    Obj['ext'] = Obj['typeref']['ext']
+    Obj['cont'] = Obj['typeref']['cont']
+    Obj['const'] = Obj['typeref']['const']
+    # WNG: seems OK to not copy flags, as it is specific to components
+    #Obj['flags'] = Obj['typeref']['flags']
+    Obj['syntax'] = Obj['typeref']['syntax']
+    if Obj['type'] in (TYPE_SEQ, TYPE_SET, TYPE_CHOICE, TYPE_CLASS):
+        Obj._build_constructed_rootext()
 
 #------------------------------------------------------------------------------#
 # ASN.1 content parser
@@ -344,7 +348,8 @@ def parse_content_enum(Obj, text=''):
         else:
             index_used.append( ind_num )
     #
-    Obj['cont'] = OD()
+    #Obj['cont'] = OD()
+    root = []
     ext_in = False
     # check against extensibility option
     if MODULE_OPT.EXT or '...' in O.keys():
@@ -353,9 +358,20 @@ def parse_content_enum(Obj, text=''):
         if key == '...':
             ext_in = True
         else:
-            Obj['cont'][key] = val
+            #Obj['cont'][key] = val
+            root.append(key)
             if ext_in:
                 Obj['ext'].append(key)
+    #
+    # reorder the root enum in the alphabetical order
+    # ... actually not !
+    #root.sort()
+    Obj['cont'] = OD()
+    for key in root:
+        Obj['cont'][key] = O[key]
+    if Obj['ext'] is not None:
+        for key in Obj['ext']:
+            Obj['cont'][key] = O[key]
     #
     return text
 
@@ -384,9 +400,15 @@ def parse_content_constructed(Obj, text=''):
     '''
     if Obj['type'] in (TYPE_SEQ_OF, TYPE_SET_OF):
         Obj['cont'] = ASN1.ASN1Obj(mode=0,
-                                   name='_cont_',
+                                   #name='_cont_',
                                    parent=Obj)
-        return parse_definition(Obj['cont'], text)
+        text_rest = parse_definition(Obj['cont'], text)
+        # WNG: handling potential flags (OPTIONAL / DEFAULT) the dirty way
+        # should work in most of the cases !
+        if Obj['cont']['flags'] is not None:
+            Obj['flags'] = Obj['cont']['flags']
+            Obj['cont']['flags'] = None
+        return text_rest
     #
     # otherwise, it's inside { }
     text, text_cont = extract_curlybrack(text)
@@ -397,7 +419,7 @@ def parse_content_constructed(Obj, text=''):
     #
     return text
 
-def _process_components(Obj, text=''):
+def _process_components(Obj, text='', process_tags=True):
     coma_offsets = [-1] + search_top_lvl_sep(text, ',') + [len(text)]
     components = map(stripper, [text[coma_offsets[i]+1:coma_offsets[i+1]] \
                                 for i in range(len(coma_offsets)-1)])
@@ -438,7 +460,7 @@ def _process_components(Obj, text=''):
                 comp = comp[2:-2].strip()
                 #
                 #log(comp)
-                _process_components(Obj, comp)
+                _process_components(Obj, comp, False)
                 if Obj['ext'] is not None:
                     raise(ASN1_PROC_TEXT('%s: invalid extension marker within '\
                           'extension group: %s' % (Obj.get_fullname(), comp)))
@@ -481,7 +503,61 @@ def _process_components(Obj, text=''):
     if Ext is None and MODULE_OPT.EXT:
         Ext = []
     #
-    Obj['cont'], Obj['ext'] = Cont, Ext
+    if Obj['type'] == TYPE_SET:
+        # for SET type, reorder root components in the alphabetical order
+        if Ext is not None:
+            root = [key for key in Cont if key not in Ext]
+        else:
+            root = Cont.keys()
+        root.sort()
+        #
+        Obj['cont'] = OD()
+        for key in root:
+            Obj['cont'][key] = Cont[key]
+        if Ext is not None:
+            for key in Ext:
+                Obj['cont'][key] = Cont[key]
+    else:
+        Obj['cont'] = Cont
+    Obj['ext'] = Ext
+    #
+    # reprocess tags according to the module option
+    if process_tags:
+        _process_components_tag(Obj)
+
+def _process_components_tag(Obj):
+    #
+    if MODULE_OPT.TAG == TAG_AUTO:
+        # collect all tags already specified
+        tag_used = []
+        for name in Obj['cont']:
+            if Obj['cont'][name]['tag'] is not None:
+                tag_used.append( Obj['cont'][name]['tag'][0] )
+        #
+        tag_auto = 0
+        while tag_auto in tag_used:
+            tag_auto += 1
+        #
+        # tag automatically components remaining untagged
+        for name in Obj['cont']:
+            comp = Obj['cont'][name]
+            if comp['tag'] is None:
+                if comp['type'] in (TYPE_CHOICE, TYPE_OPEN, TYPE_ANY):
+                    comp['tag'] = (tag_auto, TAG_EXPLICIT, TAG_CONTEXT_SPEC)
+                else:
+                    comp['tag'] = (tag_auto, TAG_IMPLICIT, TAG_CONTEXT_SPEC)
+                tag_auto += 1
+                while tag_auto in tag_used:
+                    tag_auto += 1
+    #
+    elif MODULE_OPT.TAG == TAG_IMPLICIT:
+        for name in Obj['cont']:
+            comp = Obj['cont'][name]
+            if comp['tag'] is not None \
+            and comp['type'] in (TYPE_CHOICE, TYPE_OPEN, TYPE_ANY):
+                comp['tag'] = (comp['tag'][0],
+                               TAG_EXPLICIT,
+                               comp['tag'][2])
 
 def parse_flags(Obj, text=''):
     '''
@@ -557,20 +633,35 @@ def _process_fields(Obj, text=''):
             raise(ASN1_PROC_TEXT('%s: invalid CLASS field: %s'\
                   % (Obj.get_fullname(), field)))
         name = m.group(1)
+        #
+        # TODO: field mode need to be set correctly
         Cont[name] = ASN1.ASN1Obj(name=name,
                                   mode=0,
                                   parent=Obj)
         field = field[m.end():].strip()
         #
-        # OPEN TYPE
         if re.match('[A-Z]', name):
-            Cont[name]['type'] = TYPE_OPEN
-            field = parse_flags(Cont[name], field)
-        #
-        # basic type or TypeRef
+            # &UpperField: if there is nothing more, or just a flag, 
+            # this is an OPEN TYPE
+            m = SYNT_RE_FLAG.match(field)
+            if m or field == '':
+                Cont[name]['type'] = TYPE_OPEN
+                if m:
+                    field = parse_flags(Cont[name], field)
+            else:
+                field = parse_definition(Cont[name], field)
+                # this is a values' set
+                Cont[name]['mode'] = 2
         else:
+            # $lowerField: must get a standard ASN.1 definition or reference
             field = parse_definition(Cont[name], field)
-        #
+            # if not all upper-case (if not a CLASS), this is a value
+            if Cont[name]['type'] != TYPE_CLASS:
+                Cont[name]['mode'] = 1
+        # TODO:
+        # reference to other type field (e.g. &Truc &Bidule OPTIONAL) 
+        # are not supported
+        
         if field:
             raise(ASN1_PROC_NOSUPP('%s: unsupported CLASS field definition: %s'\
                   % (Obj.get_fullname(), field)))
@@ -594,37 +685,63 @@ def parse_syntax(Obj, text=''):
     text, text_synt = extract_curlybrack(text)
     if text_synt is None:
         raise(ASN1_PROC_TEXT('%s: invalid CLASS WITH SYNTAX declaration: %s'\
-              % (Obj['name'], text)))
+              % (Obj.get_fullname(), text)))
     #
-    synt = OD()
-    group_state, group_num = None, 0
     # get all the SYNTAX text until there is a &fieldIdent
-    # check for optional groups in "[" "]"
-    # TODO: handle nested optional groups, e.g. [ A [B]] C
-    m_gr = re.match('\[', text_synt)
-    if m_gr:
-        group_state = group_num
+    Synt = OD()
+    group_state, group_id, depth = [], [], 0
+    #
+    # check for initial optional (nested) group opening
+    m_gr_in = re.match('\[', text_synt)
+    while m_gr_in:
+        depth += 1
+        if len(group_id) < depth:
+            group_id.append(0)
+        group_state = group_id[:depth]
+        #
         text_synt = text_synt[1:].strip()
+        m_gr_in = re.match('\[', text_synt)
+    #
+    # start the main loop, parsing syntax fields
     m = SYNT_RE_FIELD_IDENT.search(text_synt)
     while m:
-        synt[text_synt[:m.start()].strip()] = (m.group(1), group_state)
+        # keep track of &fieldRef, corresponding SYNTAX and optional (nested) 
+        # group identifier
+        syntax = text_synt[:m.start()].strip()
+        if syntax in SYNT_SYNTAX_BL:
+            raise(ASN1_PROC_TEXT('%s: CLASS SYNTAX confusing with ASN.1 '\
+                  'keyword: %s' % (Obj.get_fullname(), syntax)))
+        Synt[m.group(1)] = (syntax, tuple(group_state))
         text_synt = text_synt[m.end():].strip()
-        m_gr = re.match('\]', text_synt)
-        if m_gr:
-            group_state = None
-            group_num += 1
+        #
+        # check for optional (nested) group opening and closing
+        m_gr_in = re.match('\[', text_synt)
+        m_gr_out = re.match('\]', text_synt)
+        while (m_gr_in or m_gr_out):
+            if m_gr_in:
+                depth += 1
+                if len(group_id) < depth:
+                    group_id.extend( [0]*(depth-len(group_id)) )
+                else:
+                    group_id[depth-1] += 1
+                group_state = group_id[:depth]
+            elif m_gr_out:
+                depth -= 1
+                group_id = group_id[:depth+1]
+                group_state = group_id[:depth]
+            #
             text_synt = text_synt[1:].strip()
-        m_gr = re.match('\[', text_synt)
-        if m_gr:
-            group_state = group_num
-            text_synt = text_synt[1:].strip()
+            m_gr_in = re.match('\[', text_synt)
+            m_gr_out = re.match('\]', text_synt)
+        #
         m = SYNT_RE_FIELD_IDENT.search(text_synt)
+    #
     if SYNT_RE_REMAINING.match(text_synt):
         raise(ASN1_PROC_TEXT('%s: remaining CLASS syntax: %s'\
-              % (Obj['name'], text_synt)))
+              % (Obj.get_fullname(), text_synt)))
     #
-    if synt:
-        Obj['syntax'] = synt
+    if Synt:
+        Obj['syntax'] = Synt
     return text
 
 def parse_content_subtype(Obj, text=''):
@@ -652,7 +769,7 @@ def parse_content_subtype(Obj, text=''):
         m = SYNT_RE_PARAM_ARG.match(arg)
         if not m:
             raise(ASN1_PROC_TEXT('%s: invalid content argument: %s'\
-                  % (Obj['name'], arg)))
+                  % (Obj.get_fullname(), arg)))
         if m.group(2) is not None:
             # object info set reference: {param}, ... 
             _process_arg(Obj, param_cnt, m.group(2), val_set=True)
@@ -730,7 +847,11 @@ def _dispatch_param_val(Obj, param_ref, val_obj):
 #------------------------------------------------------------------------------#
 # ASN.1 value parser
 #------------------------------------------------------------------------------#
-# TODO: value parsing for constructed types is not supported yet...
+# TODO: value parsing for certain types is not supported yet
+# - SEQUENCE_OF
+# - SEQUENCE
+# - SET_OF
+# - SET
 # TODO: there is currently no constraint checking when parsing values
 
 def parse_value(Obj, text=''):
@@ -768,7 +889,7 @@ def parse_value_bool(Obj, text=''):
         m = SYNT_RE_IDENT.match(text)
         if not m:
             raise(ASN1_PROC_TEXT('%s: invalid BOOLEAN value: %s'\
-                  % (Obj['name'], text)))
+                  % (Obj.get_fullname(), text)))
         ref = m.group()
         if ref not in GLOBAL.VALUE:
             raise(ASN1_PROC_LINK('%s: undefined BOOLEAN value reference: %s'\
@@ -897,7 +1018,7 @@ def _parse_value_named_bitstr(Obj, text):
     for nb in names:
         if nb not in Obj['cont']:
             raise(ASN1_PROC_TEXT('%s: invalid BIT STRING named bit: %s'\
-                  % (Obj['name'], nb)))
+                  % (Obj.get_fullname(), nb)))
         val += 1 << (highest - Obj['cont'][nb])
     Obj['val'] = (val, highest+1)
     #
@@ -917,13 +1038,13 @@ def parse_value_str(Obj, text=''):
             m = SYNT_RE_IDENT.match(text)
             if not m:
                 raise(ASN1_PROC_TEXT('%s: invalid OCTET STRING value: %s'\
-                      % (Obj['name'], text)))
+                      % (Obj.get_fullname(), text)))
             ref = m.group()
             if ref not in GLOBAL.VALUE:
                 raise(ASN1_PROC_LINK('%s: undefined OCTET STRING value '\
                       'reference: %s' % (Obj.get_fullname(), text)))
             if GLOBAL.VALUE[ref]['type'] not in (TYPE_OCTET_STR, TYPE_IA5_STR, 
-            TYPE_PRINT_STR):
+                                                 TYPE_PRINT_STR, TYPE_NUM_STR):
                 raise(ASN1_PROC_TEXT('%s: OCTET STRING value reference to '\
                       'bad type: %s' % (Obj.get_fullname(), text)))
             Obj['val'] = GLOBAL.VALUE[ref]['val']
@@ -953,7 +1074,7 @@ def parse_value_oid(Obj, text=''):
         m = SYNT_RE_IDENT.match(text)
         if not m:
             raise(ASN1_PROC_TEXT('%s: invalid OID value: %s'\
-                  % (Obj['name'], text)))
+                  % (Obj.get_fullname(), text)))
         ref = m.group()
         if ref not in GLOBAL.VALUE:
             raise(ASN1_PROC_LINK('%s: undefined OID value reference: %s'\
@@ -976,10 +1097,16 @@ def parse_value_oid(Obj, text=''):
         elif m.group(3):
             # NameForm
             if m.group(3) in ASN1_OID_ISO:
-                val.append(int(ASN1_OID_IDO[m.group(3)]))
+                val.append(int(ASN1_OID_ISO[m.group(3)]))
+            elif m.group(3) in GLOBAL.VALUE:
+                ref = GLOBAL.VALUE[m.group(3)]
+                if ref['type'] == TYPE_OID:
+                    val.extend( ref['val'] )
+                elif ref['type'] == TYPE_INTEGER:
+                    val.append( ref['val'] )
             else:
-                raise(ASN1_PROC_NOSUPP('%s: unknown named OID component: %s'\
-                      % (Obj['name'], m.group(3))))
+                raise(ASN1_PROC_LINK('%s: undefined named OID component: %s'\
+                      % (Obj.get_fullname(), m.group(3))))
         text_oid = text_oid[m.end():].strip()
         m = SYNT_RE_OID_COMP.match(text_oid)
     #
@@ -991,7 +1118,31 @@ def parse_value_oid(Obj, text=''):
     return text
 
 def parse_value_choice(Obj, text=''):
-    raise(ASN1_PROC_NOSUPP)
+    # name: value
+    # 1) get the name of the ASN.1 object chosen
+    m = None
+    for name in Obj['cont']:
+        m = re.match(name, text)
+        if m:
+            # we have a winner
+            break
+    if m is None:
+        raise(ASN1_PROC_TEXT('%s: invalid CHOICE identifier: %s'\
+              % (Obj.get_fullname(), text)))
+    # 2) split the name : value
+    text = text[len(name):].strip()
+    if text[0] != ':':
+        raise(ASN1_PROC_TEXT('%s: invalid CHOICE value assignment: %s'\
+              % (Obj.get_fullname(), text)))
+    # 3) parse the value with the chosen component
+    text = text[1:].strip()
+    cho = Obj['cont'][name]
+    text = parse_value(cho, text)
+    # 4) set the value to the parent object and clean-up the chosen component
+    Obj['val'] = (name, cho['val'])
+    cho['val'] = None
+    #
+    return text
 
 def parse_value_seq(Obj, text=''):
     raise(ASN1_PROC_NOSUPP)
@@ -1014,7 +1165,7 @@ def parse_value_class(Obj, text=''):
         m = SYNT_RE_IDENT.match(text)
         if not m:
             raise(ASN1_PROC_TEXT('%s: invalid CLASS content: %s'\
-                  % (Obj['name'], text)))
+                  % (Obj.get_fullname(), text)))
         ref = m.group()
         if ref not in GLOBAL.VALUE:
             raise(ASN1_PROC_LINK('%s: undefined CLASS value reference: %s'\
@@ -1041,38 +1192,142 @@ def parse_value_class(Obj, text=''):
 
 def _parse_value_class_by_syntax(Obj, text=''):
     #
-    idents, ident_index, offsets = Obj['syntax'].keys(), 0, []
-    val = OD()
+    text_full = str(text)
+    tree = _syntax_tree_build(Obj)
     #
-    while ident_index < len(idents):
-        ident = idents[ident_index]
-        m = re.search(ident, text)
-        if not m:
-            group_num = Obj['syntax'][ident][1]
-            if group_num is not None:
-                # optional SYNTAX ident missing
-                # drop all SYNTAX idents in the same optional group
-                while Obj['syntax'][ident][1] == group_num:
-                    ident_index += 1
-                    ident = idents[ident_index]
-            else:
-                # mandatory SYNTAX ident missing
-                raise(ASN1_PROC_TEXT('%s: CLASS value missing mandatory '\
-                      'SYNTAX %s: %s' % (Obj.get_fullname(), ident, text)))
+    Val = []
+    selected_field = ''
+    cur = 0
+    while True:
+        # look for all possible SYNTAX tokens, according to the
+        # syntax tree and the previously selected token
+        next_fields = _syntax_tree_get_nexts(Obj, tree, selected_field)
+        next = [(Obj['syntax'][f][0], f) for f in next_fields]
+        next.sort(key = lambda s:-len(s[0]))
+        #log('next: %s' % next)
+        #
+        selected = [None, None]
+        for synt, field in next:
+            m = re.search(synt, text)
+            if m:
+                #log('field %s, synt %s' % (field, synt))
+                if _syntax_tree_select_offset(Obj, selected, m):
+                    selected_synt = synt
+                    selected_field = field
+                #log('selected: %s' % selected)
+        #
+        #log('selected field: %s' % selected_field)
+        if selected == [None, None]:
+            break
         else:
-            # can provide the value assignment to previous SYNTAX ident
-            if len(val) > 0:
-                val[val.keys()[-1]] = text[:m.start()].strip()
-            # SYNTAX ident value initialized
-            val[Obj['syntax'][m.group()][0]] = None
-            text = text[m.end():]
-            ident_index += 1
-    if len(val) > 0:
-        # provide the value assignment to last SYNTAX ident
-        val[val.keys()[-1]] = text.strip()
+            # keep track of selected field, corresponding SYNTAX token,
+            # and text offset for the start of the value
+            Val.append( (selected_field, selected_synt, 
+                        (cur+selected[0], cur+selected[1])) )
+        # truncate the text and loop
+        text = text[selected[1]:]
+        cur += selected[1]
     #
-    Obj['val'] = val
+    if () in tree and len(tree[()]):
+        # not all mandatory fields were collected
+        raise(ASN1_PROC_TEXT('%s: CLASS value missing mandatory '\
+              'SYNTAX tokens: %s' % (Obj.get_fullname(), tree[()])))
+    #
+    #log('Val: %s' % Val)
+    Obj['val'] = {}
+    for i in range(len(Val)):
+        if i < len(Val)-1:
+            Obj['val'][Val[i][0]] = text_full[Val[i][2][1]:Val[i+1][2][0]].strip()
+        else:
+            Obj['val'][Val[i][0]] = text_full[Val[i][2][1]:].strip()
     return ''
+
+def _syntax_tree_select_offset(Obj, selected, m):
+    start, end = m.start(), m.end()
+    if selected == [None, None]:
+        selected[0] = start
+        selected[1] = end
+        return True
+    elif start < selected[0]:
+        selected[0] = start
+        selected[1] = end
+        return True
+    elif start == selected[0] and end > selected[1]:
+        selected[1] = end
+        return True
+    return False
+
+def _syntax_tree_build(Obj):
+    tree = {}
+    for field, (syntax, group_state) in Obj['syntax'].items():
+        if group_state not in tree:
+            tree[group_state] = []
+        tree[group_state].append(field)
+    return tree
+
+def _syntax_tree_get_nexts(Obj, tree, field=''):
+    # returns all the possible SYNTAX ident after $field has just been
+    # processed
+    if len(field) == 0:
+        # when starting from fresh
+        return _syntax_tree_get_roots(Obj, tree)
+    else:
+        # when a field was already parsed,
+        # 1) it needs to be removed from tree
+        _syntax_tree_rm_field(Obj, tree, field)
+        # 2) get field's group_state
+        field_gs = Obj['syntax'][field][1]
+        # 3) return all possible next fields, depending of previous field
+        if field_gs == ():
+            # previous field was mandatory
+            return _syntax_tree_get_roots(Obj, tree)
+        else:
+            # previous field was optional
+            leaves = _syntax_tree_get_leaves(Obj, tree, field_gs)
+            # if no leaves are available
+            if not leaves:
+                return _syntax_tree_get_roots(Obj, tree)
+            # otherwise
+            next = []
+            # 1) check if sub-optional groups exist
+            # 2) check if the optional group of the previous field needs 
+            # to be completed, or if roots fields can follow
+            _group_completed = True
+            for group_state in leaves:
+                if group_state == field_gs \
+                and leaves[group_state]:
+                    next.extend( leaves[group_state] )
+                    _group_completed = False
+                elif len(group_state) > len(field_gs) \
+                and group_state[:len(field_gs)] == field_gs \
+                and leaves[group_state]:
+                    next.extend( leaves[group_state] )
+            if _group_completed:
+                next.extend( _syntax_tree_get_roots(Obj, tree) )
+            return next
+
+def _syntax_tree_rm_field(Obj, tree, field):
+    for group_state in tree:
+        if field in tree[group_state]:
+            tree[group_state].remove( field )
+            return
+
+def _syntax_tree_get_roots(Obj, tree):
+    # returns all fields of the tree that are mandatory 
+    # and within optional groups with depth 1  
+    roots = []
+    for group_state in tree:
+        if len(group_state) <= 1:
+            roots.extend( tree[group_state] )
+    return roots
+
+def _syntax_tree_get_leaves(Obj, tree, group_state_ref):
+    subtree = {}
+    # get the given group, and all sub_groups:
+    for group_state in tree:
+        if group_state[:len(group_state_ref)] == group_state_ref:
+            subtree[group_state] = tree[group_state]
+    return subtree
 
 def _parse_value_class_by_ident(Obj, text=''):
     #
@@ -1111,15 +1366,17 @@ def _parse_value_class_type_enforce(Obj):
         val_str = Obj['val'][ident]
         if Obj['cont'][ident]['type'] in (TYPE_OPEN, TYPE_ANY):
             # global reference to the subtype
-            if val_str not in GLOBAL.TYPE:
+            if val_str in GLOBAL.TYPE:
+                Obj['val'][ident] = GLOBAL.TYPE[val_str].clone_light()
+            # TODO: support integrated textual definition of the subtype
+            else:
                 raise(ASN1_PROC_LINK('%s: undefined CLASS open type: %s'\
                       % (Obj.get_fullname(), val_str)))
-            Obj['val'][ident] = GLOBAL.TYPE[val_str]
         else:
-            # use the CLASS field to parse the value according to its type
+            # use the CLASS field to parse the value (or values' set)
+            # according to its type
             field = Obj['cont'][ident]
             assert( field['val'] is None )
-            assert( field['mode'] in (0, 1))
             rest = parse_value(field, val_str)
             if rest:
                 raise(ASN1_PROC_TEXT('%s: CLASS value remaining text: %s'\
@@ -1240,8 +1497,11 @@ def parse_set_elements(Obj, text=''):
 # - INTEGER:
 #   -> single value
 #   -> value range, extensions are not handled properly (only True / False)
-# - BIT STRING / OCTET STRING / IA5String / PrintableString / SEQUENCE OF / SET OF: 
+# - BIT STRING / OCTET STRING / IA5String / PrintableString / NumericString /
+#   SEQUENCE OF / SET OF: 
 #   -> SIZE constraint is handled like the INTEGER one
+# - IA5String / PrintableString / NumericString: 
+#   -> FROM constraint
 # - BIT STRING / OCTET STRING
 #   -> CONTAINING constraint keeps track of the reference name
 # - CLASS field
@@ -1307,11 +1567,17 @@ def parse_constraint_integer(Obj, text=''):
     else:
         Const['ext'] = False
     #
+    # 4) WNG: in case a single value or value range constraint 
+    # was already specified, the new one replaces the existing one
+    # TODO: we should warn in case the new constraint is not a subset of the
+    # of the existing one
     if Obj._const:
         for c in Obj._const:
             if c['type'] == CONST_SINGLE_VAL \
             or c['type'] == CONST_VAL_RANGE:
-                raise(ASN1_PROC_NOSUPP('%s: multiple integer constraints'))
+                #raise(ASN1_PROC_NOSUPP('%s: multiple integer constraints'\
+                #      % Obj.get_fullname()))
+                Obj._const.remove(c)
     
     Obj['const'].append(Const)
     #
@@ -1378,43 +1644,110 @@ def parse_constraint_size(Obj, text=''):
 
 def parse_constraint_str(Obj, text=''):
     '''
-    parses constraint in "(" ")" related to string object
+    parses constraints in "(" ")" related to string object
     
-    appends a dict of constraint parameters ('text', 'type', 'keys', various)
+    appends dicts of constraint parameters ('text', 'type', 'keys', various)
     in Obj['const']
     
     returns the rest of the text
     '''
     # SIZE constraint, CONTAINING constraint
     text_rest, text_const = extract_parenth(text)
-    if not text_const:
-        return text
+    while text_const:
+        _parse_constraint_str_pass(Obj, text_const)
+        text_rest, text_const = extract_parenth(text_rest)
+    return text_rest
+
+def _parse_constraint_str_pass(Obj, text=''):
     #
     # 1) check for SIZE constraint
-    if re.match('SIZE', text_const):
-        return parse_constraint_size(Obj, text)
+    if re.match('SIZE', text):
+        return parse_constraint_size(Obj, '(%s)' % text)
     #
-    # 2) check for CONTAINING constraint
+    # 2) otherwise, check for CONTAINING constraint
+    # (only for BIT STRING and OCTET STRING)
     if Obj['type'] in (TYPE_BIT_STR, TYPE_OCTET_STR):
-        m = SYNT_RE_CONTAINING.match(text_const)
+        m = SYNT_RE_CONTAINING.match(text)
         if not m:
-            raise(ASN1_PROC_NOSUPP('%s: STRING constraint not supported: %s'\
-                  % (Obj.get_fullname(), text_const)))
-        Const = {'text':text_const,
+            raise(ASN1_PROC_NOSUPP('%s: %s constraint not supported: %s'\
+                  % (Obj.get_fullname(), Obj['type'], text)))
+        Const = {'text':text,
                  'type':CONST_CONTAINING,
                  'keys':['ref']}
         ref = m.group(1)
         if ref not in GLOBAL.TYPE:
             raise(ASN1_PROC_LINK('%s: undefined CONTAINING type: %s'\
-                  % (Obj.get_fullname(), text_const)))
+                  % (Obj.get_fullname(), text)))
         Const['ref'] = GLOBAL.TYPE[ref]
         Obj['const'].append(Const)
     #
-    text_more, text_const = extract_parenth(text_rest)
-    if text_const:
-        raise(ASN1_PROC_NOSUPP('%s: more than 1 constraint: %s'\
-              % (Obj.get_fullname(), text_const)))
-    return text_rest
+    # 3) or check for FROM constraint
+    # (only for textual strings)
+    elif Obj['type'] in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
+        m = re.match('FROM', text)
+        if not m:
+            raise(ASN1_PROC_NOSUPP('%s: %s constraint not supported: %s'\
+                  % (Obj.get_fullname(), Obj['type'], text)))
+        Const = {'text':text,
+                 'type':CONST_ALPHABET,
+                 'keys':['alpha']}
+        text = text[m.end():].strip()
+        text_rest, text_alpha = extract_parenth(text)
+        if not text_alpha:
+            raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint: %s'\
+                  % (Obj.get_fullname(), text)))
+        #
+        Const['alpha'] = parse_constraint_from(Obj, text_alpha)
+        Obj['const'].append(Const)
+
+def parse_constraint_from(Obj, text=''):
+    # "0".."9" -> 0,1,2,3,4,5,6,7,8,9
+    # "."|"-"|" " -> .,-, 
+    # "0".."9"|"*"|"#" -> 0,1,2,3,4,5,6,7,8,9,*,#
+    # "TAGC" -> T,A,G,C
+    # "T"|"A"|"G"|"C" -> T,A,G,C
+    #
+    # 1) text must start with "
+    if text[0] != '"':
+        raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint format: %s'\
+              % (Obj.get_fullname(), text)))
+    #
+    # 2) it can be a word
+    next = 1 + text[1:].find('"')
+    if next > 2:
+        # collect the list of chars within "..."
+        L = list(text[1:next])
+        if SYNT_RE_REMAINING.match(text[next+1:]):
+            raise(ASN1_PROC_NOSUPP('%s: unsupported alphabet constraint: %s'\
+                  % (Obj.get_fullname(), text)))
+        return L
+    #
+    # 3) it is a list of chars with '..' or '|' separator
+    elif next == 2:
+        L = [text[1]]
+        cur = 3
+        while cur < len(text)-3:
+            if text[cur] == '|':
+                if text[cur+1] != '"' and text[cur+3] != '"':
+                    raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint: %s'\
+                          % (Obj.get_fullname, text)))
+                L.append( text[cur+2] )
+                cur += 4
+            elif text[cur:cur+2] == '..':
+                if text[cur+2] != '"' and text[cur+4] != '"':
+                    raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint: %s'\
+                          % (Obj.get_fullname, text)))
+                L.extend( [chr(c) for c in range(ord(L[-1])+1, 
+                                                 ord(text[cur+3])+1)] )
+                cur += 5
+            else:
+                raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint: %s'\
+                      % (Obj.get_fullname, text)))
+        return L
+    #
+    else:
+        raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint: %s'\
+              % (Obj.get_fullname, text)))
 
 def parse_constraint_clafield(Obj, text=''):
     '''

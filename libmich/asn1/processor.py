@@ -39,26 +39,27 @@ import ASN1
 # only here for commodity, should be removed
 from libmich.utils.repr import *
 from PER import PER
+from BER import BER
 #ASN1.ASN1Obj.CODEC = PER
 
 PICKLE_PROTOCOL = 2
 
-MODULE_NAMES = [\
-    ('rrc3g_25331-c10.asn', 'rrc3g'),
-    ('rrclte_36331-c10.asn', 'rrclte'),
-    ('ranap_25413-c10.asn', 'ranap'),
-    ('s1ap_36413-c10.asn', 's1ap'),
-    ('x2ap_36423-c10.asn', 'x2ap')
-    ]
+MODULES = { \
+    'RRC3G': 'RRC3G_25331-c10',
+    'RRCLTE': 'RRCLTE_36331-c10',
+    'RANAP': 'RANAP_25413-c10',
+    'S1AP': 'S1AP_36413-c10',
+    'X2AP': 'X2AP_36423-c10',
+    'MAP': 'MAP_29002-bb0',
+    'SS': 'SS_24080-c00'
+    }
 
-def compile(texts, create_pickle_name=''):
+def compile(texts):
     '''
-    Scans the texts (or list of texts) to find ASN.1 modules, and compile them
+    Scan the texts (or list of texts) to find ASN.1 modules, and compile them
     into Python objects.
-    Returns the list of modules, after scanned by scan_modules()
-    
-    For each module scanned, possibly creates a Python pickled file 
-    in MODULES_DIR for further quicker loading of this module within Python
+    Return the list of modules, after scanning them with scan_modules()
+    and setting all compiled ASN.1 values, sets and types in GLOBAL.
     '''
     # 1) parse subtype definition / content
     if isinstance(texts, str):
@@ -68,37 +69,46 @@ def compile(texts, create_pickle_name=''):
         for t in texts:
             M.extend( process_modules(t) )
     #
-    if create_pickle_name:
-        path = '%s%s.pck' % (get_modules_dir(), create_pickle_name)
-        try:
-            fd = open(path, 'wb')
-        except:
-            raise(ASN1_PROC('Invalid file path for writing module: %s'\
-                  % path))
-        # create a list of objects according to the compilation order
-        obj_list = []
-        for mod in M:
-            for name in mod['obj']:
-                if name in mod['TYPE']:
-                    obj_list.append( (name, mod['TYPE'][name]) )
-                elif name in mod['VALUE']:
-                    obj_list.append( (name, mod['VALUE'][name]) )
-                elif name in mod['SET']:
-                    obj_list.append( (name, mod['SET'][name]) )
-        # pickle all of them within a file
-        p = pickle.Pickler(fd, PICKLE_PROTOCOL)
-        try:
-            p.dump(obj_list)
-        except AssertionError:
-            log('compiled results storage error: pickle AssertionError')
-            log('returning full ASN.1 objects\' list')
-            return obj_list
-    #
     return M
+
+def store_module(mod_list=[], name='test'):
+    '''
+    Create a Python pickled file in ./modules/ of all ASN.1 values, sets and
+    types defined in the modules' list mod_list, which is returned by compile().
+    
+    It can then be loaded quickly within Python.
+    '''
+    path = '%s%s.pck' % (get_modules_dir(), name)
+    try:
+        fd = open(path, 'wb')
+    except:
+        raise(ASN1_PROC('Invalid file path for writing module: %s'\
+              % path))
+    # create a list of objects according to the compilation order
+    obj_list = []
+    for mod in mod_list:
+        for name in mod['obj']:
+            if name in mod['TYPE']:
+                obj_list.append( (name, mod['TYPE'][name]) )
+            elif name in mod['VALUE']:
+                obj_list.append( (name, mod['VALUE'][name]) )
+            elif name in mod['SET']:
+                obj_list.append( (name, mod['SET'][name]) )
+    # pickle all of them within a file
+    p = pickle.Pickler(fd, PICKLE_PROTOCOL)
+    try:
+        p.dump(obj_list)
+    except AssertionError:
+        log('compiled results storage error: pickle AssertionError')
+        log('returning full ASN.1 objects\' list')
+        return obj_list
+    else:
+        log('modules successfully stored in %s' % path)
 
 def load_module(name=''):
     '''
-    returns the list of modules compiled and pickled by compile()
+    Return the list of modules compiled by compile() and pickled by 
+    store_module() under a given name.
     '''
     path = '%s%s.pck' % (get_modules_dir(), os.path.basename(name))
     if not os.path.exists(path):
@@ -119,15 +129,29 @@ def load_module(name=''):
             GLOBAL.SET[obj_name] = obj
     log('%s: %s objects loaded into GLOBAL' % (name, len(obj_list)))
 
-def generate_modules(mods=MODULE_NAMES):
-    for asn_name, mod_name in mods:
-        asn = '%s%s' % (get_asn_dir(), os.path.basename(asn_name))
-        fd = open(asn, 'r')
-        asntext = fd.read()
+def generate_modules(mods=MODULES):
+    '''
+    Generate all ASN.1 Python pickled modules according to the MODULES dict
+    '''
+    for name in mods:
+        # get the list of ASN.1 files to compile
+        asndir = '%s%s%s' % (get_asn_dir(), mods[name], os.path.sep)
+        fd = open('%sload.txt' % asndir, 'r')
+        asnlist = fd.readlines()
         fd.close()
+        asnlist = [l.replace('\n', '') for l in asnlist \
+                   if len(l) and l[0] != '#']
+        #
         GLOBAL.clear()
-        log('processing %s' % asn_name)
-        compile(asntext, mod_name)
+        M = []
+        for asn in asnlist:
+            fd = open('%s%s' % (asndir, asn), 'r')
+            text = fd.read()
+            fd.close()
+            log('processing %s' % asn)
+            M.extend( compile(text) )
+        store_module(M, name)
+    GLOBAL.clear()
 
 def inline(text=''):
     '''
@@ -225,7 +249,9 @@ def process_modules(text=''):
         module['tags'] = tag
         module['extensibility'] = ext
         MODULE_OPT.TAG = module['tags']
+        #log('module tagging mode: %s' % MODULE_OPT.TAG)
         MODULE_OPT.EXT = module['extensibility']
+        #log('module extensibility: %s' % MODULE_OPT.EXT)
         text = text[m.end():]
         #
         # 3) scan text for BEGIN - END block
@@ -284,7 +310,8 @@ def get_module_name(text=''):
 def get_module_option(text=''):
     text = ' %s' % text
     # check for tagging
-    m = re.search('(?:^|\s{1})(EXPLICIT\s{1,}TAGS|IMPLICIT\s{1,}TAGS|AUTOMATIC\s{1,}TAGS)', text)
+    m = re.search('(?:^|\s{1})(EXPLICIT\s{1,}TAGS|IMPLICIT\s{1,}'\
+                  'TAGS|AUTOMATIC\s{1,}TAGS)', text)
     if m:
         tag = m.group(1).split()[0].strip()
     else:
@@ -474,23 +501,41 @@ def process_module_content(module):
     obj_num = [len(GLOBAL.OBJ)]
     obj_list = []
     while obj_num[-1] > 0:
-        for obj in GLOBAL.OBJ:
-            name = obj._name
-            mode = obj._mode
-            try:
-                process_assignment(obj)
-            except ASN1_PROC_LINK:
-                obj.__init__(name=name, mode=mode)
-            else:
-                GLOBAL.OBJ.remove(obj)
-                obj_list.append(name)
-        obj_num.append( len(GLOBAL.OBJ) )
-        if obj_num[-1] == obj_num[-2]:
-            log('unable to process %s objects:' % obj_num[-1])
-            for obj in GLOBAL.OBJ:
-                log(obj['name'])
-            raise(ASN1_PROC_LINK('bad reference... no luck'))
+        process_module_content_pass(obj_num, obj_list)
     return obj_num, obj_list
+
+def process_module_content_pass(obj_num, obj_list):
+    # process as much object as possible
+    for obj in GLOBAL.OBJ:
+        name = obj._name
+        mode = obj._mode
+        try:
+            process_assignment(obj)
+        except ASN1_PROC_LINK:
+            obj.__init__(name=name, mode=mode)
+        else:
+            GLOBAL.OBJ.remove(obj)
+            obj_list.append(name)
+    #
+    # process self-referencing objects
+    for obj in GLOBAL.SELF:
+        if obj not in GLOBAL.OBJ \
+        and obj['type'] in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
+            for name in obj['cont']:
+                if isinstance(obj['cont'][name]['typeref'], ASN1.ASN1ObjSelf):
+                    get_typeref_infos(obj['cont'][name], obj)
+            GLOBAL.SELF.remove(obj)
+    #
+    # check in case we are blocked:
+    # not able to process any of the remaining objects
+    obj_num.append( len(GLOBAL.OBJ) )
+    if obj_num[-1] == obj_num[-2]:
+        log('unable to process %s objects:' % obj_num[-1])
+        for obj in GLOBAL.OBJ:
+            log(obj['name'])
+        log('can be a missing IMPORT directive, a circular reference '\
+            'or a self reference')
+        raise(ASN1_PROC_LINK('bad reference... no luck'))
 
 #------------------------------------------------------------------------------#
 # assignment processor
