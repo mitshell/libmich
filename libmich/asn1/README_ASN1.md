@@ -2,10 +2,12 @@ What is ASN.1
 =============
 
 ASN.1 means *Abstract Syntax Notation 1*.
-This is a language to describe data structures in a machine-independent way.
-Information described thanks to the ASN.1 language can then be transferred 
-between machines thanks to encoding / decoding rules, such as BER (Basic 
-Encoding Rules) or PER (Packed Encoding Rules).
+
+This is a language to describe data types and structures in a 
+machine-independent way. Information described with the ASN.1 language can then 
+be transferred  between machines thanks to encoding / decoding rules, such as 
+BER (Basic Encoding Rules), PER (Packed Encoding Rules), DER (Distinguished 
+Encoding Rules), XER (XML Encoding Rules), ...
 
 
 Where can I find online ressources about ASN.1
@@ -17,28 +19,30 @@ very easy to read and not the best way to understand how ASN.1 works.
 
 The best way to understand the ASN.1 language and the associated encoding rules 
 is to read the two main books, which are available for free on the Internet:
-* ASN.1 - Communication Between Heterogeneous Systems, by Olivier Dubuisson 
-   and translated by Philippe Fouquart
-* ASN.1 Complete, by John Larmouth
+* *ASN.1 - Communication Between Heterogeneous Systems*, by Olivier Dubuisson 
+   and translated by Philippe Fouquart;
+* *ASN.1 Complete*, by John Larmouth.
+
 The first one is quite complete about the syntax and the semantic of the ASN.1 
 language, whereas the second one is quite easy and practical, especially for
-a quick understanding of the encoding rules.
+a quick understanding of the encoding rules. Other available ressources can also
+be useful:
+* OSS Nokalva provides an online ASN.1 compiler, plus multiple encoders and 
+   decoders at the [asn1-playground](http://asn1-playground.oss.com).
+* Lev Walkin proposes [asn1c](http://lionet.info/asn1c/), a very complete ASN.1
+   to C and C++ compiler plus multiple encoders and decoders (and also an online 
+   one).
+* Fabrice Bellard proposes [ffasn1](http://bellard.org/ffasn1), which has a free
+   ASN.1 message converter and editor which supports many encoding rules too.
+* ITU-T has a complete web page referencing tools and softwares supporting ASN.1
+   at the [ITU-T ASN.1 tools](http://www.itu.int/en/ITU-T/asn1/Pages/Tools.aspx).
 
-OSS Nokalva provides an online ASN.1 compiler, plus multiple encoders and 
-decoders at [http://asn1-playground.oss.com].
-Lev Walkin proposes asn1c at [http://lionet.info/asn1c/], a very complete ASN.1
-to C compiler plus multiple encoders and decoders (and also an online one).
-Fabrice Bellard proposes ffasn1 at [http://bellard.org/ffasn1], which has a free
-ASN.1 message converter and editor which supports many encoding rules too.
-ITU-T has a complete web page referencing tools and softwares supporting ASN.1
-at [http://www.itu.int/en/ITU-T/asn1/Tools.aspx].
 
-
-Why to support ASN.1
+Why supporting ASN.1
 ====================
 
 ASN.1 is used to describe several protocols and data formats, especially in the
-telecommunication world:
+domain of the telecommunications:
 * X.509, LDAP, Kerberos, SNMP are examples of Internet-oriented protocols using
    the ASN.1 language and BER, CER or DER encoding rules.
 * UMTS radio access protocols (RRC, RANAP, RNSAP, NBAP, RUA, HNBAP) are using
@@ -77,9 +81,9 @@ currently provides ready-to-use ASN.1 modules:
 * S1AP_36413-c10 and X2AP_36423-c10: LTE radio access network protocols, 
    specified in the 3GPP TS 36.413 and 423, releases c10.
 
-On the other side, many ASN.1 basic types (e.g. specific String, Real, ...) 
-which are not common in mobile network protocols are not supported yet by 
-libmich.
+On the other side, many ASN.1 basic types (e.g. Relative-OID, specific String, 
+Real, ...) which are not common in mobile network protocols are not supported 
+yet by libmich.
 
 
 How does the compiler works
@@ -89,13 +93,14 @@ The largest part of the static and dynamic compiler is available in the
 *processor.py* file.
 
 The compiler can work on a list of ASN.1 files, placed in the asn/ 
-sub-directory, or in ASN.1 text directly passed to it within the Python 
+sub-directory, or on an ASN.1 text directly passed to it within the Python 
 intepreter.
 Every ASN.1 object compiled to Python is placed in the Python **GLOBAL** 
 object. **GLOBAL** has actually 3 distincts attributes:
 * **TYPE**: a dictionnary which holds all user-defined ASN.1 subtypes. 
 * **VALUE**: a dictionnary which holds all user-defined ASN.1 values. 
 * **SET**: a dictionnary which holds all user-defined ASN.1 set of values.
+
 **GLOBAL** is the main and only directory which receives all ASN.1 objects 
 processed by the compiler.
 
@@ -131,11 +136,13 @@ S1AP-PDU-Descriptions.asn
 
 A single file can contain multiple ASN.1 modules, however, this is not easy to 
 maintain. Therefore, in the current asn/ sub-directory, all ASN.1 files are
-containing only a single ASN.1 module. To compile one (or all) of it, the 
-function *generate_modules* must be used. All the ASN.1 modules described in the 
-files listed in *load.txt* are compiled into the Python **GLOBAL** object, and 
-then pickled and stored into a new file in the modules/ sub-directory. For 
-example for the S1AP protocol:
+containing only a single ASN.1 module. To compile one serie of modules (or all 
+series) of it, the function *generate_modules* must be used.
+All the ASN.1 modules described in the files listed in *load.txt* are compiled 
+into the Python **GLOBAL** object, and then pickled and stored into a new file 
+in the modules/ sub-directory.
+
+For example for the S1AP protocol:
 
 ```python
 >>> from libmich.asn1.processor import *
@@ -165,8 +172,8 @@ modules successfully stored in C:\Users\benoit\Python\libmich\asn1\modules\S1AP.
 All the S1AP ASN.1 modules get compiled and finally stored into the *S1AP.pck* 
 file. The argument of the *generate_modules* function is a dictionnary of 
 {targeted Python module name, ASN.1 modules directory}. By default, it takes the 
-*MODULES* variable which lists all already-available protocols. This way, in 
-order to compile all available protocols, It is simply possible to do:
+*MODULES* variable which lists all already-available protocols in asn/. This 
+way, in order to compile all available protocols, It is simply possible to do:
 
 ```python
 >>> generate_modules()
@@ -216,6 +223,8 @@ in ASN.1 objects' name get translated to underscore. The function *export* can
 be used for this, passing the intended scope of destination as argument. 
 
 ```python
+>>> load_module('S1AP')
+S1AP: 894 objects loaded into GLOBAL
 >>> len(GLOBAL.TYPE), len(GLOBAL.VALUE), len(GLOBAL.SET)
 (406, 308, 180)
 >>> export(globals())
@@ -236,10 +245,10 @@ Dynamic compilation of an ASN.1 object
 --------------------------------------
 
 Contrary to the static compilation which works over large text containing ASN.1
-modules definitions, it is also possible to compile dynamically ASN.1 definition
-thanks to the *inline* function. It compiles the ASN.1 definition to a Python 
-object, make it available through the **GLOBAL** object, ans returns it to the
-Python interpreter.
+modules definitions, it is also possible to compile dynamically ASN.1 
+definitions with the *inline* function. It compiles the ASN.1 definition to a 
+Python object, make it available through the **GLOBAL** object, ans returns it 
+to the Python interpreter.
 
 ```python
 >>> GLOBAL.clear()
@@ -268,7 +277,7 @@ How ASN1 Python objects work
 The basics
 ----------
 
-The largest part of ASN1 Python objects behavior is available in the *ASN1.py*
+The largest part of ASN1 Python objects' behavior is available in the *ASN1.py*
 file. All ASN.1 objects (subtypes, classes, values and sets) are all compiled as
 a specific instance of the **ASN1Obj** class. Each ASN1Obj instance has the 
 following attributes:
@@ -285,7 +294,7 @@ following attributes:
 
 All those attributes can be called like any Python instance's attribute, after
 adding an underscore prefix, or like any Python dictionnary's key. Some more 
-attributes are used internally but are not that important here. A more complete 
+attributes are used internally but are not that important, here. A more complete 
 description of the innerworking of the ASN1Obj instance is made in its docstring.
 
 
@@ -314,11 +323,12 @@ class ASN1Obj(__builtin__.object)
 How to set / get a specific value to / from an ASN.1 object
 -----------------------------------------------------------
 
-Every ASN1Obj instance has a method .set_val(val) to set a given value to it.
+Every ASN1Obj instance has a method *set_val(val)* to set a given value to it.
 The value *val* must have a type according to the *type* attribute of the 
 ASN1Obj instance. See the ASN1Obj docstring for more information on this.
 Any ASN1Obj instance which has been attributed a value, will return it when
 called. The value also (partially) appear when representing the ASN1Obj.
+
 Here are few examples:
 
 ```python
@@ -393,7 +403,7 @@ True
 >>> 
 >>> 
 >>> # lets attribute some values to a BIT STRING
->>> # warning: internal representation of BIT STRING value is done with an integral value and a size in bits
+>>> # warning: internal representation of BIT STRING values is done with an integral value and a size in bits
 >>> TestBitStr.set_val( (255, 16) )
 >>> TestBitStr
 <TestBitStr (BIT STRING type): (255, 16)>
@@ -501,17 +511,17 @@ of any encoded messages thanks to the *show* function...
 Currently, two encoders / decoders are supported:
 * BER: Basic Encoding Rules (used in the MAP protocol), which makes use of 
    heavily nested Tag-Length-Value structures, in a byte-aligned way.
-* PER: Packed Encoding Rules (used in all radio access protocols), which has
-   two variants *aligned* and *unaligned*, which is more compressed and 
+* PER: Packed Encoding Rules (used in all 3GPP radio access protocols), which 
+   has two variants *aligned* and *unaligned*, which is more compressed and 
    sequential than BER, but not byte-aligned in most of the cases.
 
-Encoders / decoders are making use of the libmich/core part to build and parse
-message structures to be transferred. Those structures are set into the ._msg
-attribute of the ASN1Obj instance. It is a libmich Layer() instance which has
-all the properties of any Layer from libmich/core/element.py. The *show* function
-leverages actually the .show() method of the ._msg attribute.
+Encoders / decoders are making use of the libmich/core/ part to build and parse
+message structures to be transferred. Those structures are set into the *_msg*
+attribute of the ASN1Obj instance. It is a libmich *Layer* instance which has
+all the properties of any Layer from libmich/core/element.py. The *show* 
+function leverages actually the *show* method of the *_msg* attribute.
 
-In case required ASN.1 Python functions and objects are not yet imported:
+In case the required ASN.1 Python functions and objects are not yet imported:
 ```python
 >>> from libmich.asn1.processor import *
 ```
@@ -539,8 +549,8 @@ In order to configure PER unaligned as the default encoder / decoder:
 >>> PER.VARIANT = 'U'
 ```
 
-Then, you can use the methods .encode() after having set a value thanks to the 
-.set_val(val) method (see below), and .decode(buf) in order to decode a buffer
+Then, you can use the methods *encode* after having set a value thanks to the 
+*set_val(val)* method (see below), and *decode(buf)* in order to decode a buffer
 according to the ASN1Obj instance definition.
 
 Let's see an example with S1AP which uses PER aligned. A buffer corresponding
@@ -708,7 +718,7 @@ S1AP: 894 objects loaded into GLOBAL
 
 Here is another example with the RRC3G module, which uses PER unaligned. A 
 Paging Control CHannel message (PCCH) gets decoded first and the corresponding
-value retrieved. Then the value corresponding to the first P-TMSI paged gets 
+value retrieved. Then, the value corresponding to the first P-TMSI paged gets 
 modified to a CS domain TMSI, and re-encoded:
 
 ```python
@@ -845,42 +855,44 @@ Structure of the ASN.1 code
 ---------------------------
 
 The following Python files are provided:
-* utils.py: it provides global variables, functions and short routines for
+* *utils.py*: it provides global variables, functions and short routines for
    processing the ASN.1 language.
-* parsers.py: it provides all required textual processing to parse the ASN.1
+* *parsers.py*: it provides all required textual processing to parse the ASN.1
    syntax and convert it to Python dictionnaries.
-* ASN1.py: it provides the class ASN1Obj and all methods required for handling
+* *ASN1.py*: it provides the class ASN1Obj and all methods required for handling
    all ASN.1 types as Python objects. Furthermore, it provides an empty 
    ASN1Codec class.
-* processor.py: it provides the main functions to compile, build Python modules
+* *processor.py*: it provides the main functions to compile, build Python modules
    and process inlined ASN.1 definitions. This is also the main file to import
    if we want to import everything needed to work with ASN.1.
-* PER.py: it provides the PER aligned and unaligned encoder / decoder.
-* BER.py: it provides the BER encoder / decoder.
-* test.py: it provides a serie of tests, in order to confirm the correct 
-   implementation and working of this ASN.1 processor.
+* *PER.py*: it provides the PER aligned and unaligned encoder / decoder.
+* *BER.py*: it provides the BER encoder / decoder.
+* *test.py*: it provides a serie of tests, in order to confirm the correct 
+   implementation and working of the ASN.1 processor and PER encoder / decoder.
 
 Supporting a new ASN.1 type
 ---------------------------
 
 It is possible to support new ASN.1 types, such as RELATIVE-OID, EMBEDDED-PDV,
-XYZString, ... For this, the global variables required need to be created in the
-*utils.py* file, specific processing and methods need to be created in the 
-ASN1Obj class in the *ASN1.py* file, and specific syntax parsing routines need
-to be created in the *parsers.py* file. When doing so, it is required not to 
-break any of the testing functions provided in the *test.py* file.
+XYZString, ...
+
+For this, the global variables required need to be created in the *utils.py* 
+file, specific processing and methods need to be created in the ASN1Obj class 
+in the *ASN1.py* file, and specific syntax parsing routines need to be created 
+in the *parsers.py* file. When doing so, it is required not to break any of the 
+testing functions provided in the *test.py* file.
 
 Supporting a new ASN.1 codec
 ----------------------------
 
 It is possible to introduce a new ASN.1 encoder / decoder. A new file containing
-a new ASN1Codec class, with .encode(obj) and .decode(obj, buf) methods, needs to
-be created similarly to what is done in *PER.py* and *BER.py*.
+a new ASN1Codec class, with *encode(obj)* and *decode(obj, buf)* methods, needs 
+to be created similarly to what is done in *PER.py* and *BER.py*.
 
 
 Contact
 =======
 
 As part of the libmich library, the license and contact does not change:
-See [https://github.com/mitshell/libmich/]
+see [libmich](https://github.com/mitshell/libmich/).
 
