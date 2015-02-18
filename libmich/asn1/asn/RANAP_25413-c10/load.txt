@@ -1,0 +1,8 @@
+# Ordered list of RANAP modules
+# to be loaded sequentially
+RANAP-CommonDataTypes.asn
+RANAP-Constants.asn
+RANAP-Containers.asn
+RANAP-IEs.asn
+RANAP-PDU-Contents.asn
+RANAP-PDU-Descriptions.asn

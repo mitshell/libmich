@@ -1,0 +1,29 @@
+# Ordered list of MAP modules
+# to be loaded sequentially
+Remote-Operations-Information-Objects.asn
+MobileDomainDefinitions.asn
+MAP-ApplicationContexts.asn
+MAP-ExtensionDataTypes.asn
+MAP-BS-Code.asn
+MAP-SS-Code.asn
+MAP-TS-Code.asn
+MAP-CommonDataTypes.asn
+MAP-SS-DataTypes.asn
+MAP-ER-DataTypes.asn
+MAP-OM-DataTypes.asn
+MAP-MS-DataTypes.asn
+MAP-GR-DataTypes.asn
+MAP-CH-DataTypes.asn
+MAP-SM-DataTypes.asn
+MAP-LCS-DataTypes.asn
+MAP-DialogueInformation.asn
+MAP-Errors.asn
+MAP-CallHandlingOperations.asn
+MAP-Group-Call-Operations.asn
+MAP-LocationServiceOperations.asn
+MAP-MobileServiceOperations.asn
+MAP-OperationAndMaintenanceOperations.asn
+MAP-ShortMessageServiceOperations.asn
+MAP-SupplementaryServiceOperations.asn
+MAP-Protocol.asn
+#MAP-Frame.asn

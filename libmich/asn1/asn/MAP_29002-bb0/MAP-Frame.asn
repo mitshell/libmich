@@ -1,0 +1,36 @@
+-- **************************************************************
+--
+-- MAP-Frame
+--
+-- **************************************************************
+
+MAP-Frame
+
+DEFINITIONS ::=
+
+BEGIN
+
+IMPORTS
+	Component,
+	TCMessage
+FROM TCAPMessages
+
+	dialogue-as-id,
+	DialoguePDU
+FROM DialoguePDUs
+
+	updateLocation
+FROM MAP-Protocol
+
+	map-DialogueAS,
+	MAP-DialoguePDU
+FROM MAP-DialogueInformation
+
+	map-ac
+FROM MAP-ApplicationContexts
+;
+
+
+ZZZZ-Dummy ::= NULL
+
+END

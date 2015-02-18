@@ -1,0 +1,8 @@
+# Ordered list of LTE S1AP modules
+# to be loaded sequentially
+S1AP-CommonDataTypes.asn
+S1AP-Constants.asn
+S1AP-Containers.asn
+S1AP-IEs.asn
+S1AP-PDU-Contents.asn
+S1AP-PDU-Descriptions.asn
