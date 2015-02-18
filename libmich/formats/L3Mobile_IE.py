@@ -1574,81 +1574,248 @@ class APN_AMBR(Layer):
 ###
 #
 # section 3.6.1: Facility Component
+# ASN.1 BER codec (Tag-Length-Value style)
 #
 
-class SS_Component(Layer):
+class BER_TLV(Layer):
+    _byte_aligned = False
+    _map_recursive = True # parse recursively contructed type
+    #_len_undef = 1024 # length allocated to V for indefinite length form
     constructorList = [
-        Int('T', Pt=0, Type='uint8'),
-        Int('L', Pt=0, Type='uint8'),
-        #Int('Lext', Pt=0, Type='uint8'),
+        Int('T', Pt=0, Type='uint8', Repr='hum'),
+        Bit('L_form', Pt=0, BitLen=1, Repr='hum', Dict={0:'short', 1:'long'}),
+        Bit('L_pre', Pt=1, BitLen=7, Repr='hum'),
+        Bit('L', Pt=0, BitLen=7, Repr='hum'),
         Str('V', Pt='', Repr='hex')
         ]
+    
     def __init__(self, **kwargs):
-        Layer.__init__(self, **kwargs)
+        Layer.__init__(self)
+        if 'T' in kwargs:
+            self.T.Pt = kwargs['T']
+        if 'V' in kwargs:
+            self.V.Pt = kwargs['V']
+            self.L.BitLen = 8*int(round(len(hex(len(self.V.Pt))[2:].replace('L',''))/2.0))
+        self.L_form.Pt = self.L
+        self.L_form.PtFunc = lambda l: 1 if l() >= 128 else 0
+        self.L_pre.Trans = self.L_form
+        self.L_pre.TransFunc = lambda f: False if f() else True
+        self.L_pre.Pt = self.L
+        self.L_pre.PtFunc = lambda l: l.BitLen//8
         self.L.Pt = self.V
         self.L.PtFunc = lambda v: len(v)
         self.V.Len = self.L
-        self.V.LenFunc = lambda l: int(l)
+        self.V.LenFunc = lambda l: l()
     
-    # TODO: ASN.1 BER: Length L can be extended to multiple bytes
-        #
-        #self.L.Pt = self.V
-        #self.L.PtFunc = self.__calc_len
-        #
-        #self.Lext.Trans = self.V
-        #self.Lext.TransFunc = self.__calc_lenext
-        #
-        #self.V.Len = (self.L, self.Lext)
-        #self.V.LenFunc = self.__calc_lenv
-    #
-    #def __calc_len(self, V):
-    #    if len(V) >= 128:
-    #        return
+    def set_val(self, V=''):
+        if len(V) >= 128:
+            self.L.BitLen = 8*int(round(len(hex(len(V))[2:].replace('L',''))/2.0))
+        else:
+            self.L.BitLen = 7
+        self.L_form.Val = None
+        self.L_pre.Val = None
+        self.L.Val = None
+        self.V.Pt = V
     
+    def map(self, s=''):
+        self.__init__()
+        if len(s) <= 1:
+            return
+        ord_s1 = ord(s[1])
+        if ord_s1 & 0x80 == 0:
+            Layer.map(self, s)
+        else:
+            self.L.BitLen = 8*(ord_s1 & 0x7F)
+            if self.L.BitLen == 0:
+                # indefinite length form
+                self.V.LenFunc = None
+                self.V.Len = len(s)-2
+            Layer.map(self, s)
+        # BER-TLV recursive parsing
+        # if Tag is for a constructed object
+        if self._map_recursive and self.T() & 0x20:
+            buf = self.V()
+            comp = []
+            while True:
+                comp.append( BER_TLV() )
+                comp[-1].map(buf)
+                buf = buf[len(comp[-1]):]
+                if len(buf) <= 1:
+                    break
+            if ''.join(map(str, comp)) == self.V():
+                self.V.Val = None
+                self.V.Pt = comp
+                self.V.Repr = 'hum'
+
+# 24.080, section 3.6.3
 SSComponentID_dict = {
     2 : 'Invoke ID',
     128 : 'Linked ID'
     }
-SSProblemCode_dict = {
+
+class SS_InvokeID(BER_TLV):
+    def __init__(self, **kwargs):
+        BER_TLV.__init__(self, T=2, **kwargs)
+        self.T.Dict = SSComponentID_dict
+
+class SS_LinkedID(BER_TLV):
+    def __init__(self, **kwargs):
+        BER_TLV.__init__(self, **kwargs)
+        self.T.Pt = 128
+        self.T.Dict = SSComponentID_dict
+
+# from ASN.1 definitions
+SSOperations_dict = {
+    10 : 'registerSS',
+    11 : 'eraseSS',
+    12 : 'activateSS',
+    13 : 'deactivateSS',
+    14 : 'interrogateSS',
+    16 : 'notifySS',
+    17 : 'registerPassword',
+    18 : 'getPassword',
+    19 : 'processUnstructuredSS-Data',
+    38 : 'forwardCheckSS-Indication',
+    59 : 'processUnstructuredSS-Request',
+    60 : 'unstructuredSS-Request',
+    61 : 'unstructuredSS-Notify',
+    109 : 'lcs-PeriodicLocationCancellation',
+    110 : 'lcs-LocationUpdate',
+    111 : 'lcs-PeriodicLocationRequest',
+    112 : 'lcs-AreaEventCancellation',
+    113 : 'lcs-AreaEventReport',
+    114 : 'lcs-AreaEventRequest',
+    115 : 'lcs-MOLR',
+    116 : 'lcs-LocationNotification',
+    117 : 'callDeflection',
+    118 : 'userUserService',
+    119 : 'accessRegisterCCEntry',
+    120 : 'forwardCUG-Info',
+    121 : 'splitMPTY',
+    122 : 'retrieveMPTY',
+    123 : 'holdMPTY',
+    124 : 'buildMPTY',
+    125 : 'forwardChargeAdvice',
+    126 : 'explicitCT',
+    }
+SSErrors_dict = {
+    1 : 'unknownSubscriber',
+    9 : 'illegalSubscriber',
+    10 : 'bearerServiceNotProvisioned',
+    11 : 'teleserviceNotProvisioned',
+    12 : 'illegalEquipment',
+    13 : 'callBarred',
+    14 : 'forwardingViolation',
+    16 : 'illegalSS-Operation',
+    17 : 'ss-ErrorStatus',
+    18 : 'ss-NotAvailable',
+    19 : 'ss-SubscriptionViolation',
+    20 : 'ss-Incompatibility',
+    21 : 'facilityNotSupported',
+    27 : 'absentSubscriber',
+    34 : 'systemFailure',
+    35 : 'dataMissing',
+    36 : 'unexpectedDataValue',
+    37 : 'pw-RegistrationFailure',
+    38 : 'negativePW-Check',
+    43 : 'numberOfPW-AttemptsViolation',
+    47 : 'forwardingFailed',
+    71 : 'unknownAlphabet',
+    72 : 'ussd-Busy',
+    121 : 'rejectedByUser',
+    122 : 'rejectedByNetwork',
+    123 : 'deflectionToServedSubscriber',
+    124 : 'specialServiceCode',
+    125 : 'invalidDeflectedToNumber',
+    126 : 'maxNumberOfMPTY-ParticipantsExceeded',
+    127 : 'resourcesNotAvailable'
+    }
+
+class SS_OperationCode(BER_TLV):
+    def __init__(self, **kwargs):
+        BER_TLV.__init__(self, **kwargs)
+        self.T.Pt = 2
+        self.T.Dict = {2:'Operation Code'}
+    def map(self, s=''):
+        BER_TLV.map(self, s)
+        if self.L() == 1:
+            code = Int('Code', Pt=ord(self.V()), Type='uint8',
+                       Dict=SSOperations_dict, Repr='hum')
+            self.V.Val = None
+            self.V.Pt = code
+            self.V.Repr = 'hum'
+
+class SS_ErrorCode(BER_TLV):
+    def __init__(self, **kwargs):
+        BER_TLV.__init__(self, **kwargs)
+        self.T.Pt = 2
+        self.T.Dict = {2:'Error Code'}
+    def map(self, s=''):
+        BER_TLV.map(self, s)
+        if self.L() == 1:
+            code = Int('Code', Pt=ord(self.V()), Type='uint8',
+                       Dict=SSErrors_dict, Repr='hum')
+            self.V.Val = None
+            self.V.Pt = code
+            self.V.Repr = 'hum'
+
+# 24.080, section 3.6.7, Problem Code
+SSProblemTag_dict = {
     128 : 'General problem',
     129 : 'Invoke problem',
     130 : 'Return Result problem',
     131 : 'Return Error problem'
     }
-
-class SS_ComponentInvokeID(SS_Component):
+SSProblemCodeGeneral_dict = {
+    0 : 'Unrecognized component',
+    1 : 'Mistyped component',
+    2 : 'Badly structured component'
+    }
+SSProblemCodeInvoke_dict = {
+    0 : 'Duplicate Invoke ID',
+    1 : 'Unrecognized operation',
+    2 : 'Mistyped parameter',
+    3 : 'Resource limitation',
+    4 : 'Initiating release',
+    5 : 'Unrecognized Linked ID',
+    6 : 'Linked response unexpected',
+    7 : 'Unexpected linked operation'
+    }    
+SSProblemCodeRetRes_dict = {
+    0 : 'Unrecognized Invoke ID',
+    1 : 'Return Result unexpected',
+    2 : 'Mistyped parameter'
+    }
+SSProblemCodeRetErr_dict = {
+    0 : 'Unrecognized Invoke ID',
+    1 : 'Return Error unexpected',
+    2 : 'Unrecognized error',
+    3 : 'Unexpected error',
+    4 : 'Mistyped parameter'
+    }
+class SS_ProblemCode(BER_TLV):
     def __init__(self, **kwargs):
-        SS_Component.__init__(self, **kwargs)
-        self.T.Pt = 2
-        self.T.Dict = SSComponentID_dict
-
-class SS_ComponentLinkedID(SS_Component):
-    def __init__(self, **kwargs):
-        SS_Component.__init__(self, **kwargs)
+        BER_TLV.__init__(self, **kwargs)
         self.T.Pt = 128
-        self.T.Dict = SSComponentID_dict
+        self.T.Dict = SSProblemTag_dict
+    
+    def map(self, s=''):
+        BER_TLV.map(self, s)
+        if self.L() == 1:
+            code = Int('Code', Pt=ord(self.V()), Type='uint', Repr='hum')
+            code.Dict = self.T
+            code.DictFunc = lambda t: {128:SSProblemCodeGeneral_dict,
+                                       129:SSProblemCodeInvoke_dict,
+                                       130:SSProblemCodeRetRes_dict,
+                                       131:SSProblemCodeRetErr_dict}
+            self.V.Val = None
+            self.V.Pt = code
+            self.V.Repr = 'hum'
 
-class SS_ComponentOperationCode(SS_Component):
-    def __init__(self, **kwargs):
-        SS_Component.__init__(self, **kwargs)
-        self.T.Pt = 2
-        self.T.Dict = {2:'Operation Code'}
-
-class SS_ComponentErrorCode(SS_Component):
-    def __init__(self, **kwargs):
-        SS_Component.__init__(self, **kwargs)
-        self.T.Pt = 2
-        self.T.Dict = {2:'Error Code'}
-
-class SS_ComponentProblemCode(SS_Component):
-    def __init__(self, **kwargs):
-        SS_Component.__init__(self, **kwargs)
-        self.T.Pt = 128
-        self.T.Dict = SSProblemCode_dict
-
-class SS_ComponentParameters(SS_Component):
+class SS_Parameters(BER_TLV):
     pass
 
+# 24.080, section 3.6.2, Component Type
 SSComponentType_dict = {
     161 : 'Invoke',
     162 : 'Return Result',
@@ -1660,47 +1827,57 @@ class SS_Invoke(Layer):
     constructorList = [
         Int('T', Pt=161, Type='uint8', Dict=SSComponentType_dict),
         Int('L', Type='uint8'),
-        SS_ComponentInvokeID(),
-        SS_ComponentLinkedID(), # optional
-        SS_ComponentOperationCode(),
-        SS_ComponentParameters() # optional
+        SS_InvokeID(),
+        SS_LinkedID(), # optional
+        SS_OperationCode(),
+        SS_Parameters() # optional
         ]
     def map(self, s=''):
-        s = self[0:3].map_ret(s)
+        part = self[0:3]
+        part.map(s)
+        s = s[len(part):]
         if s:
             if ord(s[0]) == 2:
-                self.SS_ComponentLinkedID.Trans = True
-                s = self[4].map_ret(s)
+                self[3].Trans = True
+                self[4].map(s)
+                s = s[len(self[4]):]
             else:
-                s = self[3:5].map_ret(s)
+                part = self[3:5]
+                part.map(s)
+                s = s[len(part):]
         if s:
-            self.SS_ComponentParameters.map(s)
+            self[-1].map(s)
         else:
-            self.SS_ComponentParameters.Trans = True
+            self[-1].Trans = True
 
 class SS_ReturnResult(Layer):
     constructorList = [
         Int('T', Pt=162, Type='uint8', Dict=SSComponentType_dict),
         Int('L', Type='uint8'),
-        SS_ComponentInvokeID(),
+        SS_InvokeID(),
         Int('T_seq', Pt=48, Type='uint8'), # optional, together with L_seq
         Int('L_seq', Pt=0, Type='uint8'), # optional, together with T_seq
-        SS_ComponentOperationCode(), # optional
-        SS_ComponentParameters() # optional
+        SS_OperationCode(), # optional
+        SS_Parameters() # optional
         ]
     def map(self, s=''):
-        s = self[0:3].map_ret(s)
+        part = self[0:3]
+        part.map(s)
+        s = s[len(part):]
         if s:
             if ord(s[0]) != 48:
                 self.T_seq.Trans = True
                 self.L_seq.Trans = True
             else:
-                s = self[3:5].map_ret(s)
+                part = self[3:5]
+                part.map(s)
+                s = s[len(part):]
         if s:
             if ord(s[0]) != 2:
                 self[-2].Trans = True
             else:
-                s = self[-2].map_ret(s)
+                self[-2].map(s)
+                s = s[len(self[-2]):]
         if s:
             self[-1].map(s)
         else:
@@ -1710,12 +1887,14 @@ class SS_ReturnError(Layer):
     constructorList = [
         Int('T', Pt=163, Type='uint8', Dict=SSComponentType_dict),
         Int('L', Pt=0, Type='uint8'),
-        SS_ComponentInvokeID(),
-        SS_ComponentErrorCode(),
-        SS_ComponentParameters() # optional
+        SS_InvokeID(),
+        SS_ErrorCode(),
+        SS_Parameters() # optional
         ]
     def map(self, s=''):
-        s = self[0:4].map_ret(s)
+        part = self[0:4]
+        part.map(s)
+        s = s[len(part):]
         if s:
             self[-1].map(s)
         else:
@@ -1725,10 +1904,11 @@ class SS_Reject(Layer):
     constructorList = [
         Int('T', Pt=164, Type='uint8', Dict=SSComponentType_dict),
         Int('L', Type='uint8'),
-        SS_ComponentInvokeID(),
-        SS_ComponentProblemCode()
+        SS_InvokeID(),
+        SS_ProblemCode()
         ]
 
+# 24.080, section 3.6, Facility IE
 class Facility(Layer):
     constructorList = []
     def map(self, s=''):
@@ -1744,9 +1924,10 @@ class Facility(Layer):
         elif t == 164:
             self.append( SS_Reject() )
         else:
-            self.append( Str('undef') )
+            self.append( BER_TLV() )
         Layer.map(self, s)
 
+# 24.080, section 3.7.2, SS version IE
 SSversion_dict = IANA_dict({
     0:'phase 2 service, ellipsis notation, and phase 2 error handling is supported',
     1:'SS-Protocol version 3 is supported, and phase 2 error handling is supported'
