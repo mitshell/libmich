@@ -20,7 +20,7 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : libmich/mobnet/__init__.py
+# * File Name : mobnet/__init__.py
 # * Created : 2012-12-12 
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------

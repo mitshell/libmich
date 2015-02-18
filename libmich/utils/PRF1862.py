@@ -1,4 +1,4 @@
-# −*− coding: UTF−8 −*−
+# -*- coding: UTF-8 -*-
 
 # implements the Pseudo-Random Function defined by NIST in PRF-186-2
 # usable for EAP-SIM and EAP-AKA PRF: based on the NIST-186-2 

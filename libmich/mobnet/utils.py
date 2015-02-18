@@ -20,7 +20,7 @@
 # * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 # *
 # *--------------------------------------------------------
-# * File Name : libmich/mobnet/utils.py
+# * File Name : mobnet/utils.py
 # * Created : 2013-11-04
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------

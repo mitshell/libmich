@@ -53,9 +53,10 @@ def minenc_int(val=0):
         return (6, 'int48')
     elif -36028797018963968 <= val < 36028797018963968:
         return (7, 'int56')
-    #elif -9223372036854775808 <= val < 9223372036854775808:
-    else:
+    elif -9223372036854775808 <= val < 9223372036854775808:
         return (8, 'int64')
+    else:
+        return (0, None)
 
 ###
 # provides minimum encoding for unsigned integer
@@ -83,7 +84,8 @@ def minenc_uint(val=0):
         return (6, 'uint48')
     elif 0 <= val < 72057594037927936:
         return (7, 'uint56')
-    #elif -9223372036854775808 <= val < 9223372036854775808:
-    else:
+    elif -9223372036854775808 <= val < 9223372036854775808:
         return (8, 'uint64')
+    else:
+        return (0, None)
 

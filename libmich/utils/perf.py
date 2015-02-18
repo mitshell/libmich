@@ -33,13 +33,15 @@ from libmich.core.element import test as test_tlv
 from libmich.formats.BMP import BMP
 from libmich.formats.BGP4 import BGP4, testbuf
 from libmich.formats.L3Mobile import test_regr
-from libmich.asn1.test import test_all as test_asn1
+from libmich.asn1.test import test_def, test_per_integer, test_per_choice, \
+    test_per_sequence
 from libmich.asn1.test import _test_rrc3g_prep, _test_rrc3g, \
     _test_s1ap_prep, _test_s1ap
 
 import libmich as _lm
 bmp_fd = open(_lm.__path__[0] + '/utils/test.bmp', 'rb')
 bmp_file = bmp_fd.read()
+bmp_fd.close()
 del _lm, bmp_fd
 
 Element.safe = False
@@ -118,8 +120,12 @@ def t7():
     Int._endian = 'big'
     print('test 7: compiling / assigning / encoding / decoding ASN.1 PER '\
           'structures %i times' % RND_T7)
+    print_info = False
     for i in range(RND_T7):
-        test_asn1()
+        test_def(print_info)
+        test_per_integer(print_info)
+        test_per_choice(print_info)
+        test_per_sequence(print_info)
 
 def t8():
     Int._endian = 'big'
@@ -128,6 +134,7 @@ def t8():
     pkts, pkts_nc = _test_rrc3g_prep()
     if pkts is None:
         print('unable to load rrc3g ASN.1 module')
+        return
     for i in range(RND_T8):
         _test_rrc3g(pkts, pkts_nc)
 
@@ -138,6 +145,7 @@ def t9():
     pkts = _test_s1ap_prep()
     if pkts is None:
         print('unable to load s1ap ASN.1 module')
+        return
     for i in range(RND_T9):
         _test_s1ap(pkts)
 
@@ -152,4 +160,3 @@ def main(tests=TESTS):
 
 if __name__ == '__main__':
     main()
-

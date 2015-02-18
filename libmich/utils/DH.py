@@ -1,4 +1,4 @@
-# −*− coding: UTF−8 −*−
+# -*- coding: UTF-8 -*-
 # Diffie-Hellman python script from the OpenID project:
 # http://openidenabled.com/files/python-openid/docs/1.2.0/openid.dh-module.html
 # test with:
