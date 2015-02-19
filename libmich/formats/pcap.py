@@ -26,8 +26,6 @@
 # *--------------------------------------------------------
 #*/ 
 
-#!/usr/bin/env python
-
 # generic imports
 from libmich.core.element import Bit, Str, Int, Layer, Block, show
 
@@ -47,14 +45,27 @@ class Global(Layer):
         Int('zone_time', Pt=0, Type='int32', Repr='hum'),
         Int('ts_accuracy', Pt=0, Type='uint32', Repr='hum'),
         Int('snaplen', Pt=0, Type='uint32', Repr='hum'),
-        Int('link_type', Pt=0, Type='uint32', Repr='hex')]
-
+        Int('link_type', Pt=0, Type='uint32', Repr='hex')
+        ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        for i in self:
+            i._endian = 'l'
+        
 class Record(Layer):
     constructorList = [
         Int('ts_sec', Pt=0, Type='uint32', Repr='hum'),
         Int('ts_usec', Pt=0, Type='uint32', Repr='hum'),
         Int('incl_len', Pt=0, Type='uint32', Repr='hum'),
-        Int('orig_len', Pt=0, Type='uint32', Repr='hum')]
+        Int('orig_len', Pt=0, Type='uint32', Repr='hum')
+        ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init_(self, **kwargs)
+        for i in self:
+            i._endian = 'l'
+
 
 ###
 # gsmtap header format
@@ -87,4 +98,5 @@ class gsmtap(Layer):
         Int('sub_type', Pt=0, Type='uint8'),
         Int('antenna_nr', Pt=0, Type='uint8'),
         Int('sub_slot', Pt=0, Type='uint8'),
-        Int('res', Pt=0, Type='uint8')]
+        Int('res', Pt=0, Type='uint8')
+        ]
