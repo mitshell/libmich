@@ -34,17 +34,17 @@ HOWTO:
 
 -> some internal parameters
 ARPd.GGSN_ETH_IF = 'eth0' : ethernet interface toward external networks (e.g. Internet)
-APRd.GGSN_MAC_ADDR = '\x08\x00\x00\x01\x02\x03' : the MAC address of our ethernet interface
+APRd.GGSN_MAC_ADDR = '080000010203'.decode('hex') : the MAC address of our ethernet interface
 APRd.GGSN_IP_ADDR = '192.168.1.100' : our own IP address set for the ethernet interface
 GTPUd.EXT_IF = 'eth0' : same as ARPd.GGSN_ETH_IF
-GTPUd.GGSN_MAC_ADDR = '\x08\x00\x00\x01\x02\x03' : same as ARPd.GGSN_MAC_ADDR
+GTPUd.GGSN_MAC_ADDR = '080000010203'.decode('hex') : same as ARPd.GGSN_MAC_ADDR
 
 -> some mobiles parameters
 APRd.IP_POOL = ('192.168.1.201', '192.168.1.202') : the pool of IP addresses to be used by our mobiles
 
 -> some external network parameters (toward e.g. Internet)
 APRd.SUBNET_PREFIX = '192.168.1.' : the subnet prefix for the external network (we only handle /24 subnet at this time)
-APRd.ROUTER_MAC_ADDR = '\xf4\x\x00\x00\x01\02\03' : the 1st IP hop MAC address
+APRd.ROUTER_MAC_ADDR = 'f40000010203'.decode('hex') : the 1st IP hop MAC address
 APRd.ROUTER_IP_ADDR = '192.168.1.1' : the 1st IP hop IP address
 
 -> some internal network parameters (toward RNC / eNodeB)
