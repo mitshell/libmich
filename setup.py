@@ -6,9 +6,9 @@ class post_install(install_data):
         # Call parent 
         install_data.run(self)
         # Compile ASN.1 modules
-        print('post installation: compiling ASN.1 modules')
-        from libmich.asn1.processor import *
-        generate_modules(MODULES)
+        #print('post installation: compiling ASN.1 modules')
+        #from libmich.asn1.processor import *
+        #generate_modules(MODULES)
 
 
 setup(name="libmich",
