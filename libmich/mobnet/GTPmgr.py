@@ -75,9 +75,9 @@ from random import randint
 #
 if os.name != 'nt':
     from fcntl import ioctl
-    from socket import socket, timeout, error, 
-                       ntohs, htons, inet_aton, inet_ntoa, 
-                       AF_PACKET, SOCK_RAW, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
+    from socket import socket, timeout, error, \
+        ntohs, htons, inet_aton, inet_ntoa, \
+        AF_PACKET, SOCK_RAW, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
 else:
     print('[ERR] GTPmgr : you\'re not on *nix system. It\'s not going to work:\n' \
           'You need PF_PACKET socket')
