@@ -2946,8 +2946,8 @@ Ext-CwFeatureList ::= SEQUENCE SIZE (1..maxNumOfExt-BasicServiceGroups) OF
 				Ext-CwFeature
 
 Ext-CwFeature ::= SEQUENCE {
-	basicService	[1] Ext-BasicServiceCode, 
-	ss-Status		[2] Ext-SS-Status,
+	basicService	[1] Ext-BasicServiceCode, 
+	ss-Status		[2] Ext-SS-Status,
 	... }
 
 ClipData ::= SEQUENCE {
