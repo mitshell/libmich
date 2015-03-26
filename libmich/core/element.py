@@ -626,7 +626,7 @@ class Int(Element):
     def __confine(self, value):
         # unsigned
         if self.Type[0] == 'u':
-            return max(0, min(2**(8*self.Len-1), value))
+            return max(0, min(2**(8*self.Len)-1, value))
         # signed
         else:
             return max(-2**(8*self.Len-1), min(2**(8*self.Len-1)-1, value))
