@@ -51,7 +51,8 @@ MODULES = { \
     'S1AP': 'S1AP_36413-c10',
     'X2AP': 'X2AP_36423-c10',
     'MAP': 'MAP_29002-bb0',
-    'SS': 'SS_24080-c00'
+    'SS': 'SS_24080-c00',
+    'LPP': 'LPP_36355-ac0'
     }
 
 def compile(texts):

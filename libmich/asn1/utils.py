@@ -204,6 +204,7 @@ TYPE_OCTET_STR      = 'OCTET STRING'
 TYPE_IA5_STR        = 'IA5String'
 TYPE_PRINT_STR      = 'PrintableString'
 TYPE_NUM_STR        = 'NumericString'
+TYPE_VIS_STR        = 'VisibleString'
 # constructed types
 TYPE_CHOICE         = 'CHOICE'
 TYPE_SEQ            = 'SEQUENCE'
@@ -251,6 +252,7 @@ TAG_UNIV_TYPETOVAL = {
     TYPE_NUM_STR : 18,
     TYPE_PRINT_STR : 19,
     TYPE_IA5_STR : 22,
+    TYPE_VIS_STR : 26
 }
 TAG_UNIV_VALTOTYPE = {
     0 : 'reserved for BER',
@@ -279,7 +281,7 @@ TAG_UNIV_VALTOTYPE = {
     23 : 'UTCTime',
     24 : 'GeneralizedTime',
     25 : 'GraphicString',
-    26 : 'GraphicString',
+    26 : TYPE_VIS_STR,
     27 : 'GeneralString',
     28 : 'UniversalString',
     29 : 'CHARACTER STRING',

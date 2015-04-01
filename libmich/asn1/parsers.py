@@ -1044,7 +1044,8 @@ def parse_value_str(Obj, text=''):
                 raise(ASN1_PROC_LINK('%s: undefined OCTET STRING value '\
                       'reference: %s' % (Obj.get_fullname(), text)))
             if GLOBAL.VALUE[ref]['type'] not in (TYPE_OCTET_STR, TYPE_IA5_STR, 
-                                                 TYPE_PRINT_STR, TYPE_NUM_STR):
+                                                 TYPE_PRINT_STR, TYPE_NUM_STR,
+                                                 TYPE_VIS_STR):
                 raise(ASN1_PROC_TEXT('%s: OCTET STRING value reference to '\
                       'bad type: %s' % (Obj.get_fullname(), text)))
             Obj['val'] = GLOBAL.VALUE[ref]['val']
@@ -1683,7 +1684,8 @@ def _parse_constraint_str_pass(Obj, text=''):
     #
     # 3) or check for FROM constraint
     # (only for textual strings)
-    elif Obj['type'] in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
+    elif Obj['type'] in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR,
+                         TYPE_VIS_STR):
         m = re.match('FROM', text)
         if not m:
             raise(ASN1_PROC_NOSUPP('%s: %s constraint not supported: %s'\

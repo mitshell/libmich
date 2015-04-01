@@ -305,6 +305,7 @@ class PER(ASN1.ASN1Codec):
     _REPR_BIT_STR = 'hex'
     _REPR_OCT_STR = 'hex'
     _REPR_PRINT_STR = 'hum'
+    _REPR_VIS_STR = 'hum'
     
     def is_aligned(self):
         if self.VARIANT[:1] == 'A': return True
@@ -330,7 +331,8 @@ class PER(ASN1.ASN1Codec):
             self.encode_enum(obj)
         elif obj._type == TYPE_BIT_STR:
             self.encode_bit_str(obj)
-        elif obj._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR):
+        elif obj._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR,
+                           TYPE_VIS_STR):
             self.encode_oct_str(obj)
         elif obj._type == TYPE_CHOICE:
             self.encode_choice(obj)
@@ -711,6 +713,8 @@ class PER(ASN1.ASN1Codec):
             size = len(obj._val)
             if obj._type == TYPE_PRINT_STR:
                 val = Str('C', Pt=obj._val, Len=size, Repr=self._REPR_PRINT_STR)
+            elif obj._type == TYPE_VIS_STR:
+                val = Str('C', Pt=obj._val, Len=size, Repr=self._REPR_VIS_STR)
             else:
                 val = Str('C', Pt=obj._val, Len=size, Repr=self._REPR_OCT_STR)
         #
@@ -1131,7 +1135,8 @@ class PER(ASN1.ASN1Codec):
             return self.decode_enum(obj, buf)
         elif obj._type == TYPE_BIT_STR:
             return self.decode_bit_str(obj, buf)
-        elif obj._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR):
+        elif obj._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR,
+                           TYPE_VIS_STR):
             return self.decode_oct_str(obj, buf)
         elif obj._type == TYPE_CHOICE:
             return self.decode_choice(obj, buf)
@@ -1514,6 +1519,8 @@ class PER(ASN1.ASN1Codec):
                 buf = self._get_P(obj, buf)
             if obj._type == TYPE_PRINT_STR:
                 c = Str('C', Len=lb, Repr=self._REPR_PRINT_STR)
+            elif obj._type == TYPE_VIS_STR:
+                c = Str('C', Len=lb, Repr=self._REPR_VIS_STR)
             else:
                 c = Str('C', Len=lb, Repr=self._REPR_OCT_STR)
             buf = c.map_ret(buf)
@@ -1545,6 +1552,8 @@ class PER(ASN1.ASN1Codec):
         # finally decode content
         if obj._type == TYPE_PRINT_STR:
             c = Str('C', Len=size, Repr=self._REPR_PRINT_STR)
+        elif obj._type == TYPE_VIS_STR:
+            c = Str('C', Len=size, Repr=self._REPR_VIS_STR)
         else:
             c = Str('C', Len=size, Repr=self._REPR_OCT_STR)
         buf = c.map_ret(buf)
@@ -1567,6 +1576,8 @@ class PER(ASN1.ASN1Codec):
         # finally decode content
         if obj._type == TYPE_PRINT_STR:
             c = Str('C', Len=size, Repr=self._REPR_PRINT_STR)
+        elif obj._type == TYPE_VIS_STR:
+            c = Str('C', Len=size, Repr=self._REPR_VIS_STR)
         else:
             c = Str('C', Len=size, Repr=self._REPR_OCT_STR)
         buf = c.map_ret(buf)

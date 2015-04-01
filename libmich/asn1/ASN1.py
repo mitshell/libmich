@@ -340,7 +340,8 @@ class ASN1Obj(object):
                 # is done by _val_basic_in_const()
                 return True
             return isinstance(val, str)
-        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
+        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR,
+                            TYPE_VIS_STR):
             return isinstance(val, str)
         elif self._type == TYPE_OID:
             return isinstance(val, list) \
@@ -366,7 +367,7 @@ class ASN1Obj(object):
                     raise(ASN1_OBJ('%s: BIT STRING size underflow (MIN: %s): %s'\
                           % (self.get_fullname(), lb, val[1])))
         elif self._type in (TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR, 
-                            TYPE_NUM_STR) \
+                            TYPE_NUM_STR, TYPE_VIS_STR) \
         and isinstance(val, str):
             lb, ub, ext = self.get_const_int()
             if not ext:
@@ -765,8 +766,8 @@ class ASN1Obj(object):
         if self._type == TYPE_INTEGER:
             lb, ub, ext = None, None, False
         elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR, TYPE_IA5_STR,
-                            TYPE_PRINT_STR, TYPE_NUM_STR, TYPE_SEQ_OF,
-                            TYPE_SET_OF):
+                            TYPE_PRINT_STR, TYPE_NUM_STR, TYPE_VIS_STR,
+                            TYPE_SEQ_OF, TYPE_SET_OF):
             lb, ub, ext = 0, None, False
         else:
             return None, None, None
@@ -841,7 +842,7 @@ class ASN1Obj(object):
                 return text
         elif self._type in (TYPE_NULL, TYPE_BOOL, TYPE_OID, TYPE_OPEN, TYPE_ANY,
                             TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR, 
-                            TYPE_NUM_STR):
+                            TYPE_NUM_STR, TYPE_VIS_STR):
             # there is no content for those types
             return text
         elif self._type == TYPE_INTEGER:
@@ -987,7 +988,7 @@ class ASN1Obj(object):
         elif self._type == TYPE_INTEGER:
             return self._parse_constraint_integer(text)
         elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR, TYPE_PRINT_STR, 
-                            TYPE_IA5_STR, TYPE_NUM_STR):
+                            TYPE_IA5_STR, TYPE_NUM_STR, TYPE_VIS_STR):
             return self._parse_constraint_str(text)
         return text
     
@@ -1023,7 +1024,7 @@ class ASN1Obj(object):
             elif self._type == TYPE_BIT_STR:
                 return self._parse_value_bitstr(text)
             elif self._type in (TYPE_OCTET_STR, TYPE_IA5_STR, TYPE_PRINT_STR,
-                                TYPE_NUM_STR):
+                                TYPE_NUM_STR, TYPE_VIS_STR):
                 return self._parse_value_str(text)
             elif self._type == TYPE_OID:
                 return self._parse_value_oid(text)
@@ -1240,7 +1241,8 @@ class ASN1Obj(object):
                 return str(self._val)
             elif isinstance(self._val, ASN1Obj):
                 return self._val.to_dict()
-        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
+        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR,
+                            TYPE_VIS_STR):
             return str(self._val)
         elif self._type == TYPE_OID:
             return [int(i) for i in self._val]
@@ -1447,7 +1449,8 @@ class ASN1Obj(object):
             elif isinstance(DictVal, dict):
                 self._val = ASN1Obj()
                 self._val.from_dict( DictVal )
-        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR):
+        elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR,
+                            TYPE_VIS_STR):
             self._val = str(DictVal)
         elif self._type == TYPE_OID:
             self._val = [int(i) for i in DictVal]
