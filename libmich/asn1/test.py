@@ -3,7 +3,7 @@
 # * Software Name : libmich 
 # * Version : 0.2.3
 # *
-# * Copyright © 2014. Benoit Michau. ANSSI.
+# * Copyright Â© 2014. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -673,7 +673,7 @@ def test_per_sequence(print_info=True):
 def _test_s1ap_prep():
     GLOBAL.clear()
     try:
-        load_module('s1ap')
+        load_module('S1AP')
     except:
         log('Module "s1ap" unavailable')
         return None
@@ -724,7 +724,7 @@ def test_s1ap():
 def _test_rrc3g_prep():
     GLOBAL.clear()
     try:
-        load_module('rrc3g')
+        load_module('RRC3G')
     except:
         log('Module "rrc3g" unavailable')
         return None, None
