@@ -24,20 +24,18 @@
 # * Created : 2014-06-17
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-#!/usr/bin/env python
+#*/
 
 ###
 # provides minimum encoding for signed integer
 ###
 def minenc_int(val=0):
     '''
-    for a given signed integer value, returns the minimum octet encoding,
-    limited to 8 bytes (int64).
+    for a given signed integer value, returns the minimum octet encoding.
     
     minenc_int(X) -> (Y, 'intZ')
-        1 <= Y <= 8
-        'int8' -> 'int64'
+        -2**(Y*8-1) <= Y < 2**(Y*8-1)
+        'int8' -> 'intZ'
     '''
     if -128 <= val < 128:
         return (1, 'int8')
@@ -56,36 +54,54 @@ def minenc_int(val=0):
     elif -9223372036854775808 <= val < 9223372036854775808:
         return (8, 'int64')
     else:
-        return (0, None)
+        if val < 0:
+            n = 9
+            lim = -2**71
+            while val < lim:
+                n += 1
+                lim <<= 8
+            return (n, 'int{0}'.format(n*8))
+        else:
+            n = 9
+            lim = 2**71
+            while val >= lim:
+                n += 1
+                lim <<= 8
+            return (n, 'int{0}'.format(n*8))
 
 ###
 # provides minimum encoding for unsigned integer
 ###
 def minenc_uint(val=0):
     '''
-    for a given unsigned integer value, returns the minimum octet encoding,
-    limited to 8 bytes (uint64).
+    for a given unsigned integer value, returns the minimum octet encoding.
     
-    minenc_uint(X) -> (Y, 'intZ')
-        1 <= Y <= 8
-        'uint8' -> 'uint64'
+    minenc_uint(X) -> (Y, 'uintZ')
+        0 <= X < 2**(8*Y)
+        'uint8' -> 'uintZ'
     '''
-    if 0 <= val < 256:
+    if val < 0:
+        return (0, 'uint0')
+    elif val < 256:
         return (1, 'uint8')
-    elif 0 <= val < 65536:
+    elif val < 65536:
         return (2, 'uint16')
-    elif 0 <= val < 16777216:
+    elif val < 16777216:
         return (3, 'uint24')
-    elif 0 <= val < 4294967296:
+    elif val < 4294967296:
         return (4, 'uint32')
-    elif 0 <= val < 1099511627776:
+    elif val < 1099511627776:
         return (5, 'uint40')
-    elif 0 <= val < 281474976710656:
+    elif val < 281474976710656:
         return (6, 'uint48')
-    elif 0 <= val < 72057594037927936:
+    elif val < 72057594037927936:
         return (7, 'uint56')
-    elif -9223372036854775808 <= val < 9223372036854775808:
+    elif val < 18446744073709551616:
         return (8, 'uint64')
     else:
-        return (0, None)
-
+        n = 9
+        lim = 2**72
+        while val >= lim:
+            n += 1
+            lim <<= 8
+        return (n, 'uint{0}'.format(n*8))

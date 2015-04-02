@@ -209,8 +209,8 @@ class _PER_NSVAL(Layer):
             self.Sig > 1
             self.remove(self[-1])
             Value = ASN1.ASN1Obj(name='Value', type=TYPE_INTEGER)
-            Value.const.append({'type':CONST_VAL_RANGE, 
-                                'lb':0, 'ub':None, 'ext':False})
+            Value._const.append({'type':CONST_VAL_RANGE, 
+                                 'lb':0, 'ub':None, 'ext':False})
             Value._encode(val)
             self.extend(Value._msg)
     
@@ -238,8 +238,8 @@ class _PER_NSVAL(Layer):
         self.remove(self[-1])
         s = shtr(s) << 1
         Value = ASN1.ASN1Obj(name='Value', type=TYPE_INTEGER)
-        Value.const.append({'type':CONST_VAL_RANGE, 
-                            'lb':0, 'ub':None, 'ext':False})
+        Value._const.append({'type':CONST_VAL_RANGE, 
+                             'lb':0, 'ub':None, 'ext':False})
         s = Value.decode(s)
         self.append(Value._msg)
         return s
@@ -262,8 +262,8 @@ class _PER_NSVAL(Layer):
         s._cur += 1
         self.remove(self[-1])
         Value = ASN1.ASN1Obj(name='Value', type=TYPE_INTEGER)
-        Value.const.append({'type':CONST_VAL_RANGE, 
-                            'lb':0, 'ub':None, 'ext':False})
+        Value._const.append({'type':CONST_VAL_RANGE, 
+                             'lb':0, 'ub':None, 'ext':False})
         s = Value.decode(s)
         self.append(Value._msg)
         return s
@@ -470,9 +470,9 @@ class PER(ASN1.ASN1Codec):
         # length determinant + minimum octets signed number (2'complement)
         # TODO: support unconstrained integer over 64 bits
         #
-        if not -2**63 <= val < 2**63:
-            raise(ASN1_PER_ENCODER('%s: unconstrained integer value %i '\
-                  'over encoder limit (64 bit)' % (obj.get_fullname(), val)))
+        #if not -2**63 <= val < 2**63:
+        #    raise(ASN1_PER_ENCODER('%s: unconstrained integer value %i '\
+        #          'over encoder limit (64 bit)' % (obj.get_fullname(), val)))
         #
         # 1) add padding for the aligned variant
         if self.is_aligned():
@@ -494,9 +494,9 @@ class PER(ASN1.ASN1Codec):
         # length determinant + minimum octets unsigned number
         # TODO: support semi-constrained integer over 64 bits
         #
-        if not 0 <= val < 2**64:
-            raise(ASN1_PER_ENCODER('%s: semi-constrained integer value %i '\
-                  'over encoder limit (64 bit)' % (obj.get_fullname(), val)))
+        #if not 0 <= val < 2**64:
+        #    raise(ASN1_PER_ENCODER('%s: semi-constrained integer value %i '\
+        #          'over encoder limit (64 bit)' % (obj.get_fullname(), val)))
         #
         # 1) add padding for the aligned variant
         if self.is_aligned():
@@ -1249,10 +1249,10 @@ class PER(ASN1.ASN1Codec):
         size = l()
         #
         # 3) decode signed integer value
-        if size > 8:
-            raise(ASN1_PER_DECODER('%s: unconstrained integer value too '\
-                  'long (%i), over decoder limit (64 bit)'\
-                  % (obj.get_fullname(), size)))
+        #if size > 8:
+        #    raise(ASN1_PER_DECODER('%s: unconstrained integer value too '\
+        #          'long (%i), over decoder limit (64 bit)'\
+        #          % (obj.get_fullname(), size)))
         #
         c = Int('C', Type='int%i' % (8*size), Repr=self._REPR_INT)
         buf = c.map_ret(buf)
@@ -1275,10 +1275,10 @@ class PER(ASN1.ASN1Codec):
         size = l() 
         #
         # 3) decode unsigned integer value
-        if size > 8:
-            raise(ASN1_PER_DECODER('%s: semi-constrained integer value too '\
-                  'large (%i), over decoder limit (64 bit)'\
-                  % (obj.get_fullname(), size)))
+        #if size > 8:
+        #    raise(ASN1_PER_DECODER('%s: semi-constrained integer value too '\
+        #          'large (%i), over decoder limit (64 bit)'\
+        #          % (obj.get_fullname(), size)))
         #
         c = Int('C', Type='uint%i' % (8*size), Repr=self._REPR_INT)
         buf = c.map_ret(buf)
