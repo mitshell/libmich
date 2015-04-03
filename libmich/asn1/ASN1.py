@@ -881,18 +881,7 @@ class ASN1Obj(object):
         return text
     
     def _build_constructed_rootext(self):
-        # build _root_comp: a static list of root components
-        if self._ext is not None:
-            self._root_comp = [c for c in self._cont if c not in self._ext]
-        else:
-            self._root_comp = [c for c in self._cont]
-        # build _root_opt: a static list of optional root components
-        self._root_opt = []
-        for name in self._root_comp:
-            if self._cont[name]._flags is not None \
-            and (FLAG_OPT not in self._cont[name]._flags \
-             or FLAG_DEF not in self._cont[name]._flags):
-                self._root_opt.append(name)
+        # 1)
         # build _ext_flat: a static list of flattened extensions
         #       _ext_group: a static dict of {group : extensions}
         if self._ext is not None:
@@ -903,6 +892,22 @@ class ASN1Obj(object):
                     if self._cont[name]._group not in self._ext_group:
                         self._ext_group[self._cont[name]._group] = []
                     self._ext_group[self._cont[name]._group].append(name)
+        # 2)
+        # build _root_comp: a static list of root components
+        if self._ext is not None:
+            self._root_comp = [c for c in self._cont \
+                               if c not in self._ext_flat]
+        else:
+            self._root_comp = [c for c in self._cont]
+        # 3)
+        # build _root_opt: a static list of optional root components
+        self._root_opt = []
+        for name in self._root_comp:
+            if self._cont[name]._flags is not None \
+            and (FLAG_OPT not in self._cont[name]._flags \
+             or FLAG_DEF not in self._cont[name]._flags):
+                self._root_opt.append(name)
+        # 4)
         # build _cont_tag: a static dict of {tag : component}
         if self._type in (TYPE_SET, TYPE_CHOICE):
             self._cont_tags = {}

@@ -211,8 +211,10 @@ class _PER_NSVAL(Layer):
             Value = ASN1.ASN1Obj(name='Value', type=TYPE_INTEGER)
             Value._const.append({'type':CONST_VAL_RANGE, 
                                  'lb':0, 'ub':None, 'ext':False})
-            Value._encode(val)
+            Value._val = val
+            Value._encode()
             self.extend(Value._msg)
+            self[-1].CallName = 'Value'
     
     def __call__(self):
         return self.Value()
@@ -241,32 +243,15 @@ class _PER_NSVAL(Layer):
         Value._const.append({'type':CONST_VAL_RANGE, 
                              'lb':0, 'ub':None, 'ext':False})
         s = Value.decode(s)
-        self.append(Value._msg)
+        self.extend(Value._msg)
+        self[-1].CallName = 'Value'
+        if self[-1].Val is None:
+            raise(ASN1_PER_DECODER('undefined NSVAL'))
         return s
     
     def map(self, s=''):
         self.map_ret(s)
-    
-    def map_ret_(self, s):
-        if not s:
-            return s
-        # reinit to the basic representation 
-        self.__init__()
-        # get the Form bit
-        Sig = s.to_uint(1)
-        # Sig = 0, small value: do not change anything
-        if Sig == 0:
-            return Layer.map_ret(self, s)
-        # Sig = 1, not that small value: semi-constrained INTEGER
-        self.Sig < 1
-        s._cur += 1
-        self.remove(self[-1])
-        Value = ASN1.ASN1Obj(name='Value', type=TYPE_INTEGER)
-        Value._const.append({'type':CONST_VAL_RANGE, 
-                             'lb':0, 'ub':None, 'ext':False})
-        s = Value.decode(s)
-        self.append(Value._msg)
-        return s
+  
     
 #------------------------------------------------------------------------------#
 # PER encoder / decoder
