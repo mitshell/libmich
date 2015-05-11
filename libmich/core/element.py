@@ -852,7 +852,7 @@ class Int(Element):
             if self.Len <= 8:
                 return unpack('<Q', string + '\0'*(8 - self.Len))[0]
             else:
-                u8 = unpack('<'+self.Len*'B', string)
+                u8 = list(unpack('<'+self.Len*'B', string))
                 u8.reverse()
                 return reduce(lambda x,y: (x<<8)+y, u8)
         else:
@@ -878,7 +878,7 @@ class Int(Element):
                 return unpack('<Q', string + '\0'*(8 - self.Len))[0] \
                        - 2**(self.Len*8)
             else:
-                i8 = unpack('<'+self.Len*'B', string)
+                i8 = list(unpack('<'+self.Len*'B', string))
                 i8.reverse()
                 return reduce(lambda x,y:(x<<8)+y, i8) - 2**(self.Len*8)
         else:
