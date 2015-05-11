@@ -2041,14 +2041,14 @@ class Block(object):
 class testTLV(Layer):
     _byte_aligned = True
     constructorList = [
-        Int(CallName='T', ReprName='Tag', Type='uint8', \
+        Int('T', ReprName='Tag', Type='uint8', \
             Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
-        Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=1),
-        Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
-        Bit(CallName='res', ReprName='Reserved', Pt=0, BitLen=13),
+        Bit('F1', ReprName='Flag1', Pt=0, BitLen=1),
+        Bit('F2', ReprName='Flag2', Pt=1, BitLen=2),
+        Bit('res', ReprName='Reserved', Pt=0, BitLen=13),
         # length in bytes (including header, excepted Tag)
-        Int(CallName='L', ReprName='Length', Type='uint8' ),
-        Str(CallName='V', ReprName='Value', Pt='default value'),
+        Int('L', ReprName='Length', Type='uint8' ),
+        Str('V', ReprName='Value', Pt='default value'),
         ]
 
     def __init__(self, **kwargs):
@@ -2063,13 +2063,13 @@ class testTLV(Layer):
 class testA(Layer):
     _byte_aligned = False
     constructorList = [
-        Bit(CallName='T', ReprName='Tag', BitLen=6, Repr='hum',
+        Bit('T', ReprName='Tag', BitLen=6, Repr='hum',
             Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
-        Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=4),
-        Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
+        Bit('F1', ReprName='Flag1', Pt=0, BitLen=4),
+        Bit('F2', ReprName='Flag2', Pt=1, BitLen=2),
         # length in bytes
-        Int(CallName='L', ReprName='Length', Type='uint8', Repr='hum'),
-        Str(CallName='V', ReprName='Value', Pt='default value'),
+        Int('L', ReprName='Length', Type='uint8', Repr='hum'),
+        Str('V', ReprName='Value', Pt='default value'),
         ]
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
@@ -2081,12 +2081,12 @@ class testA(Layer):
 class testB(Layer):
     _byte_aligned = False
     constructorList = [
-        Bit(CallName='T', ReprName='Tag', BitLen=6, Repr='hum', \
+        Bit('T', ReprName='Tag', BitLen=6, Repr='hum', \
             Dict={0:'Reserved', 1:'Tag1', 2:'Tag2', 5:'Tag5'}),
-        Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=4),
-        Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
+        Bit('F1', ReprName='Flag1', Pt=0, BitLen=4),
+        Bit('F2', ReprName='Flag2', Pt=1, BitLen=2),
         # length in bits
-        Int(CallName='L', Pt=0, ReprName='Length', Type='uint16', Repr='hum'),
+        Int('L', Pt=0, ReprName='Length', Type='uint16', Repr='hum'),
         testA(T=1, V='super mega default value'),
         testA(T=2, V='ultra colored'),
         ]
