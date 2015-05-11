@@ -80,6 +80,8 @@ currently provides ready-to-use ASN.1 modules:
    TS 36.331, release c10.
 * S1AP_36413-c10 and X2AP_36423-c10: LTE radio access network protocols, 
    specified in the 3GPP TS 36.413 and 423, releases c10.
+* LPP_36355-ac0: LTE Positionning Protocol, specified in the 3GPP TS 36.355, 
+   release ac0.
 
 On the other side, many ASN.1 basic types (e.g. Relative-OID, specific String, 
 Real, ...) which are not common in mobile network protocols are not supported 
