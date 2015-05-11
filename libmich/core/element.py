@@ -2046,15 +2046,17 @@ class testTLV(Layer):
         Bit(CallName='F1', ReprName='Flag1', Pt=0, BitLen=1),
         Bit(CallName='F2', ReprName='Flag2', Pt=1, BitLen=2),
         Bit(CallName='res', ReprName='Reserved', Pt=0, BitLen=13),
-        # length in bytes (including header)
+        # length in bytes (including header, excepted Tag)
         Int(CallName='L', ReprName='Length', Type='uint8' ),
         Str(CallName='V', ReprName='Value', Pt='default value'),
         ]
 
     def __init__(self, **kwargs):
         Layer.__init__(self, **kwargs)
+        # automating the computation of Length at runtime
         self.L.Pt = self.V
         self.L.PtFunc = lambda X: len(X)+3
+        # automating the parsing of Value when calling .map(buffer)
         self.V.Len = self.L
         self.V.LenFunc = lambda X: int(X)-3
 
