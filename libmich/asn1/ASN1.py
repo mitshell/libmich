@@ -599,7 +599,6 @@ class ASN1Obj(object):
             return self._msg
     
     def _encode(self, **kwargs):
-        #self._msg = Layer(self._name)
         self._msg = Layer(self.get_name())
         #
         # do not encode ASN.1 objects which are set with their DEFAULT value
@@ -619,7 +618,7 @@ class ASN1Obj(object):
         else:
             self._codec.encode(self, **kwargs)
         if self._DEBUG:
-            log('encode: %s, ' % (self.get_fullname(), hex(self)))
+            log('encode: %s, %s' % (self.get_fullname(), hex(self)))
     
     def decode(self, buf='', **kwargs):
         if self._RAISE_SILENTLY:
@@ -636,7 +635,8 @@ class ASN1Obj(object):
             return self._msg
     
     def _decode(self, buf, **kwargs):
-        #self._msg = Layer(self._name)
+        if self._DEBUG >= 2:
+            log('buf: %s' % buf.encode('hex'))
         self._msg = Layer(self.get_name())
         self._codec = self.CODEC()
         if self._RAISE_SILENTLY:

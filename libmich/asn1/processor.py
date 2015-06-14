@@ -52,7 +52,8 @@ MODULES = { \
     'X2AP': 'X2AP_36423-c10',
     'MAP': 'MAP_29002-bb0',
     'SS': 'SS_24080-c00',
-    'LPP': 'LPP_36355-ac0'
+    'LPP': 'LPP_36355-ac0',
+    'PCAP': 'PCAP_25453-c20'
     }
 
 def compile(texts):

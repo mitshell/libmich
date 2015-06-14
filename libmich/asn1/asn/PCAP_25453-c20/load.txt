@@ -1,0 +1,8 @@
+# Ordered list of PCAP modules
+# to be loaded sequentially
+PCAP-PDU-CommonDataTypes.asn
+PCAP-PDU-Constants.asn
+PCAP-PDU-Containers.asn
+PCAP-PDU-IEs.asn
+PCAP-PDU-Contents.asn
+PCAP-PDU-Descriptions.asn

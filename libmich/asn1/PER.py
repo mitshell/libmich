@@ -414,7 +414,11 @@ class PER(ASN1.ASN1Codec):
         #
         # 6) both lower / upper bounds: fully constrained
         # get integer value range
-        ra = ub - lb + 1
+        if lb >= 0:
+            ra = ub - lb + 1
+        else:
+            # 2's complement encoding
+            ra = ub - lb
         if ra == 1:
             # only a single value
             if obj._val == lb:
@@ -1209,7 +1213,11 @@ class PER(ASN1.ASN1Codec):
         #
         # 5) both lower / upper bounds: fully constrained
         # get integer value range
-        ra = ub - lb + 1
+        if lb >= 0:
+            ra = ub - lb + 1
+        else:
+            # 2's complement encoding
+            ra = ub - lb
         if ra == 1:
             # only a single value is possible: no decoding needed
             obj._val = lb

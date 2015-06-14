@@ -76,6 +76,8 @@ currently provides ready-to-use ASN.1 modules:
    3GPP TS 25.331, release c10.
 * RANAP_25413-c10: 3G Radio Access Network Application Part protocol, specified
    in the 3GPP TS 25.413, release c10.
+* PCAP_25453-c20: 3G Positioning Calculation Application Part, specified in the
+   TS 25.453, release c20.
 * RRCLTE_36331-c10: LTE Radio Ressource Control protocol, specified in the 3GPP
    TS 36.331, release c10.
 * S1AP_36413-c10 and X2AP_36423-c10: LTE radio access network protocols, 
@@ -88,8 +90,8 @@ Real, ...) which are not common in mobile network protocols are not supported
 yet by libmich.
 
 
-How does the compiler works
-===========================
+How does the compiler work
+==========================
 
 The largest part of the static and dynamic compiler is available in the 
 *processor.py* file.
