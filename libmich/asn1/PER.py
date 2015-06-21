@@ -414,11 +414,8 @@ class PER(ASN1.ASN1Codec):
         #
         # 6) both lower / upper bounds: fully constrained
         # get integer value range
-        if lb >= 0:
-            ra = ub - lb + 1
-        else:
-            # 2's complement encoding
-            ra = ub - lb
+        ra = ub - lb + 1
+        #
         if ra == 1:
             # only a single value
             if obj._val == lb:
@@ -517,12 +514,12 @@ class PER(ASN1.ASN1Codec):
             #
             # 2b) add value with minimal byte-encoding
             if ra == 256:
-                obj._msg.append(Bit('C', Pt=val, BitLen=8, Repr=self._REPR_INT))
-                self._off += 8
-                return
+                bitlen = 8
+            else:
+                bitlen = 16
             #
-            obj._msg.append(Bit('C', Pt=val, BitLen=16, Repr=self._REPR_INT))
-            self._off += 16
+            obj._msg.append(Bit('C', Pt=val, BitLen=bitlen, Repr=self._REPR_INT))
+            self._off += bitlen
             return
         #
         # 3) for greater dynamic
@@ -530,7 +527,9 @@ class PER(ASN1.ASN1Codec):
         # minimum number of bytes)
         # dyn_ra: number of bits required to describe the length in 
         # bytes of the maximum value that could be encoded
-        dyn_ra = len_bits(len_bytes(ra))
+        ra -= 1
+        dyn_ra = len_bits(len_bytes(ra)-1)
+        #
         # dyn_val: number of bytes required to encode the given value
         dyn_val = len_bytes(val)
         obj._msg.append(Bit('L', Pt=dyn_val-1, BitLen=dyn_ra, Repr=self._REPR_L))
@@ -1213,11 +1212,7 @@ class PER(ASN1.ASN1Codec):
         #
         # 5) both lower / upper bounds: fully constrained
         # get integer value range
-        if lb >= 0:
-            ra = ub - lb + 1
-        else:
-            # 2's complement encoding
-            ra = ub - lb
+        ra = ub - lb + 1
         if ra == 1:
             # only a single value is possible: no decoding needed
             obj._val = lb
@@ -1296,18 +1291,14 @@ class PER(ASN1.ASN1Codec):
             #
             # 2b) add value with minimal byte-encoding
             if ra == 256:
-                c = Bit('C', BitLen=8, Repr=self._REPR_INT)
-                buf = c.map_ret(buf)
-                obj._msg.append(c)
-                self._off += 8
-                #
-                obj._val = c() + lb
-                return buf
+                bitlen = 8
+            else:
+                bitlen = 16
             #
-            c = Bit('C', BitLen=16, Repr=self._REPR_INT)
+            c = Bit('C', BitLen=bitlen, Repr=self._REPR_INT)
             buf = c.map_ret(buf)
             obj._msg.append(c)
-            self._off += 16
+            self._off += bitlen
             #
             obj._val = c() + lb
             return buf
@@ -1316,7 +1307,9 @@ class PER(ASN1.ASN1Codec):
         # 3a) get custom length determinant
         # dyn_ra: number of bits required to describe the length in 
         # bytes of the maximum value that could be encoded
-        dyn_ra = len_bits(len_bytes(ra))
+        ra -= 1
+        dyn_ra = len_bits(len_bytes(ra)-1)
+        #
         l = Bit('L', BitLen=dyn_ra, Repr=self._REPR_L)
         buf = l.map_ret(buf)
         obj._msg.append( l )
