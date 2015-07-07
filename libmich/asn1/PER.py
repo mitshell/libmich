@@ -1760,10 +1760,9 @@ class PER(ASN1.ASN1Codec):
                     # this overwrites previous content
                     const = comp.get_const_ref()
                     if const:
-                        done, ref = self._get_open_ref(obj, comp, const)
-                        if done:
-                            #log('CONST_SET_REF, ref: %s' % ref._name)
-                            comp._cont = ref
+                        done, comp._cont = self._get_open_ref(obj, comp, const)
+                        #if done:
+                        #    log('CONST_SET_REF, ref: %s' % comp._cont._name)
                     #log('_decode_seq, type OPEN: %s, %s' % (comp._name, comp._cont))
                 # 5) decode standard ASN1 object
                 buf = comp._decode(buf, offset=self._off)
@@ -1801,7 +1800,10 @@ class PER(ASN1.ASN1Codec):
         try:
             ref = const['ref'](const['at'], at_val)
         except:
-            # invalid value passed against object info value set
+            # invalid identifier passed to the object info value set
+            return (False, None)
+        if ref is None:
+            # invalid value against identifier passed to the object info value set
             return (False, None)
         #
         comp_typename = comp.get_typename()
