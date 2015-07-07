@@ -675,7 +675,7 @@ def _test_s1ap_prep():
     try:
         load_module('S1AP')
     except:
-        log('Module "s1ap" unavailable')
+        log('Module "S1AP" unavailable')
         return None
     ASN1.ASN1Obj._RAISE_SILENTLY = False
     ASN1.ASN1Obj.CODEC = PER
@@ -721,12 +721,54 @@ def test_s1ap():
     if pkts is not None:
         void = _test_s1ap(pkts)
 
+def _test_x2ap_prep():
+    GLOBAL.clear()
+    try:
+        load_module('X2AP')
+    except:
+        log('Module "X2AP" unavailable')
+        return None
+    ASN1.ASN1Obj._RAISE_SILENTLY = False
+    ASN1.ASN1Obj.CODEC = PER
+    PER.VARIANT = 'A'
+    unh = lambda x: x.decode('hex')
+    #
+    # logs nicely submitted by Alexandre De Oliveira (P1)
+    # (2nd from http://www.pcapr.net/view/nos/2014/8/0/10/x2ap.pcap.html)
+    #
+    pkts = map(unh, [\
+'000600808a000004001500080011f1110001013000140051020000330011f11101011010029011f111004c2c05dc330000340011f1110101102000a011f111004c2c05dc444000350011f1110101103000a011f111005eec189c3300010011f1110a0ab010002705dc001800060011f1118000a8dd4018000002100040030001031001400a0001c006001008020100',
+'0000007b000006000a00020001000540020000000b000800522018000000200017000700522018000102000e004100010000000000303132333435363738393031323334353637383930313233343536373839303120000000000004400e0000010a03e01401a8c000000002020000000f400c000052201800000021800003',
+       ])
+    return pkts
+
+def _test_x2ap(pkts):
+    T0 = time()
+    i = 1
+    #
+    pdu = GLOBAL.TYPE['X2AP-PDU']
+    for msg in pkts:
+        pdu.decode(msg)
+        assert( str(pdu) == msg )
+        val = pdu()
+        buf = pdu.encode()
+        assert( str(pdu) == msg )
+        assert( pdu() == val )
+        i += 1
+    #
+    return time() - T0
+
+def test_x2ap():
+    pkts = _test_x2ap_prep()
+    if pkts is not None:
+        void = _test_x2ap(pkts)
+
 def _test_rrc3g_prep():
     GLOBAL.clear()
     try:
         load_module('RRC3G')
     except:
-        log('Module "rrc3g" unavailable')
+        log('Module "RRC3G" unavailable')
         return None, None
     ASN1.ASN1Obj._RAISE_SILENTLY = False
     ASN1.ASN1Obj.CODEC = PER
@@ -867,7 +909,9 @@ def test_all(print_info=False):
     test_per_choice(print_info)
     test_per_sequence(print_info)
     test_s1ap()
+    test_x2ap()
     test_rrc3g()
+    GLOBAL.clear()
     
 if __name__ == '__main__':
     test_all()
