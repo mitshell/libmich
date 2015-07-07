@@ -36,7 +36,7 @@ from libmich.formats.L3Mobile import test_regr
 from libmich.asn1.test import test_def, test_per_integer, test_per_choice, \
     test_per_sequence
 from libmich.asn1.test import _test_rrc3g_prep, _test_rrc3g, \
-    _test_s1ap_prep, _test_s1ap
+    _test_s1ap_prep, _test_s1ap, _test_x2ap_prep, _test_x2ap
 
 import libmich as _lm
 bmp_fd = open(_lm.__path__[0] + '/utils/test.bmp', 'rb')
@@ -58,6 +58,7 @@ RND_T6 = 3
 RND_T7 = 12
 RND_T8 = 5
 RND_T9 = 20
+RND_T10 = 30
 
 def texec(procedure):
     t0=time.time()
@@ -129,27 +130,38 @@ def t7():
 
 def t8():
     Int._endian = 'big'
-    print('test 8: loading rrc3g module and encoding / decoding UMTS RRC ASN.1 '\
+    print('test 8: loading RRC3G module and encoding / decoding UMTS RRC ASN.1 '\
           'PER unaligned structures %i times' % RND_T8)
     pkts, pkts_nc = _test_rrc3g_prep()
     if pkts is None:
-        print('unable to load rrc3g ASN.1 module')
+        print('unable to load RRC3G ASN.1 module')
         return
     for i in range(RND_T8):
         _test_rrc3g(pkts, pkts_nc)
 
 def t9():
     Int._endian = 'big'
-    print('test 9: loading s1ap module and encoding / decoding LTE S1AP ASN.1 '\
+    print('test 9: loading S1AP module and encoding / decoding LTE S1AP ASN.1 '\
           'PER aligned structures %i times' % RND_T9)
     pkts = _test_s1ap_prep()
     if pkts is None:
-        print('unable to load s1ap ASN.1 module')
+        print('unable to load S1AP ASN.1 module')
         return
     for i in range(RND_T9):
         _test_s1ap(pkts)
 
-TESTS = [t1, t2, t3, t4, t5, t6, t7, t8, t9]
+def t10():
+    Int._endian = 'big'
+    print('test 10: loading X2AP module and encoding / decoding LTE X1AP ASN.1 '\
+          'PER aligned structures %i times' % RND_T10)
+    pkts = _test_x2ap_prep()
+    if pkts is None:
+        print('unable to load X2AP ASN.1 module')
+        return
+    for i in range(RND_T10):
+        _test_x2ap(pkts)
+
+TESTS = [t1, t2, t3, t4, t5, t6, t7, t8, t9, t10]
 #TESTS = [t3]
 
 def main(tests=TESTS):
