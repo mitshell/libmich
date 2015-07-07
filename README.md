@@ -88,7 +88,7 @@ Here is the list of external files, or code derived from external projects:
 * *libmich/utils/CRC16.py*
 * *libmich/utils/CRC32C.py*
 * *libmich/utils/CrcMoose.py*
-* *libmich/utils/DH.py*
+* *libmich/utils/DHold.py*
 * *libmich/utils/inet.py*
 * *libmich/utils/PRF1862.py*
 * *libmich/formats/MCCMNC.py*
@@ -590,7 +590,7 @@ sub-directory:
 * CRC32C: function to compute CRC-32C checksum, taken from google code
 * CrcMoose: large sets of CRC checksums, taken from the Ray Burr website (but 
    not use in any part of the project, yet)
-* DH: class to compute Diffe-Hellman keys, taken from the python OpenID project
+* DH: class to compute Diffe-Hellman shared keys
 * PRF1862: class to compute NIST 186-2 pseudo random generation, derived from 
    SHA1.py
 * inet: IP / TCP checksum routines, taken from scapy
