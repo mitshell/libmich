@@ -493,7 +493,7 @@ class TRACKING_AREA_UPDATE_REQUEST(Layer3NASEMM):
             Type3_TV('PTMSISign', ReprName='Old P-TMSI signature', T=0x19,
                      V=3*'\0', Len=3),
             Type4_TLV('GUTI_2', ReprName='Additional GUTI', T=0x50, V=11*'\0'),
-            Type3_TV('NonceUE', T=0x55, V=4*'\0'),
+            Type3_TV('NonceUE', T=0x55, V=4*'\0', Len=4),
             Type4_TLV('UENetCap', ReprName='UE network capability', T=0x58, 
                       V='\0\0'),
             Type3_TV('TAI', ReprName='Last Visited Registered TAI', T=0x52,
@@ -747,8 +747,9 @@ class SECURITY_MODE_COMMAND(Layer3NASEMM):
             Type4_LV('UESecCap', ReprName='Replayed UE Security Capabilities',
                      V=2*'\0'),
             Type1_TV('IMEISVReq', T=0x0C, V=0),
-            Type3_TV('NonceUE', ReprName='Replayed Nonce UE', T=0x55, V=4*'\0'),
-            Type3_TV('NonceMME', T=0x56, V=4*'\0')
+            Type3_TV('NonceUE', ReprName='Replayed Nonce UE', T=0x55, V=4*'\0',
+                     Len=4),
+            Type3_TV('NonceMME', T=0x56, V=4*'\0', Len=4)
             ])
         self._post_init(with_options, **kwargs)
 
@@ -824,9 +825,9 @@ class CS_SERVICE_NOTIFICATION(Layer3NASEMM):
             Int('PagingID', Pt=0, Type='uint8', Dict=PagingID_dict),
             Type4_TLV('CLI', ReprName='Calling Line', T=0x60, V='\0'),
             Type3_TV('SSCode', ReprName='Supplementary Service Transaction',
-                     T=0x61, V='\0'),
+                     T=0x61, V='\0', Len=1),
             Type3_TV('LCSInd', ReprName='Location Service Indicator', T=0x62,
-                     V='\0'),
+                     V='\0', Len=1),
             Type4_TLV('LCSCliID', ReprName='Location Service Client Identity',
                       T=0x63, V='\0')
             ])
