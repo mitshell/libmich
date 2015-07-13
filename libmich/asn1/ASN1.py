@@ -328,17 +328,9 @@ class ASN1Obj(object):
             else:
                 return isinstance(val, str) and val in self._cont
         elif self._type == TYPE_BIT_STR:
-            if isinstance(val, ASN1Obj):
-                # WNG: the test for ASN1Obj type compliance toward CONTAINING
-                # is done by _val_basic_in_const()
-                return True
             return isinstance(val, (list, tuple)) and len(val) == 2 \
             and all([isinstance(v, (int, long)) and v >= 0 for v in val])
         elif self._type == TYPE_OCTET_STR:
-            if isinstance(val, ASN1Obj):
-                # WNG: the test for ASN1Obj type compliance toward CONTAINING
-                # is done by _val_basic_in_const()
-                return True
             return isinstance(val, str)
         elif self._type in (TYPE_IA5_STR, TYPE_PRINT_STR, TYPE_NUM_STR,
                             TYPE_VIS_STR):
@@ -377,17 +369,6 @@ class ASN1Obj(object):
                 elif lb is not None and len(val) < lb:
                     raise(ASN1_OBJ('%s: %s size underflow (MIN: %s): %s'\
                           % (self.get_fullname(), self._type, lb, len(val))))
-        if self._type in (TYPE_BIT_STR, TYPE_OCTET_STR) \
-        and isinstance(val, ASN1Obj):
-            const = self.get_const_contain()
-            if const is None:
-                raise(ASN1_OBJ('%s: %s, invalid value, no CONTAINING constraint'\
-                      % (self.get_fullname(), self._type)))
-            # TODO: improve this check
-            if const['obj']._typeref != val._typeref \
-            and const['obj']._typeref != val._name:
-                raise(ASN1_OBJ('%s: %s, invalid value for CONTAINING constraint'\
-                      % (self.get_fullname(), self._type)))
     
     def _set_val_basic(self, val):
         if self._SAFE:
@@ -397,6 +378,25 @@ class ASN1Obj(object):
                       % (self.get_fullname(), self._type, val)))
             self._val_basic_in_const(val)
         self._val = val
+    
+    def _set_val_str(self, val):
+        # BIT STRING or OCTET STRING, which can have a CONTAINING constraint
+        contain = self.get_const_contain()
+        if contain and isinstance(val, tuple) and len(val) == 2 \
+        and val[0] == contain['ref']._name:
+            # passing a reference to an ASN1Obj internal structure:
+            # ASN1Obj name as val[0], corresponding to the CONTAINING constraint
+            # ASN1Obj value as val[1]
+            self._cont = GLOBAL.TYPE[val[0]].clone_light()
+            self._cont.set_val(val[1])
+            self._val = (val[0], self._cont._val)
+            self._cont._val = None
+            # WNG: BIT STRING can have a content (named bits), which will be lost
+            # with this specific handling
+            # However, this would be a terrible protocol design to have both 
+            # CONTAINING constraint and named bits...
+        else:
+            self._set_val_basic(val)
     
     def _set_val_open(self, val):
         if isinstance(val, str):
@@ -410,11 +410,6 @@ class ASN1Obj(object):
             self._cont.set_val(val[1])
             self._val = (val[0], self._cont._val)
             self._cont._val = None
-        #elif isinstance(self._cont, ASN1Obj):
-        #    # using a fixed ASN1Obj set in the OPEN type
-        #    self._cont.set_val(val)
-        #    self._val = self._cont._val
-        #    self._cont._val = None
         elif self._SAFE:
             raise(ASN1_OBJ('%s: invalid %s value: %s'\
                   % (self.get_fullname(), self._type, val)))
@@ -571,6 +566,8 @@ class ASN1Obj(object):
                 self._set_val_seq(val)
             elif self._type in (TYPE_OPEN, TYPE_ANY):
                 self._set_val_open(val)
+            elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR):
+                self.set_val_str(val)
             else:
                 self._set_val_basic(val)
         elif self._mode == 2:

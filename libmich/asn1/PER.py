@@ -607,14 +607,16 @@ class PER(ASN1.ASN1Codec):
         lb, ub, ext = obj.get_const_int()
         #
         # 2) encode content and get bit length
-        if isinstance(obj._val, ASN1.ASN1Obj):
-            # corresponds to CONTAINING constraint case
-            obj._val._encode(offset=0)
-            # TODO: confirm padding is required
-            obj._val._codec._add_P(obj._val)
-            val = obj._val._msg
+        if isinstance(obj._cont, ASN1.ASN1Obj) and isinstance(obj._val, tuple) \
+        and obj._val[0] == obj._cont._name:
+            # corresponds to CONTAINING constraint type and value
+            # TODO: check if padding is required
+            obj._cont._val = obj._val[1]
+            # encode (octet-aligned)
+            obj._cont._encode(offset=0)
+            val = obj._cont._msg
             size = val.bit_len()
-            obj._val._msg = None
+            obj._cont._msg = None
         else:
             size = obj._val[1]
             val = Bit('C', Pt=obj._val[0], BitLen=size, Repr=self._REPR_BIT_STR)
@@ -691,12 +693,16 @@ class PER(ASN1.ASN1Codec):
         lb, ub, ext = obj.get_const_int()
         #
         # 2) encode content and get byte length
-        if isinstance(obj._val, ASN1.ASN1Obj):
-            # corresponds to CONTAINING constraint case
-            obj._val._encode(offset=0)
-            obj._val._codec._add_P(obj._val)
-            val = obj._val._msg
+        if isinstance(obj._cont, ASN1.ASN1Obj) and isinstance(obj._val, tuple) \
+        and obj._val[0] == obj._cont._name:
+            # corresponds to CONTAINING constraint type and value
+            # TODO: check if padding is required
+            obj._cont._val = obj._val[1]
+            # encode (octet-aligned)
+            obj._cont._encode(offset=0)
+            val = obj._cont._msg
             size = len(val)
+            obj._cont._msg = None
         else:
             size = len(obj._val)
             if obj._type == TYPE_PRINT_STR:
@@ -1403,7 +1409,8 @@ class PER(ASN1.ASN1Codec):
     #--------------------------------------------------------------------------#
     # BIT STRING
     #--------------------------------------------------------------------------#
-    # TODO: decode to another ASN1Obj corresponding to the CONTAINING constraint
+    # TODO: decoding to a CONTAINING constraint object does not work with size 
+    # constrained BIT STRING
     def decode_bit_str(self, obj, buf):
         # obj._val: (integer, bit_length), bit_length: uint
         # 1) resolve SIZE constraints
@@ -1451,7 +1458,7 @@ class PER(ASN1.ASN1Codec):
         # finally decode content
         c = Bit('C', BitLen=size, Repr=self._REPR_BIT_STR)
         buf = c.map_ret(buf)
-        obj._msg.append( c )
+        obj._msg.append(c)
         self._off += size
         #
         obj._val = (c(), size)
@@ -1468,18 +1475,31 @@ class PER(ASN1.ASN1Codec):
         self._off += l.bit_len()
         size = l()
         # finally decode content
-        c = Bit('C', BitLen=size, Repr=self._REPR_BIT_STR)
-        buf = c.map_ret(buf)
-        obj._msg.append(c)
+        contain = obj.get_const_contain()
+        if contain:
+            # CONTAINING reference is used to decode the buffer
+            obj._cont = contain['ref'].clone_light()
+            buf = obj._cont._decode(buf)
+            if self._SAFE:
+                assert(obj._cont._msg.bit_len() == size)
+            obj._msg.append(obj._cont._msg)
+            obj._val = (obj._cont._name, obj._cont._val)
+            obj._cont._msg = None
+            obj._cont._val = None
+        else:
+            # standard BIT STRING decoding to (uint, size)
+            c = Bit('C', BitLen=size, Repr=self._REPR_BIT_STR)
+            buf = c.map_ret(buf)
+            obj._msg.append(c)
+            obj._val = (c(), size)
         self._off += size
-        #
-        obj._val = (c(), size)
         return buf
     
     #--------------------------------------------------------------------------#
     # OCTET STRING
     #--------------------------------------------------------------------------#
-    # TODO: decode to another ASN1Obj corresponding to the CONTAINING constraint
+    # TODO: decoding to a CONTAINING constraint object does not work with size 
+    # constrained OCTET STRING
     def decode_oct_str(self, obj, buf):
         # obj._val: string
         # 1) resolve INTEGER constraints
@@ -1560,17 +1580,29 @@ class PER(ASN1.ASN1Codec):
         self._off += l.bit_len()
         size = l()
         # finally decode content
-        if obj._type == TYPE_PRINT_STR:
-            c = Str('C', Len=size, Repr=self._REPR_PRINT_STR)
-        elif obj._type == TYPE_VIS_STR:
-            c = Str('C', Len=size, Repr=self._REPR_VIS_STR)
+        contain = obj.get_const_contain()
+        if contain:
+            # CONTAINING reference is used to decode the buffer
+            obj._cont = contain['ref'].clone_light()
+            buf = obj._cont._decode(buf)
+            if self._SAFE:
+                assert(len(obj._cont._msg) == size)
+            obj._msg.append(obj._cont._msg)
+            obj._val = (obj._cont._name, obj._cont._val)
+            obj._cont._msg = None
+            obj._cont._val = None
         else:
-            c = Str('C', Len=size, Repr=self._REPR_OCT_STR)
-        buf = c.map_ret(buf)
-        obj._msg.append(c)
+            # standard OCTET STRING decoding to str
+            if obj._type == TYPE_PRINT_STR:
+                c = Str('C', Len=size, Repr=self._REPR_PRINT_STR)
+            elif obj._type == TYPE_VIS_STR:
+                c = Str('C', Len=size, Repr=self._REPR_VIS_STR)
+            else:
+                c = Str('C', Len=size, Repr=self._REPR_OCT_STR)
+            buf = c.map_ret(buf)
+            obj._msg.append(c)
+            obj._val = c()
         self._off += size*8
-        #
-        obj._val = c()
         return buf
     
     #--------------------------------------------------------------------------#
