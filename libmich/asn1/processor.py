@@ -107,7 +107,7 @@ def store_module(mod_list=[], name='test'):
     else:
         log('modules successfully stored in %s' % path)
 
-def load_module(name=''):
+def load_module(name='', GLOB=GLOBAL):
     '''
     Return the list of modules compiled by compile() and pickled by 
     store_module() under a given name.
@@ -121,14 +121,14 @@ def load_module(name=''):
         obj_list = p.load()
     except:
         raise(ASN1_PROC('Invalid module content'))
-    GLOBAL.clear()
+    #GLOB.clear()
     for obj_name, obj in obj_list:
         if obj['mode'] == 0:
-            GLOBAL.TYPE[obj_name] = obj
+            GLOB.TYPE[obj_name] = obj
         elif obj['mode'] == 1:
-            GLOBAL.VALUE[obj_name] = obj
+            GLOB.VALUE[obj_name] = obj
         elif obj['mode'] == 2:
-            GLOBAL.SET[obj_name] = obj
+            GLOB.SET[obj_name] = obj
     log('%s: %s objects loaded into GLOBAL' % (name, len(obj_list)))
 
 def generate_modules(mods=MODULES):

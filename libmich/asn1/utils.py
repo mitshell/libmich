@@ -143,33 +143,39 @@ class MODULE_OPT(object):
     # extensibility mode: can be implied, or not
     EXT = None # None, 'IMPLIED'
 
-# specific ASN.1 global tables
-class GLOBAL(object):
-    #
-    # stores all user-defined ASN.1 subtypes
-    TYPE = OD()
-    # stores all user-defined ASN.1 values and sets
-    VALUE = OD()
-    SET = OD()
-    #
-    # for all ASN.1 initialized objects that are user-defined but
-    # still needs to be processed
-    OBJ = []
-    # for ASN.1 initialized objects that are user-defined and have a component
-    # that is self-referencing, and needs to be re-processed afterwards
-    SELF = []
+# GLOBAL: specific ASN.1 global tables
+def _make_GLOBAL():
     
-    @classmethod
-    def clear(cla):
-        cla.TYPE.clear()
-        cla.VALUE.clear()
-        cla.SET.clear()
-        cla.clear_tmp()
+    class GLOBAL(object):
+        #
+        # stores all user-defined ASN.1 subtypes
+        TYPE = OD()
+        # stores all user-defined ASN.1 values and sets
+        VALUE = OD()
+        SET = OD()
+        #
+        # for all ASN.1 initialized objects that are user-defined but
+        # still needs to be processed
+        OBJ = []
+        # for ASN.1 initialized objects that are user-defined and have a component
+        # that is self-referencing, and needs to be re-processed afterwards
+        SELF = []
+        
+        @classmethod
+        def clear(cla):
+            cla.TYPE.clear()
+            cla.VALUE.clear()
+            cla.SET.clear()
+            cla.clear_tmp()
+        
+        @classmethod
+        def clear_tmp(cla):
+            del cla.OBJ[:]
+            del cla.SELF[:]
     
-    @classmethod
-    def clear_tmp(cla):
-        del cla.OBJ[:]
-        del cla.SELF[:]
+    return GLOBAL
+
+GLOBAL = _make_GLOBAL()
 
 # list ASN.1 ISO OID required to be known by the compiler
 ASN1_OID_ISO = {
