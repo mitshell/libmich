@@ -567,7 +567,7 @@ class ASN1Obj(object):
             elif self._type in (TYPE_OPEN, TYPE_ANY):
                 self._set_val_open(val)
             elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR):
-                self.set_val_str(val)
+                self._set_val_str(val)
             else:
                 self._set_val_basic(val)
         elif self._mode == 2:

@@ -614,6 +614,8 @@ class PER(ASN1.ASN1Codec):
             obj._cont._val = obj._val[1]
             # encode (octet-aligned)
             obj._cont._encode(offset=0)
+            # TODO: confirm padding is required
+            obj._cont._codec._add_P(obj._cont)
             val = obj._cont._msg
             size = val.bit_len()
             obj._cont._msg = None
@@ -700,6 +702,8 @@ class PER(ASN1.ASN1Codec):
             obj._cont._val = obj._val[1]
             # encode (octet-aligned)
             obj._cont._encode(offset=0)
+            # TODO: confirm padding is required
+            obj._cont._codec._add_P(obj._cont)
             val = obj._cont._msg
             size = len(val)
             obj._cont._msg = None
@@ -1480,6 +1484,8 @@ class PER(ASN1.ASN1Codec):
             # CONTAINING reference is used to decode the buffer
             obj._cont = contain['ref'].clone_light()
             buf = obj._cont._decode(buf)
+            # TODO: confirm padding is required
+            buf = obj._cont._codec._get_P(obj._cont, buf)
             if self._SAFE:
                 assert(obj._cont._msg.bit_len() == size)
             obj._msg.append(obj._cont._msg)
@@ -1585,6 +1591,8 @@ class PER(ASN1.ASN1Codec):
             # CONTAINING reference is used to decode the buffer
             obj._cont = contain['ref'].clone_light()
             buf = obj._cont._decode(buf)
+            # TODO: confirm padding is required
+            buf = obj._cont._codec._get_P(obj._cont, buf)
             if self._SAFE:
                 assert(len(obj._cont._msg) == size)
             obj._msg.append(obj._cont._msg)
