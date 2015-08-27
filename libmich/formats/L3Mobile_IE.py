@@ -154,13 +154,21 @@ class PLMN(Layer):
         self.set_mnc(MCCMNC[3:])
     
     def get_mcc(self):
-        return '%i%i%i' % (self.MCC1(), self.MCC2(), self.MCC3())
+        return '{0}{1}{2}'.format(self.MCC1(), self.MCC2(), self.MCC3())
     
     def get_mnc(self):
         if self.MNC3() == 0b1111:
-            return '%i%i' % (self.MNC1(), self.MNC2())
+            return '{0}{1}'.format(self.MNC1(), self.MNC2())
         else:
-            return '%i%i%i' % (self.MNC1(), self.MNC2(), self.MNC3())
+            return '{0}{1}{2}'.format(self.MNC1(), self.MNC2(), self.MNC3())
+    
+    def get_mccmnc(self):
+        if self.MNC3() == 0b1111:
+            return '{0}{1}{2}{3}{4}'.format(self.MCC1(), self.MCC2(), self.MCC3(), 
+                                            self.MNC1(), self.MNC2())
+        else:
+            return '{0}{1}{2}{3}{4}{5}'.format(self.MCC1(), self.MCC2(), self.MCC3(),
+                                               self.MNC1(), self.MNC2(), self.MNC3())
     
     def set_mcc(self, MCC='001'):
         if not MCC.isdigit() or len(MCC) != 3:
@@ -184,6 +192,10 @@ class PLMN(Layer):
             self.MNC3 > 0b1111
         else:
             self.MNC3 > int(MNC[2])
+    
+    def set_mccmnc(self, MCCMNC='000101'):
+        self.set_mcc(MCCMNC[:3])
+        self.set_mnc(MCCMNC[3:])
     
     def __repr__(self):
         return '<[PLMN]: MCC: %s / MNC: %s>' % (self.get_mcc(), self.get_mnc())
