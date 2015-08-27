@@ -33,34 +33,41 @@ HOWTO:
 1) in order to use this GTP tunnels handler, the following parameters need to be configured:
 
 -> some internal parameters
-ARPd.GGSN_ETH_IF = 'eth0' : ethernet interface toward external networks (e.g. Internet)
-APRd.GGSN_MAC_ADDR = '080000010203'.decode('hex') : the MAC address of our ethernet interface
-APRd.GGSN_IP_ADDR = '192.168.1.100' : our own IP address set for the ethernet interface
-GTPUd.EXT_IF = 'eth0' : same as ARPd.GGSN_ETH_IF
-GTPUd.GGSN_MAC_ADDR = '080000010203'.decode('hex') : same as ARPd.GGSN_MAC_ADDR
-
--> some mobiles parameters
-APRd.IP_POOL = ('192.168.1.201', '192.168.1.202') : the pool of IP addresses to be used by our mobiles
+ARPd.GGSN_ETH_IF = 'eth0', ethernet interface toward external networks (e.g. Internet)
+APRd.GGSN_MAC_ADDR = '08:00:00:01:02:03', MAC address of the ethernet interface toward external networks
+APRd.GGSN_IP_ADDR = '192.168.1.100', IP address set to the ethernet interface toward external networks
+GTPUd.EXT_IF = 'eth0', same as ARPd.GGSN_ETH_IF
+GTPUd.GGSN_MAC_ADDR = '08:00:00:01:02:03', same as ARPd.GGSN_MAC_ADDR
 
 -> some external network parameters (toward e.g. Internet)
-APRd.SUBNET_PREFIX = '192.168.1.' : the subnet prefix for the external network (we only handle /24 subnet at this time)
-APRd.ROUTER_MAC_ADDR = 'f40000010203'.decode('hex') : the 1st IP hop MAC address
-APRd.ROUTER_IP_ADDR = '192.168.1.1' : the 1st IP hop IP address
+APRd.SUBNET_PREFIX = '192.168.1', subnet prefix of the LAN to which the ethernet interface to external network is connected
+APRd.ROUTER_MAC_ADDR = 'f4:00:00:01:02:03', the LAN router (1st IP hop) MAC address
+APRd.ROUTER_IP_ADDR = '192.168.1.1', the LAN router (1st IP hop) IP address
 
 -> some internal network parameters (toward RNC / eNodeB)
-GTPUd.INT_IP = '10.1.1.1' : our own IP address on the RAN side
-GTPUd.INT_PORT = 2152 : our GTPU UDP port on the RAN side
+GTPUd.INT_IP = '10.1.1.1', IP address exposed on the RAN side
+GTPUd.INT_PORT = 2152, GTPU UDP port to be used by RAN equipments
 
-There are also few others parameters configurable for GTPUd. Please read the code.
+-> some mobiles parameters
+APRd.IP_POOL = ('192.168.1.201', '192.168.1.202'), the pool of IP addresses to be used by our set of mobiles
+GTPUd.BLACKHOLING = True, False or 'ext', to filter out all the mobile trafic, no trafic at all, or IP packets to external network only
+GTPUd.WL_ACTIVE = True or False, to allow specific IP packets to be forwarded to the external network, bypassing the BLACKHOLING directive
+GTPUd.WL_PORTS = [('UDP', 53), ('UDP', 123)], to specify to list of IP protocol / port to allow in case WL_ACTIVE is True
+GTPUd.DPI = True or False, to store packet statistics (protocol / port / DNS requests, see the class DPI) in GTPUd.stats 
 
-2) To use the GTPUd, you need to be root (due to the use of raw sockets, but you could also use Linux cap):
+2) To use the GTPUd, you need to be root or have the capability to start raw sockets:
 
-Just launch the demon, and add_mobile() / rem_mobile() to add or remove
-GTPU tunnel endpoint.
-
+-> launch the demon, and add_mobile() / rem_mobile() to add or remove GTPU tunnel endpoint.
 >>> gsn = GTPUd()
->>> teid_to_rnc = gsn.add_mobile(mobile_IP='192.168.1.201', rnc_IP='10.2.1.1', TEID_from_rnc=0x1):
->>> gsn.rem_mobile(mobile_IP='192.168.1.201'):
+
+-> to start forwarding IP packets between the external interface and the GTP tunnel
+if you want to let the GTPUd manage the attribution of TEID_to_rnc (GTPUd.GTP_TEID_EXT = False)
+>>> teid_to_rnc = gsn.add_mobile(mobile_IP='192.168.1.201', rnc_IP='10.2.1.1', TEID_from_rnc=0x1)
+if you want to manage TEID_to_rnc by yourself and just mush its value to GTPUd (GTPUd.GTP_TEID_EXT = True)
+>>> add_mobile(self, mobile_IP='192.168.1.201', rnc_IP='10.1.1.2', TEID_from_rnc=0x1, TEID_to_rnc=0x2)
+
+-> to stop forwading IP packets
+>>> gsn.rem_mobile(mobile_IP='192.168.1.201')
 
 3) That's all !
 '''
@@ -83,7 +90,7 @@ else:
           'You need PF_PACKET socket')
 
 from libmich.formats.GTP import *
-from libmich.mobnet.utils import *
+from .utils import *
 #
 # filtering exports
 __all__ = ['GTPUd', 'ARPd', 'DPI']
@@ -170,7 +177,9 @@ def unset_promisc(sk):
 #
 class ARPd(object):
     #
-    DEBUG = 2
+    # verbosity level: list of log types to display when calling 
+    # self._log(logtype, msg)
+    DEBUG = ('ERR', 'WNG', 'INF', 'DBG')
     #
     # recv() buffer length
     BUFLEN = 2048
@@ -182,21 +191,28 @@ class ARPd(object):
     # Our GGSN ethernet parameters (IF, MAC and IP addresses)
     # (and also the MAC address to be used for any mobiles through our GGSN)
     GGSN_ETH_IF = 'eth0'
-    GGSN_MAC_ADDR = '080000010203'.decode('hex')
+    GGSN_MAC_ADDR = '08:00:00:01:02:03'
     GGSN_IP_ADDR = '192.168.1.100'
     #
     # the pool of IP address to be used by our mobiles
     IP_POOL = ('192.168.1.201', '192.168.1.202')
     #
     # network parameters:
-    # subnet prefix (we only handle /24 subnet at this time)
-    SUBNET_PREFIX = '192.168.1.'
+    # subnet prefix 
+    # WNG: we only handle IPv4 /24 subnet
+    SUBNET_PREFIX = '192.168.1'
     # and 1st IP router (MAC and IP addresses)
     # this is to resolve directly any IP outside our subnet
-    ROUTER_MAC_ADDR = 'f40000010203'.decode('hex')
+    ROUTER_MAC_ADDR = 'f4:00:00:01:02:03'
     ROUTER_IP_ADDR = '192.168.1.1'
     
     def __init__(self):
+        #
+        self.GGSN_MAC_BUF = mac_aton(self.GGSN_MAC_ADDR)
+        self.GGSN_IP_BUF = inet_aton(self.GGSN_IP_ADDR)
+        self.SUBNET_PREFIX = self.SUBNET_PREFIX.split('.')[:3]
+        self.ROUTER_MAC_BUF = mac_aton(self.ROUTER_MAC_ADDR)
+        self.ROUTER_IP_BUF = inet_aton(self.ROUTER_IP_ADDR)
         #
         # init RAW ethernet socket for ARP
         self.sk_arp = socket(AF_PACKET, SOCK_RAW, ntohs(0x0806))
@@ -214,29 +230,30 @@ class ARPd(object):
         #
         # ARP resolution table
         self.ARP_RESOLV_TABLE = {
-            self.ROUTER_IP_ADDR : self.ROUTER_MAC_ADDR,
-            self.GGSN_IP_ADDR : self.GGSN_MAC_ADDR,
+            self.ROUTER_IP_ADDR : self.ROUTER_MAC_BUF,
+            self.GGSN_IP_ADDR : self.GGSN_MAC_BUF,
             }
         for ip in self.IP_POOL:
-            self.ARP_RESOLV_TABLE[ip] = self.GGSN_MAC_ADDR
+            self.ARP_RESOLV_TABLE[ip] = self.GGSN_MAC_BUF
         #
         # interrupt handler
         #def sigint_handler(signum, frame):
         #    if self.DEBUG > 1:
-        #        self._log('CTRL+C caught')
+        #        self._log('INF', 'CTRL+C caught')
         #    self.stop()
         #signal.signal(signal.SIGINT, sigint_handler)
         #
         # starting main listening loop in background
         self._listening = True
         self._listener_t = threadit(self.listen)
-        self._log('ARP resolver started')
+        self._log('INF', 'ARP resolver started')
         #
         # .resolve(ip) method is available for ARP resolution by GTPUd
     
-    def _log(self, msg=''):
-        if self.DEBUG:
-            logit('[ARPd] %s' % msg)
+    def _log(self, logtype='DBG', msg=''):
+        # logtype: 'ERR', 'WNG', 'INF', 'DBG'
+        if logtype in self.DEBUG:
+            log('[{0}] [ARPd] {1}'.format(logtype, msg))
     
     def stop(self):
         if self._listening:
@@ -251,8 +268,12 @@ class ARPd(object):
             r = []
             r = select([self.sk_arp, self.sk_ip], [], [], self.SELECT_TO)[0]
             for sk in r:
-                buf = ''
-                buf = sk.recvfrom(self.BUFLEN)[0]
+                buf = bytes()
+                try:
+                    buf = sk.recvfrom(self.BUFLEN)[0]
+                except Exception as err:
+                    self._log('ERR', 'external network error (recvfrom): {0}'\
+                              .format(err))
                 # dipatch ARP request / IP response
                 if sk is self.sk_arp \
                 and len(buf) >= 42 and buf[12:14] == '\x08\x06':
@@ -264,9 +285,9 @@ class ARPd(object):
             if len(r) == 0:
                 sleep(self.SELECT_SLEEP)
         #
-        self._log('ARP resolver stopped')
+        self._log('INF', 'ARP resolver stopped')
     
-    def _process_arpbuf(self, buf=''):
+    def _process_arpbuf(self, buf=bytes()):
         # this is an ARP request or response:
         arpop = ord(buf[21:22])
         # 1) check if it requests for one of our IP
@@ -278,55 +299,61 @@ class ARPd(object):
                     self.sk_arp.sendto(
                      '{0}{1}\x08\x06\0\x01\x08\0\x06\x04\0\x02{2}{3}{4}{5}'\
                      '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'.format(
-                      buf[6:12], self.GGSN_MAC_ADDR, self.GGSN_MAC_ADDR,
-                      buf[38:42], buf[6:12], buf[28:32]),
+                      buf[6:12], self.GGSN_MAC_BUF, # Ethernet hdr
+                      self.GGSN_MAC_BUF, buf[38:42], # ARP sender
+                      buf[6:12], buf[28:32]), # ARP target 
                      (self.GGSN_ETH_IF, 0x0806))
-                except:
-                    self._log('Exception on ARP socket sendto (ARP response)')
+                except Exception as err:
+                    self._log('ERR', 'external network error (sendto) on ARP '\
+                              'response: {0}'.format(err))
                 else:
-                    if self.DEBUG > 1:
-                        self._log('ARP response sent for IP: %s' % ipreq)
+                    self._log('DBG', 'ARP response sent for IP: {0}'.format(
+                              ipreq))
         # 2) check if it responses something useful for us
         elif arpop == 2:
             ipres = inet_ntoa(buf[28:32])
-            if ipres[:11] == self.SUBNET_PREFIX \
+            if ipres.split('.')[:3] == self.SUBNET_PREFIX \
             and ipres not in self.ARP_RESOLV_TABLE:
+                # WNG: no protection (at all) against ARP cache poisoning
                 self.ARP_RESOLV_TABLE[ipres] = buf[22:28]
-                if self.DEBUG > 1:
-                    self._log('got ARP response for new local IP %s' % ipres)
+                self._log('DBG', 'got ARP response for new local IP: {0}'\
+                          .format(ipres))
     
-    def _process_ipbuf(self, buf=''):
+    def _process_ipbuf(self, buf=bytes()):
         # this is an IPv4 packet : check if src IP is in our subnet
         ipsrc = inet_ntoa(buf[26:30])
-        if ipsrc[:11] == self.SUBNET_PREFIX and ipsrc not in self.ARP_RESOLV_TABLE:
-            # if local IP and not alreay resolved, store the Ethernet MAC address
+        #
+        # if local IP and not alreay resolved, store the Ethernet MAC address
+        if ipsrc.split('.')[:3] == self.SUBNET_PREFIX \
+        and ipres not in self.ARP_RESOLV_TABLE:
+            # WNG: no protection (at all) against ARP cache poisoning
             self.ARP_RESOLV_TABLE[ipsrc] = buf[6:12]
-            if self.DEBUG > 1:
-                self._log('got MAC address from IPv4 packet for new local IP %s' % ipsrc)
+            self._log('DBG', 'got MAC address from IPv4 packet for new local '\
+                      'IP {0}'.format(ipsrc))
     
     def resolve(self, ip='192.168.1.2'):
         #
-        # check if already resolved, possibly bypassing LAN subnet prefix
+        # check if already resolved
         if ip in self.ARP_RESOLV_TABLE:
             return self.ARP_RESOLV_TABLE[ip]
         #
-        #if ip[:11] == self.SUBNET_PREFIX:
-        elif '.'.join(ip.split('.')[:3]) == self.SUBNET_PREFIX:
-            # else, need to request it live on the Ethernet link
-            # response will be handled by .listen()
+        # else, need to request it live on the Ethernet link
+        # response will be handled by .listen()
+        elif ip.split('.')[:3]  == self.SUBNET_PREFIX:
+            ip_buf = inet_aton
             try:
                 self.sk_arp.sendto(
-                 '\xFF\xFF\xFF\xFF\xFF\xFF{0}\x08\x06\0\x01\x08\0\x06\x04'\
-                 '\0\x01{1}{2}{3}\0\0\0\0\0\0%s\0\0\0\0\0\0\0\0\0\0\0\0\0\0'\
-                 '\0\0\0\0'.format(
-                   self.GGSN_MAC_ADDR, self.GGSN_MAC_ADDR, 
-                   inet_aton(self.GGSN_IP_ADDR), inet_aton(ip)),
+                 '{0}{1}\x08\x06\0\x01\x08\0\x06\x04\0\x01{2}{3}\0\0\0\0\0\0{4}'\
+                 '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'.format(
+                   self.ROUTER_MAC_BUF, self.GGSN_MAC_BUF, # Ethernet hdr
+                   self.GGSN_MAC_BUF, self.GGSN_IP_BUF, # ARP sender
+                   inet_aton(ip)), # ARP target
                  (self.GGSN_ETH_IF, 0x0806))
-            except:
-                self._log('Exception on ARP socket sendto (ARP request)')
+            except Exception as err:
+                self._log('ERR', 'external network error (sendto) on ARP '\
+                          'request: {0}'.format(err))
             else:
-                if self.DEBUG > 1:
-                    self._log('ARP request sent for our IP %s' % ip)
+                self._log('DBG', 'ARP request sent for IP {0}'.format(ip))
             cnt = 0
             while ip not in self.ARP_RESOLV_TABLE:
                 sleep(self.SELECT_SLEEP)
@@ -336,9 +363,9 @@ class ARPd(object):
             if cnt < 3:
                 return self.ARP_RESOLV_TABLE[ip]
             else:
-                return 6*'\xFF'
+                return 6*'\xFF' # LAN broadcast, maybe a bit strong !
         else:
-            return self.ROUTER_MAC_ADDR
+            return self.ROUTER_MAC_BUF
 
 
 #------------------------------------------------------------------------------#
@@ -373,15 +400,16 @@ class ARPd(object):
 #
 # A whitelist feature (TCP/UDP, port) is also integrated, when activated
 # WL_ACTIVE = True
-# only the packet for the given protocol / ports are transferred to the Gi
+# only packets for the given protocol / port are transferred to the Gi
 # WL_PORTS = [('UDP', 53), ('UDP', 123), ('TCP', 80), ...]
-# This is bypapssing the blackhiling feature.
+# This is bypassing the blackholing feature.
 #
 
 class GTPUd(object):
     #
-    # debug level
-    DEBUG = DBG
+    # verbosity level: list of log types to display when calling 
+    # self._log(logtype, msg)
+    DEBUG = ('ERR', 'WNG', 'INF', 'DBG')
     #
     # packet buffer space (over MTU...)
     BUFLEN = 2048
@@ -401,6 +429,8 @@ class GTPUd(object):
     # GTP TEID toward RNC / eNodeBs
     GTP_TEID = 0
     GTP_TEID_MAX = 2**32 - 1
+    # in case the GTP TEID is assigned by an external entity
+    GTP_TEID_EXT = True
     #
     # in case we dont want mobile traffic to reach the external IF
     # False: all the GTP traffic is relayed to the external IF
@@ -418,19 +448,22 @@ class GTPUd(object):
     
     def __init__(self):
         #
+        self.GGSN_MAC_BUF = mac_aton(self.GGSN_MAC_ADDR)
+        #
         # these are 2 dict for handling mobile GTPU packets' transfers :
         # take mobile IPv4 addr as key, and references (TEID, RNC_IP) 
         self._mobiles_ip = {}
         # take mobile TEID as key, and references mobile_IP
         self._mobiles_teid = {}
         # global TEID to RNC value, to be incremented from here
-        self.GTP_TEID = randint(0, 20000)
+        if not self.GTP_TEID_EXT:
+            self.GTP_TEID = randint(0, 20000)
         #
         # create a single GTP format decoder for input from RNC
         self._GTP_in = GTPv1()
         # and for output to RNC (un-automatize GTP length calculation)
         self._GTP_out = GTPv1()
-        self._GTP_out.type.Pt = 0xff
+        self._GTP_out.msg.Pt = 0xff
         self._GTP_out.len.PtFunc = None
         # initialize the traffic statistics
         self.init_stats()
@@ -457,21 +490,22 @@ class GTPUd(object):
         # interrupt handler
         #def sigint_handler(signum, frame):
         #    if self.DEBUG > 1:
-        #        self._log('CTRL+C caught')
+        #        self._log('INF', 'CTRL+C caught')
         #    self.stop()
         #signal.signal(signal.SIGINT, sigint_handler)
         #
         # and start listening and transferring packets in background
         self._listening = True
         self._listener_t = threadit(self.listen)
-        self._log('GTPU handler started')
+        self._log('INF', 'GTPU handler started')
         #
         # and finally start ARP resolver
         self.arpd = ARPd()
     
-    def _log(self, msg=''):
-        if self.DEBUG:
-            logit('[GTPUd] %s' % msg)
+    def _log(self, logtype='DBG', msg=''):
+        # logtype: 'ERR', 'WNG', 'INF', 'DBG'
+        if logtype in self.DEBUG:
+            log('[{0}] [GTPUd] {1}'.format(logtype, msg))
     
     def init_stats(self):
         self.stats = {
@@ -491,11 +525,11 @@ class GTPUd(object):
         if self._listening:
             self._listening = False
             sleep(self.SELECT_TO * 2)
+            # unset promiscuous mode
+            unset_promisc(self.ext_sk)
             # closing sockets
             self.int_sk.close()
             self.ext_sk.close()
-            # unset promiscuous mode
-            unset_promisc(self.ext_sk)
     
     def listen(self):
         # select() until we receive something on 1 side
@@ -503,21 +537,30 @@ class GTPUd(object):
             r = []
             r = select([self.int_sk, self.ext_sk], [], [], self.SELECT_TO)[0]
             for sk in r:
-                buf = ''
+                buf = bytes()
                 if sk is self.int_sk:
-                    buf = sk.recv(self.BUFLEN)
+                    try:
+                        buf = sk.recv(self.BUFLEN)
+                    except Exception as err:
+                        self._log('ERR', 'internal network IF error (recv)'\
+                                  ': {0}'.format(err))
                     if buf:
                         self.transfer_to_ext(buf)  
                 elif sk is self.ext_sk:
                     # WNG: seems some pseudo-RNC IP stack crashes when we send
                     # fragmented IP packets on Iu side...
-                    buf = sk.recvfrom(self.BUFLEN-128)[0]
-                    if len(buf) >= 34 and buf[12:14] == '\x08\0' \
-                    and buf[:6] == self.GGSN_MAC_ADDR :
-                        # transferring over GTPU after removing Ethernet header
-                        self.transfer_to_int(buf[14:])
+                    try:
+                        buf = sk.recvfrom(self.BUFLEN-128)[0]
+                    except Exception as err:
+                        self._log('ERR', 'external network IF error (recvfrom)'\
+                                  ': {0}'.format(err))
+                    else:
+                        if len(buf) >= 34 and buf[12:14] == '\x08\0' \
+                        and buf[:6] == self.GGSN_MAC_BUF:
+                            # transferring over GTPU after removing Ethernet hdr
+                            self.transfer_to_int(buf[14:])
         #
-        self._log('GTPU handler stopped')
+        self._log('INF', 'GTPU handler stopped')
     
     def transfer_to_ext(self, buf='\0'):
         # if GTP-U TEID in self._mobiles_teid, just forward...
@@ -531,6 +574,8 @@ class GTPUd(object):
             return
         # in case GTP does not contain UP data, drop it
         if self._GTP_in.msg() != 0xff:
+            self._log('WNG', 'GTP msg type unsupported: {0}'.format(
+                      repr(self._GTP_in.msg)))
             return
         #
         # get the IP packet: use the length in GTPv1 header to cut the buffer
@@ -541,7 +586,8 @@ class GTPUd(object):
         #
         # drop dummy packets
         if len(ipbuf) < 24:
-            self._log('dummy packet from mobile dropped: %s' % hexlify(ipbuf))
+            self._log('WNG', 'dummy packet from mobile dropped: {0}'.format(
+                      hexlify(ipbuf)))
             return
         ipdst = inet_ntoa(ipbuf[16:20])
         #
@@ -568,22 +614,22 @@ class GTPUd(object):
             return
         #
         # blackhole the packet (blackholing only external routed traffic)
-        if self.BLACKHOLING == 'ext' and macdst == self.arpd.ROUTER_MAC_ADDR:
+        if self.BLACKHOLING == 'ext' and macdst == self.arpd.ROUTER_MAC_BUF:
             return
         #
         self._transfer_to_ext(macdst, ipbuf)
     
-    def _transfer_to_ext(self, macdst='', ipbuf='\0'):
+    def _transfer_to_ext(self, macdst=bytes(), ipbuf='\0'):
         # forward to the external PF_PACKET socket, over the Gi interface
         try:
             self.ext_sk.sendto('{0}{1}\x08\0{2}'.format(
-                                macdst, self.GGSN_MAC_ADDR,self.EXT_PROT),
+                                macdst, self.GGSN_MAC_BUF, ipbuf),
                                (self.EXT_IF, self.EXT_PROT))
-        except:
-            self._log('Exception on external Ethernet socket sendto')
+        except Exception as err:
+            self._log('ERR', 'external network IF error (sendto): {0}'\
+                      .format(err))
         else:
-            if self.DEBUG > 1:
-                self._log('buffer transferred from GTPU to RAW')
+            self._log('DBG', 'buffer transferred from GTPU to RAW')
     
     def transfer_to_int(self, buf='\0'):
         # prepend GTP-U header and forward on internal sk
@@ -598,42 +644,46 @@ class GTPUd(object):
                 self._GTP_out.len > len(buf)
                 self._transfer_to_int(ipdst, str(self._GTP_out)+buf)
     
-    def _transfer_to_int(self, ipdst='', gtpbuf=''):
+    def _transfer_to_int(self, ipdst=bytes(), gtpbuf=bytes()):
         try:
             ret = self.int_sk.sendto(gtpbuf,
                                     (self._mobiles_ip[ipdst][0], self.INT_PORT))
-        except:
-            self._log('Exception on internal UDP socket sendto')
+        except Exception as err:
+            self._log('ERR', 'internal network IF error (sendto): {0}'\
+                      .format(err))
         else:
-            if self.DEBUG > 1:
-                self._log('%i bytes transferred from RAW to GTPU' % ret)
+            self._log('DBG', '{0} bytes transferred from RAW to GTPU'.format(
+                      ret))
     
     ###
     # Now we can add and remove (mobile_IP, TEID_from/to_RNC),
     # to configure filters and really start forwading packets over GTP
-    def add_mobile(self, mobile_IP='192.168.1.201', rnc_IP='10.1.1.1', \
-                                                    TEID_from_rnc=0x1):
+    def add_mobile(self, mobile_IP='192.168.1.201', rnc_IP='10.1.1.1',
+                         TEID_from_rnc=0x1, TEID_to_rnc=0x1):
         try:
             ip = inet_aton(mobile_IP)
-        except error:
-            self._log('mobile_IP has not the correct format: ' \
-                      'cannot configure the GTPU handler')
+        except Exception as err:
+            self._log('ERR', 'mobile_IP ({0}) has not the correct format: '\
+                      'cannot configure the GTPU handler'.format(mobile_IP))
             return
-        TEID_to_rnc = self.get_teid_to_rnc()
+        if not self.GTP_TEID_EXT:
+            TEID_to_rnc = self.get_teid_to_rnc()
         self._mobiles_ip[ip] = (rnc_IP, TEID_to_rnc)
         self._mobiles_teid[TEID_from_rnc] = ip
-        self._log('setting GTP tunnel for mobile with IP %s' % mobile_IP)
+        self._log('INF', 'setting GTP tunnel for mobile with IP {0}'.format(
+                  mobile_IP))
         return TEID_to_rnc
     
     def rem_mobile(self, mobile_IP='192.168.1.201'):
         try:
             ip = inet_aton(mobile_IP)
-        except error:
-            self._log('mobile_IP has not the correct format: ' \
-                      'cannot configure the GTPU handler')
+        except Exception as err:
+            self._log('ERR', 'mobile_IP ({0}) has not the correct format: ' \
+                      'cannot configure the GTPU handler'.format(mobile_IP))
             return
         if ip in self._mobiles_ip:
-            self._log('unsetting GTP tunnel for mobile with IP %s' % mobile_IP)
+            self._log('INF', 'unsetting GTP tunnel for mobile with IP '\
+                      '{0}'.format(mobile_IP))
             del self._mobiles_ip[ip]
         if ip in self._mobiles_teid.values():
             for teid in self._mobiles_teid.keys():
