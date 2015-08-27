@@ -1059,11 +1059,13 @@ class PER(ASN1.ASN1Codec):
         # 4) no upper-bound: semi-constrained count
         if ub is None:
             self._encode_seq_of_noub(obj, count)
+            return
         #
         # 5) upper bound defined: fully constrained count
         if ub == lb and ub < 65536:
             # no need for length determinant (implicit count)
             self._encode_seq_of_obj(obj)
+            return
         if ub >= 65536:
             raise(ASN1_PER_ENCODER('%s: length determinant for upper bound'\
                   '(%s) over encoder limit (64k)' % (obj.get_fullname(), ub)))
