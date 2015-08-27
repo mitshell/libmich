@@ -323,7 +323,7 @@ class PER(ASN1.ASN1Codec):
             self.encode_choice(obj)
         elif obj._type == TYPE_SEQ:
             self.encode_seq(obj)
-        elif obj._type == TYPE_SEQ_OF:
+        elif obj._type in (TYPE_SEQ_OF, TYPE_SET_OF):
             self.encode_seq_of(obj)
         elif obj._type in (TYPE_ANY, TYPE_OPEN):
             self.encode_open_type(obj)
@@ -1143,7 +1143,7 @@ class PER(ASN1.ASN1Codec):
             return self.decode_choice(obj, buf)
         elif obj._type == TYPE_SEQ:
             return self.decode_seq(obj, buf)
-        elif obj._type == TYPE_SEQ_OF:
+        elif obj._type in (TYPE_SEQ_OF, TYPE_SET_OF):
             return self.decode_seq_of(obj, buf)
         elif obj._type in (TYPE_ANY, TYPE_OPEN):
             return self.decode_open_type(obj, buf)
