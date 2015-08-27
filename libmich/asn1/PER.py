@@ -1020,7 +1020,8 @@ class PER(ASN1.ASN1Codec):
                     bitmap.append(0)
             group_num = obj._cont[name]._group
         if bitmap:
-            assert( len(bitmap) == len(obj._ext) )
+            if self._SAFE:
+                assert( len(bitmap) == len(obj._ext) )
             self._add_B(obj, bitmap)
     
     # Bitmap for optional components
@@ -1736,8 +1737,15 @@ class PER(ASN1.ASN1Codec):
             buf = wrapped._codec._get_P(wrapped, buf, 8)
         else:
             buf = wrapped._codec._get_P(wrapped, buf)
-        if self._SAFE:
-            assert( wrapped._msg.bit_len() == size*8 )
+        # 6) in case the wrapped object has not been encoded correctly
+        # and its length does not correspond to indicated size:
+        w_bl = wrapped._msg.bit_len()
+        if w_bl < size*8:
+            # realign it with padding
+            buf = wrapped._codec._get_P(wrapped, buf, size*8 - w_bl)
+        elif w_bl > size * 8 and self._SAFE:
+            assert()
+        #
         obj._msg.append( wrapped._msg )
         self._off += size*8
         return buf
