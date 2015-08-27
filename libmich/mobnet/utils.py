@@ -1,9 +1,9 @@
-# −*− coding: UTF−8 −*−
+# -*- coding: UTF-8 -*-
 #/**
 # * Software Name : libmich
-# * Version : 0.2.2
+# * Version : 0.3.0
 # *
-# * Copyright © 2013. Benoit Michau. ANSSI.
+# * Copyright © 2015. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -21,341 +21,238 @@
 # *
 # *--------------------------------------------------------
 # * File Name : mobnet/utils.py
-# * Created : 2013-11-04
+# * Created : 2015-02-18
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-#!/usr/bin/env python
+#*/
 
-import thread
-import os
-from inspect import stack
-from time import time, sleep
+from time import time
 from datetime import datetime
-from Queue import Queue
-from random import choice
-from subprocess import Popen, PIPE
-from threading import Thread, Event
+from threading import Thread
+from binascii import unhexlify, hexlify
+from struct import unpack, pack
 #
-# for logit() to Qt widget
-try:
-    from services.build_qt import LogViewer, LogWriter, QThread
-except:
-    print('utils.py: No QT services')
+from libmich.formats.L3Mobile_IE import ID, GUTI, PLMN
 #
-# and jingle playing with sound()
-try:
-    import pygame
-    __pygame_imported = True
-except ImportError:
-    print('[import pygame] WNG: pygame not found, unable to play sounds')
-    __pygame_imported = False
-    def sound(*args, **kwargs):
-        pass
-else:
-    pygame.mixer.init(32000, -16, 1, 1024)
-    pygame.mixer.set_num_channels(16)
-
-# export filtering
-__all__ = ['pthreadit', 'threadit', 'logit', 'LOG_WITH_TIME', 'LOG_DIRTY', \
-           'speech', 'SPEECH_USE', 'sound', 'SOUND_USE', \
-           'tracecall', 'Timer', 'L3stack', 'show_msg', \
-           ]
-
-
-###
-# sound facility
-###
+# ASN.1 imports and PER codec config
+from libmich.asn1.utils import _make_GLOBAL
+from libmich.asn1.processor import PER, ASN1, load_module, GLOBAL
+ASN1Obj = ASN1.ASN1Obj
+ASN1Obj._DEBUG = 0
+ASN1Obj._SAFE = True
+#ASN1Obj._SAFE = False
+ASN1Obj._RAISE_SILENTLY = False
+ASN1Obj._RET_STRUCT = False
+ASN1Obj.CODEC = PER
+PER.VARIANT = 'A'
+PER._SAFE = True
+#PER._SAFE = False
+PER._ENUM_BUILD_DICT = False
 #
-# automatic text-to-speech announcement
-SPEECH_USE = True
-_flite_path='/usr/bin/'
-_flite_voice='slt'
-def speech(msg=''):
-    if not SPEECH_USE:
-        return
-    cmd = '%sflite' % _flite_path
-    if not os.path.exists(cmd):
-        print('[WNG] Flite binary not found at %s: no text-to-speech fun' % cmd)
-        return
-    #
-    # TODO: insecure os.system() call
-    os.system('%s "%s " -voice %s -o play >/dev/null 2>&1 &' \
-              % (cmd, str(msg), _flite_voice))
+# S1AP ASN.1 db in GLOBAL, RRCLTE ASN.1 db in GLOBAL_RRCLTE, RRC3G ASN.1 db in GLOBAL_RRC3G
+load_module('S1AP')
+GLOBAL_RRCLTE = _make_GLOBAL()
+load_module('RRCLTE', GLOBAL_RRCLTE)
+GLOBAL_RRC3G = _make_GLOBAL()
+load_module('RRC3G', GLOBAL_RRC3G)
 
-# sound jingle playing, using pygame sound engine
-SOUND_USE = True
-_sounds_path = './sounds/'
-if __pygame_imported:
-    def sound(filename='to.wav', channel=1):
-        if not SOUND_USE:
-            return
-        sample = '%s%s' % (_sounds_path, filename)
-        if not os.path.exists(sample):
-            print('[ERR] sound sample at %s not found' % sample)
-            return
-        try:
-            chan = pygame.mixer.Channel( int(channel)%16 )
-            sound = pygame.mixer.Sound( sample )
-            chan.play( sound )
-        except:
-            print('[ERR] playing sound sample at %s' % sample)
-
-###
-# thread facility
-###
-# pthread the function / method (for e.g. backgrounding a TCP server)
-def pthreadit(f, *args, **kwargs):
-    if len(args) == 0 and len(kwargs) == 0:
-        thread.start_new_thread(f, ())
-    else:
-        thread.start_new_thread(f, *args, **kwargs)
-    return None
-
-try:
-    class _QThread(QThread):
-        def __init__(self, f, *args, **kwargs):
-            self.f = f
-            self.args = args
-            self.kwargs = kwargs
-            QThread.__init__(self)
-        
-        def run(self):
-            self.f(*self.args, **self.kwargs)
-    
-    def qthreadit(f, *args, **kwargs):
-        qth = _QThread(f, *args, **kwargs)
-        qth.start()
-        return qth
-except:
+# dedicated error
+class MMEErr(Exception):
     pass
 
-def pythreadit(f, *args, **kwargs):
+# Signalling stack handler (e.g. for UEd and ENBd)
+class SigStack(object):
+    pass
+
+# Signalling procedure handler (e.g. for UES1SigProc, UENASSigProc and ENBProc)
+class SigProc(object):
+    pass
+
+class UESigProc(SigProc):
+    pass
+
+# S1AP procedure codes: eNB related or UE related
+# unimplemented: 39 (PrivateMessage), 48 (UERadioCapMatch), 49 (PWSRestartInd)
+S1APENBProcCodes = [14, 15, 17, 29, 30, 34, 35, 36, 37, 38, 40, 41, 43, 46, 47]
+S1APUEProcCodes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 42, 44, 45]
+
+# thread launcher
+def threadit(f, *args, **kwargs):
     th = Thread(target=f, args=args, kwargs=kwargs)
     th.start()
     return th
 
-def threadit(f, *args, **kwargs):
-    #return pthreadit(f, *args, **kwargs)
-    #return qthreadit(f, *args, **kwargs)
-    return pythreadit(f, *args, **kwargs)
+# coloured logs
+TRA_COLOR_START = '\x1b[94m'
+TRA_COLOR_END = '\x1b[0m'
 
-
-####
-# log facility
-###
-#
-LOG_WITH_TIME = True
-#
-LOG_TO_FILE = False
-_log_file = '/tmp/mobnet_logs'
-#
-LOG_TO_NEW_WINDOW = False
-_log_window_path = '/tmp/mobnet_logs_fifo'
-def _create_window():
-    os.mkfifo(_log_window_path)
-    Popen(['xterm', '-e', 'tail', '-f', _log_window_path])
-#
-LOG_TO_WIDGET = False
-_qlog_queue = Queue()
-try:
-    _qlog_writer = LogWriter()
-    _qlog_writer.queue = _qlog_queue
-    #print('LogWriter OK')
-except:
-    _qlog_writer = None
-    print('LogWriter creation failed')
-
-#
-LOG_TO_CONSOLE = True
-
-
-LOG_DIRTY = False
-_dirty_logs = ( \
-'bro', 'dude', 'baby', 'son', 'man', 'toh !!!', 'rastafary !!',
-'oh my god !!', 'ok, but only this time', 'bitte ein Bit', 'on vend la caravane', 
-'con una cerveza, por favor', 'si senior Valdez', 'please ?', 'isn\'t it, my Lord',
-'r\'yu kidding me ?!', 'yu\'r talking to me ?!', 'don\'t move, i\'ll do it',
-'just for you, baby', 'yu\'r so sexy', 'you dirty nerd', 'lol', 'looooool',
-'lolol', 'ooooh baby !!', 'i like it like that', 'wu-tang forever', 'alleluia !!',
-'whazzzup, bro ?', 'right now!', 'bingo !!!', 'ouais gros', 'let\'s do this',
-)
-
-
-def logit(msg=''):
-    #
-    if LOG_WITH_TIME:
-        #log = '[%.3f] %s' % (time(), msg)
-        log = '[%s] %s' % (datetime.now(), msg)
+# logging facility
+def log(msg='', withdate=True):
+    #print('[%s] %s' % (datetime.now(), msg))
+    if withdate:
+        open('/tmp/corenet.log', 'a').write('[{0}] {1}\n'.format(datetime.now(), msg))
     else:
-        log = msg
-    if LOG_DIRTY:
-        log = '%s; %s' % (log, choice(_dirty_logs))
-    #
-    if LOG_TO_FILE:
-        try:
-            fd = open(_log_file, 'a')
-        except IOError:
-            print('[ERR] logit : cannot append to log file %s' % _log_file)
-        else:
-            fd.write('%s\n' % log)
-            fd.close()
-    #
-    if LOG_TO_NEW_WINDOW:
-        if not os.path.exists(_log_window_path):
-            _create_window()
-        try:
-            fd = open(_log_window_path, 'w')
-        except IOError:
-            print('[ERR] logit : cannot write to log fifo %s' % _log_window_path)
-        else:
-            fd.write('%s\n' % log)
-    #
-    elif LOG_TO_WIDGET:
-        if hasattr(_qlog_writer, 'connected') and _qlog_writer.connected:
-            _qlog_queue.put( log )
-        else:
-            print('[ERR] logit : log writer not connecting to widget %s' \
-                   % _qlog_writer.ref)
-    #
-    elif LOG_TO_CONSOLE:
-        print(log)
+        open('/tmp/corenet.log', 'a').write(msg)
 
-###
-# tracing facility
-###
-# tracing function calls with this decorator, for debugging purpose
-def tracecall(func):
-    def wrapped(*args, **kwargs):
-        #
-        if 'function' in repr(func.__class__):
-            funcname = func.__name__
-        elif 'instancemethod' in repr(func.__class__):
-            funcname = '%s.%s' % (func.im_class.__name__, func.__name__)
-        print('[TRACECALL] %s, args: %s, %s' \
-              % (funcname, repr(args), repr(kwargs)))
-        #
-        return func(*args, **kwargs)
-    return wrapped
+# recursive copy routines (dict / list - friendly)
+def cpdict(d):
+    ret = {}
+    for k in d:
+        if isinstance(d[k], dict):
+            ret[k] = cpdict(d[k])
+        elif isinstance(d[k], list):
+            ret[k] = cplist(d[k])
+        else:
+            ret[k] = d[k]
+    return ret
 
+def cplist(l):
+    ret = []
+    for e in l:
+        if isinstance(e, dict):
+            ret.append(cpdict(e))
+        elif isinstance(e, list):
+            ret.append(cplist(e))
+        else:
+            ret.append(e)
+    return ret
 
-####
-# global L3stack container, with built-in logging facilities
-# and other standard methods and attributes
-###
-#
-def show_msg(msg=''):
-    if hasattr(msg, 'show'):
-        return '\n%s' % msg.show()
-    elif isinstance(msg, str):
-        return '\n%s' % hexlify(msg)
-    #elif isinstance(msg, (int, float, long)):
-    #    return '\n%s' % repr(msg)
+# MAC@ converter
+def mac_aton(mac='00:00:00:00:00:00'):
+    return unhexlify(mac.replace(':', ''))
+
+# stateless routines
+def get_ue_s1ap_id(s1appdu):
+    mme_ue_id, enb_ue_id = None, None
+    #
+    # 3 possible config:
+    # no identifiers
+    # only ENB-UE-S1AP-ID (when a new UE is attaching the eNB), 1st protocolIE
+    # both MME then ENB-UE-S1AP-ID, 1st and 2nd protocolIE
+    pIEs = s1appdu[1]['value'][1]['protocolIEs']
+    if pIEs[0]['id'] == 0:
+        mme_ue_id = pIEs[0]['value'][1]
+        if pIEs[1]['id'] == 8:
+            enb_ue_id = pIEs[1]['value'][1]
+        #else:
+        #    assert()
+    #
+    elif pIEs[0]['id'] == 8:
+        enb_ue_id = pIEs[0]['value'][1]
+    #
+    return mme_ue_id, enb_ue_id
+
+def get_tmsi(naspdu):
+    ident = None
+    #
+    # from basic ID (EPS_IDENTIFY)
+    if hasattr(naspdu, 'ID'):
+        ident = naspdu.ID.getobj()
+    #
+    # from EPS ID (ATTACH / DETACH)
+    elif hasattr(naspdu, 'EPS_ID'):
+        ident = naspdu.EPS_ID.getobj()
+    #
+    # from GUTI (TAU)
+    elif hasattr(naspdu, 'GUTI'):
+        ident = naspdu.GUTI.getobj()
+    #
+    if isinstance(ident, ID):
+        if hasattr(ident, 'tmsi'):
+            return ident.tmsi()
+    elif isinstance(ident, GUTI):
+        return ident.MTMSI()
     else:
-        return '\n%s' % repr(msg)
-#
-class L3stack(object):
-    #
-    # this is a fixed signal to unblock the listening loop
-    _STACK_STOP = 0x574E
-    #
-    # settings to be more or less verbose, and to print IO signalling messages
-    DEBUG = 1
-    TRACE_IO = True
-    
-    def _log(self, msg=''):
-        '''
-        logging message
-        '''
-        if self.DEBUG:
-            # try to get IMSI
-            if hasattr(self, 'IMSI'):
-                ident = self.IMSI
-            elif hasattr(self, '_eNBID'):
-                ident = self._eNBID
-            else:
-                ident = ''
-            # log name of class, name of function calling for log, and msg
-            _stack = stack()
-            if len(_stack) >= 2:
-                funcname = _stack[2][3]
-            else:
-                funcname = ''
-            #
-            logit('[%s] [%s - %s] %s' \
-                  % (ident, self.__class__.__name__, funcname, msg))
-    
-    def _trace(self, msg=''):
-        '''
-        tracing signalling message passed between L3stack
-        '''
-        if self.DEBUG and self.TRACE_IO:
-            # try to get IMSI
-            if hasattr(self, 'IMSI'):
-                imsi = self.IMSI
-            else:
-                imsi = ''
-            # log name of class, name of function calling for log, and msg
-            _stack = stack()
-            if len(_stack) >= 1:
-                funcname = _stack[2][3]
-            else:
-                funcname = ''
-            #
-            logit('[%s] [%s - %s - IO tracing]%s' \
-                  % (imsi, self.__class__.__name__, funcname, show_msg(msg)))
-    
+        return None
 
-###
-# synchro facility with timer for queue and thread
-###
-#
-class Timer(object):
-    '''
-    Timer instance sleeps for $dur seconds (it handles int and float),
-    waking up every second to check if it has been stopped through self.stop(),
-    and finally sends self.TIMER_EXPIRED signal to the $queue.
-    '''
-    # signal to throw on a queue when expiring
-    TIMER_EXPIRED = 0x10000001
+def get_imsi(naspdu):
+    ident = None
     #
-    def __init__(self, dur=1, queue=Queue(), **kwargs):
-        # maximum timer duration is fixed to 120s
-        self.dur = min(120.0, float(dur))
-        # queue to which timer will send signal when expiring
-        self.queue = queue
-        # Timer can embed more custom attributes
-        for argname in kwargs:
-            setattr(self, argname, kwargs[argname])
-        #
-        self.TIMER_EXPIRED = Timer.TIMER_EXPIRED
-        Timer.TIMER_EXPIRED += 1
-        #
-        self._running = False
-        threadit(self._run)
+    # from basic ID (EPS_IDENTIFY)
+    if hasattr(naspdu, 'ID'):
+        ident = naspdu.ID.getobj()
     
-    def _run(self):
-        # this timer count runs in background
-        # so it can be stopped before expiry
-        #
-        s, f = divmod(self.dur, 1)
-        self._running = True
-        # sleep (several time) for 1 sec.
-        while self._running and s > 0:
-            sleep(1)
-            s -= 1
-        # sleep the fractional second time
-        if self._running and f > 0:
-            sleep(f)
-        # if timer is still running after those sleep(), throw TIMER_EXPIRED
-        if self._running:
-            self.queue.put(self.TIMER_EXPIRED)
-            self.stop()
-    
-    def is_running(self):
-        return self._running
-    
-    def stop(self):
-        # this stops the timer
-        self._running = False
+    # from EPS ID (ATTACH / DETACH)
+    elif hasattr(naspdu, 'EPS_ID'):
+        ident = naspdu.EPS_ID.getobj()
+    #
+    if isinstance(ident, ID):
+        return ident.get_imsi()
+    else:
+        return None
+
+def convert_str_bitstr(s=''):
+    h = hexlify(s)
+    return (int(h, 16), len(h)*4)
+
+def convert_tai(tai):
+    plmn = PLMN()
+    plmn.map(tai['pLMNidentity'])
+    return (plmn, unpack('>H', tai['tAC'])[0])
+
+def convert_eutran_cgi(eutran_cgi):
+    plmn = PLMN()
+    plmn.map(eutran_cgi['pLMNidentity'])
+    return (plmn, '%.7x' % eutran_cgi['cell-ID'][0])
+
+def decode_UERadioCapability(buf=''):
+    per_v = PER.VARIANT
+    PER.VARIANT = 'U'
+    try:
+        GLOBAL_RRCLTE.TYPE['UERadioAccessCapabilityInformation'].decode(buf)
+    except:
+        PER.VARIANT = per_v
+        return None
+    UERadCap = GLOBAL_RRCLTE.TYPE['UERadioAccessCapabilityInformation']()
+    if UERadCap['criticalExtensions'][0] != 'c1':
+        PER.VARIANT = per_v
+        return UERadCap
+    if UERadCap['criticalExtensions'][1][0] != 'ueRadioAccessCapabilityInformation-r8':
+        PER.VARIANT = per_v
+        return UERadCap
+    if 'ue-RadioAccessCapabilityInfo' not in UERadCap['criticalExtensions'][1][1]:
+        PER.VARIANT = per_v
+        return UERadCap
+    if UERadCap['criticalExtensions'][1][1]['ue-RadioAccessCapabilityInfo'][0] != 'UECapabilityInformation':
+        PER.VARIANT = per_v
+        return UERadCap
+    #
+    uecapinfo = UERadCap['criticalExtensions'][1][1]['ue-RadioAccessCapabilityInfo'][1]
+    #uecapinfo['rrc-TransactionIdentifier']
+    if uecapinfo['criticalExtensions'][0] != 'c1':
+        PER.VARIANT = per_v
+        return UERadCap
+    if uecapinfo['criticalExtensions'][1][0] != 'ueCapabilityInformation-r8':
+        PER.VARIANT = per_v
+        return UERadCap
+    if 'ue-CapabilityRAT-ContainerList' not in uecapinfo['criticalExtensions'][1][1]:
+        PER.VARIANT = per_v
+        return UERadCap
+    #
+    for rat in uecapinfo['criticalExtensions'][1][1]['ue-CapabilityRAT-ContainerList']:
+        if rat['rat-Type'] == 'eutra':
+            try:
+                GLOBAL_RRCLTE.TYPE['UE-EUTRA-Capability'].decode(rat['ueCapabilityRAT-Container'])
+            except:
+                pass
+            else:
+                rat['ueCapabilityRAT-Container'] = GLOBAL_RRCLTE.TYPE['UE-EUTRA-Capability']()
+        elif rat['rat-Type'] == 'utra':
+            try:
+                GLOBAL_RRC3G.TYPE['InterRATHandoverInfo'].decode(rat['ueCapabilityRAT-Container'])
+            except:
+                pass
+            else:
+                rat['ueCapabilityRAT-Container'] = GLOBAL_RRC3G.TYPE['InterRATHandoverInfo']()
+        elif rat['rat-Type'] == 'geran-cs':
+            # MSCm2 || MSCm3
+            pass
+        elif rat['rat-Type'] == 'geran-ps':
+            # MSRACap
+            pass
+        elif rat['rat-Type'] == 'cdma2000-1XRTT':
+            pass
+    #
+    PER.VARIANT = per_v
+    return UERadCap
 #
