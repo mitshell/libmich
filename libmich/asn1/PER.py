@@ -3,7 +3,7 @@
 # * Software Name : libmich 
 # * Version : 0.2.3
 # *
-# * Copyright © 2014. Benoit Michau. ANSSI.
+# * Copyright Â© 2014. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -850,7 +850,7 @@ class PER(ASN1.ASN1Codec):
         self._off += i.bit_len()
         #
         # 4) add padding
-        if self.is_aligned:
+        if self.is_aligned():
             self._add_P(obj)
         #
         # 5) wrap into an LV structure
@@ -1695,7 +1695,7 @@ class PER(ASN1.ASN1Codec):
             cho = obj._cont[cho_name].clone_light()
         #
         # 4) potential padding
-        if self.is_aligned:
+        if self.is_aligned():
             buf = self._get_P(obj, buf)
         #
         # 5) extended value chosen needs to be decoded like an OPEN TYPE
