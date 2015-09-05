@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich
-# * Version : 0.2.2
+# * Version : 0.3.0
 # *
 # * Copyright © 2013. Benoit Michau. ANSSI.
 # *
@@ -24,8 +24,7 @@
 # * Created : 2013-11-04
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-#!/usr/bin/env python
+#*/
 
 '''
 HOWTO:
@@ -44,6 +43,8 @@ HOWTO:
 
 3) That's all !
 '''
+# filtering exports
+__all__ = ['AuC']
 
 import os, time
 from random import _urandom as urandom
@@ -53,14 +54,11 @@ from time import sleep
 #
 try:
     from CryptoMobile.Milenage import *
-except ImportError:
+except ImportError as err:
     print('CryptoMobile library is required for Milenage')
-    raise()
+    raise(err)
 #
 from .utils import log
-
-# filtering exports
-__all__ = ['AuC']
 
 class AuC:
     '''
@@ -322,4 +320,3 @@ class AuC:
                   ' RAND, XRES, AUTN, KASME for IMSI {0} with SQN {1} and SN '\
                   'ID {2}'.format(IMSI, hexlify(SQN), hexlify(SN_ID)))
         return RAND, XRES, AUTN, Kasme
-#
