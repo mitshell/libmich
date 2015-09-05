@@ -24,8 +24,7 @@
 # * Created : 2013-11-04
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-#!/usr/bin/env python
+#*/
 
 '''
 HOWTO:
@@ -69,15 +68,18 @@ if you want to manage TEID_to_rnc by yourself and just mush its value to GTPUd (
 -> to stop forwading IP packets
 >>> gsn.rem_mobile(mobile_IP='192.168.1.201')
 
+-> modules that act on GTPU packets can be added to the GTPUd instance, they must be put in the MOD attribute
+An example module TCPSYNACK is provided, it answers to TCP SYN packets sent by the mobile
+>>> gsn.MOD.append( TCPSYNACK )
+
 3) That's all !
 '''
+# filtering exports
+__all__ = ['GTPUd', 'ARPd', 'DPI', 'TCPSYNACK']
 
 import os
 #import signal
 from select import select
-from struct import pack, unpack
-from binascii import hexlify, unhexlify
-from time import time, sleep
 from random import randint
 #
 if os.name != 'nt':
@@ -90,11 +92,10 @@ else:
           'You need PF_PACKET socket')
 
 from libmich.formats.GTP import *
+from libmich.formats.IP import *
+from libmich.core.element import Block
 from .utils import *
 #
-# filtering exports
-__all__ = ['GTPUd', 'ARPd', 'DPI']
-
 # debug level
 DBG = 1
 
@@ -325,7 +326,7 @@ class ARPd(object):
         #
         # if local IP and not alreay resolved, store the Ethernet MAC address
         if ipsrc.split('.')[:3] == self.SUBNET_PREFIX \
-        and ipres not in self.ARP_RESOLV_TABLE:
+        and ipsrc not in self.ARP_RESOLV_TABLE:
             # WNG: no protection (at all) against ARP cache poisoning
             self.ARP_RESOLV_TABLE[ipsrc] = buf[6:12]
             self._log('DBG', 'got MAC address from IPv4 packet for new local '\
@@ -465,9 +466,12 @@ class GTPUd(object):
         self._GTP_out = GTPv1()
         self._GTP_out.msg.Pt = 0xff
         self._GTP_out.len.PtFunc = None
+        #
         # initialize the traffic statistics
         self.init_stats()
         self.__prot_dict = {1:'ICMP', 6:'TCP', 17:'UDP'}
+        # initialize the list of modules that can act on GTP-U payloads
+        self.MOD = []
         #
         # create a RAW PF_PACKET socket on the `Internet` side
         # python is not convinient to configure dest mac addr 
@@ -595,6 +599,17 @@ class GTPUd(object):
         if self.DPI:
             self._analyze(ipbuf)
         #
+        # possibly process the UL GTP-U payload within modules
+        try:
+            if self.MOD:
+                for mod in self.MOD:
+                    if mod.TYPE == 0:
+                        ipbuf = mod.handle_ul(ipbuf)
+                    else:
+                        mod.handle_ul(ipbuf)
+        except Exception as err:
+            self._log('ERR', 'MOD error: {0}'.format(err))
+        #
         # resolve the dest MAC addr
         macdst = self.arpd.resolve(ipdst)
         #
@@ -632,6 +647,17 @@ class GTPUd(object):
             self._log('DBG', 'buffer transferred from GTPU to RAW')
     
     def transfer_to_int(self, buf='\0'):
+        # possibly process the DL GTP-U payload within modules
+        try:
+            if self.MOD:
+                for mod in self.MOD:
+                    if mod.TYPE == 0:
+                        buf = mod.handle_dl(buf)
+                    else:
+                        mod.handle_dl(buf)
+        except Exception as err:
+            self._log('ERR', 'MOD error: {0}'.format(err))
+        #
         # prepend GTP-U header and forward on internal sk
         if len(buf) >= 20:
             # check dest IP
@@ -754,4 +780,58 @@ class DPI:
             n.append( s[1:1+l] )
             s = s[1+l:]
         return '.'.join(n)
-#
+
+
+class MOD(object):
+    # This is a skeleton for GTP-U payloads specific handler.
+    # After It gets loaded by the GTPUd instance, it acts on each GTP-U payloads (UL and DL)
+    #
+    # In can work actively on GTP-U packets (possibly changing them) with TYPE = 0
+    # or passively (not able to change them), only getting copy of them, with TYPE = 1
+    TYPE = 0
+    
+    # reference to the GTPUd instance
+    GTPUd = None
+    
+    @classmethod
+    def handle_ul(self, ippuf):
+        pass
+    
+    @classmethod
+    def handle_dl(self, ipbuf):
+        pass
+    
+class TCPSYNACK(MOD):
+    # this modules answers to TCP SYN request incoming from UE (UL direction)
+    # to be used with GTPUd.BLACKHOLING capability to avoid UE getting SYN-ACK from real servers
+    TYPE = 1
+    
+    @classmethod
+    def handle_ul(self, ipbuf):
+        # check if we have a TCP SYN
+        ip_proto, ip_pay = ord(ipbuf[9]), ipbuf[20:]
+        if ip_proto != 6:
+            # not TCP
+            return
+        if ip_pay[13] != '\x02':
+            # not TCP SYN
+            return
+        
+        # build the TCP SYN-ACK: invert src / dst ports, seq num (random), ack num (SYN seq num + 1)
+        tcpsrc, tcpdst, seq = unpack('!HHI', ip_pay[:8])
+        tcp_synack = TCP(src=tcpdst, dst=tcpsrc, flags=['SYN', 'ACK'])
+        tcp_synack[2] = randint(1, 4294967295) # seq num
+        tcp_synack[3] = (seq + 1) % 4294967296 # ack num
+        tcp_synack[15] = 0x1000 # window
+        
+        # build the IPv4 header: invert src / dst addr
+        ipsrc, ipdst = map(inet_ntoa, (ipbuf[12:16], ipbuf[16:20]))
+        iphdr = IPv4(src=ipdst, dst=ipsrc)
+        
+        p = Block()
+        p.append(iphdr)
+        p.append(tcp_synack)
+        p[1].hierarchy = 1 # TCP, payload of IP
+        
+        # send back the TCP SYN-ACK
+        self.GTPUd.transfer_to_int(bytes(p))
