@@ -604,11 +604,16 @@ sub-directory:
 * pointer: to handle reference in a dynamic way with Python dict
 
 
-The library provides few others routines that can be of interest to developers
-working with mobile network applications.
+The library provides routines and EPC network stacks that can be of interest to 
+developers working with mobile network applications.
 The *libmich/mobnet/* sub-directory provides the following files:
 * utils: common functions required for the rest of the mobnet library
 * AuC: HLR Authentication Center, to authenticate with SIM and USIM, making 
    use of the *CryptoMobile* library
 * GTPmgr: to handle GTP-U tunnels for Mobile data connectivity
-
+* MME: to run a minimal MME, handling eNodeB thanks to ENBmgr and UE thanks to
+   UEmgr, UES1proc and UENASproc
+* ENBmgr: to handle S1 procedures related to eNodeB
+* UEmgr: to handle S1, NAS and all important procedures related to UE
+* UES1proc: to support S1AP procedures related to UE
+* UENASproc: to support NAS EMM and ESM procedures related to UE
