@@ -3,11 +3,11 @@
 ###################
 #
 # file used by AuC.py
-# 
+# For 2G authentication, always replay run_gsm_algorithm() result,
+# as AuC.py does not implement COMP-128
+#
 # csv'style file, with the following fields:
 # IMSI (digit), RAND (hex), Kc (hex), RES (hex)
 #
-# for 2G authentication, always replay run_gsm_algorithm() result
-# much easier than running COMP-128 variants
-#
-001010000000001;00000000000000000000000000000000;ba5ad2d3d2c92637;0f09d7cb
+001010000000001;00000000000000000000000000000000;1122334455667788;99aabbcc;
+001010000000002;00000000000000000000000000000000;0011223344556677;ffeeddcc;
