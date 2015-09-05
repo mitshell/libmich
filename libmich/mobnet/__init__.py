@@ -1,7 +1,7 @@
 # −*− coding: UTF−8 −*−
 #/**
 # * Software Name : libmich 
-# * Version : 0.2.2
+# * Version : 0.3.0
 # *
 # * Copyright © 2012. Benoit Michau. ANSSI.
 # *
@@ -26,4 +26,5 @@
 # *--------------------------------------------------------
 #*/ 
 
-__all__ = ['utils', 'AuC', 'GTPmgr']
+__all__ = ['utils', 'AuC', 'GTPmgr', 'MME', 'ENBmgr', 'UEmgr', 'UES1proc',
+           'UENASproc']
