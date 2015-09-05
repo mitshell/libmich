@@ -26,13 +26,13 @@
 # *--------------------------------------------------------
 #*/
 
-from time import time
+from time import sleep, time
 from datetime import datetime
 from threading import Thread
-from binascii import unhexlify, hexlify
-from struct import unpack, pack
+from binascii import hexlify, unhexlify
+from struct import pack, unpack
 #
-from libmich.formats.L3Mobile_IE import ID, GUTI, PLMN
+from libmich.formats.L3Mobile_IE import ID, GUTI, PLMN, LAI
 #
 # ASN.1 imports and PER codec config
 from libmich.asn1.utils import _make_GLOBAL
@@ -50,11 +50,15 @@ PER._SAFE = True
 PER._ENUM_BUILD_DICT = False
 #
 # S1AP ASN.1 db in GLOBAL, RRCLTE ASN.1 db in GLOBAL_RRCLTE, RRC3G ASN.1 db in GLOBAL_RRC3G
-load_module('S1AP')
-GLOBAL_RRCLTE = _make_GLOBAL()
-load_module('RRCLTE', GLOBAL_RRCLTE)
-GLOBAL_RRC3G = _make_GLOBAL()
-load_module('RRC3G', GLOBAL_RRC3G)
+try:
+    load_module('S1AP')
+    GLOBAL_RRCLTE = _make_GLOBAL()
+    load_module('RRCLTE', GLOBAL_RRCLTE)
+    GLOBAL_RRC3G = _make_GLOBAL()
+    load_module('RRC3G', GLOBAL_RRC3G)
+except Exception as err:
+    print('unable to load ASN.1 modules (S1AP, RRCLTE, RRC3G), exception: {0}'.format(err))
+    print('you need to compile them before running corenet')
 
 # dedicated error
 class MMEErr(Exception):
@@ -73,8 +77,8 @@ class UESigProc(SigProc):
 
 # S1AP procedure codes: eNB related or UE related
 # unimplemented: 39 (PrivateMessage), 48 (UERadioCapMatch), 49 (PWSRestartInd)
-S1APENBProcCodes = [14, 15, 17, 29, 30, 34, 35, 36, 37, 38, 40, 41, 43, 46, 47]
-S1APUEProcCodes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 42, 44, 45]
+S1APENBProcCodes = [10, 14, 15, 17, 29, 30, 34, 35, 36, 37, 38, 40, 41, 43, 46, 47]
+S1APUEProcCodes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 42, 44, 45]
 
 # thread launcher
 def threadit(f, *args, **kwargs):
@@ -255,4 +259,3 @@ def decode_UERadioCapability(buf=''):
     #
     PER.VARIANT = per_v
     return UERadCap
-#
