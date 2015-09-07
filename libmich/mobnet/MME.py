@@ -656,7 +656,7 @@ class MMEd(object):
                 # and delay the processing of the pdu
                 if imsi is None:
                     self._ue_delayed[mme_ue_id] = pdu
-                    self.send_enb(sk, self.ue_request_imsi(enb_gid, mme_ue_id, enb_ue_id))
+                    self.send_enb(sk, self.ue_request_ident(enb_gid, mme_ue_id, enb_ue_id, ident_type=1))
                 # otherwise, just setup the UE handler in the MME registries
                 # and pass it the S1AP PDU to process
                 else:
@@ -785,9 +785,9 @@ class MMEd(object):
                     return self.TMSI[tmsi]
         return None
     
-    def ue_request_imsi(self, enb_gid, mme_ue_id, enb_ue_id):
+    def ue_request_ident(self, enb_gid, mme_ue_id, enb_ue_id, ident_type=1):
         # send a NAS-PDU with IMSI request
-        naspdu = EPS_IDENTITY_REQUEST(IDType=1)
+        naspdu = EPS_IDENTITY_REQUEST(IDType=ident_type)
         pIEs = [{'value': ('MME-UE-S1AP-ID', mme_ue_id),
                  'criticality': 'ignore',
                  'id': 0},
