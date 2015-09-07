@@ -102,6 +102,11 @@ Provides "mobnet" repo with some core-network features:
 - utils: common function to the mobnet library
 - AuC: HLR Authentication Center, to authenticate with SIM and USIM
 - GTPmgr: handle GTP-U tunnels for Mobile data connectivity
+- MME: to run a minimal MME, handling eNodeB thanks to ENBmgr and UE thanks to UEmgr, UES1proc and UENASproc
+- ENBmgr: to handle S1 procedures related to eNodeB
+- UEmgr: to handle S1, NAS and all important procedures related to UE
+- UES1proc: to support S1AP procedures related to UE
+- UENASproc: to support NAS EMM and ESM procedures related to UE
 '''
 
 __all__ = ['core', 'utils', 'formats', 'asn1', 'mobnet']
