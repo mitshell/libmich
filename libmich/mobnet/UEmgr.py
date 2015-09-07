@@ -1030,7 +1030,7 @@ class UEd(SigStack):
                 return sec_naspdu
         #
         # 6b) ciphering (not applied to SMC)
-        if 0 < eea < 4 and naspdu_type != 93:
+        if 0 < eea < 4 and naspdu.Type() != 93:
             if self.SEC['Knas_enc'] is None:
                 self.SEC['Knas_enc'] = conv_A7(kasme, 1, eea)[16:32]
             # get encryption algo instance
