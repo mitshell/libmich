@@ -134,7 +134,7 @@ class UENASSigProc(UESigProc):
     
     def _end(self, state=None):
         # remove EMM / ESM the procedure (after verifying it's on the procedure stack)
-        if self == self.UE.Proc[self.Dom][-1]:
+        if self.UE.Proc[self.Dom] and self == self.UE.Proc[self.Dom][-1]:
             self.UE.Proc[self.Dom].pop()
         # restore (or force) the EMM / ESM state
         if state:
@@ -314,23 +314,26 @@ class Authentication(UENASSigProc):
         else:
             # if the procedure is on the UE stack, remove it
             self._end()
-            self._clean_sec_ctx()
+            self._clean_sec_ctxt()
             # TBC: let the UE stop the radio connection
             return None
     
-    def _clean_sec_ctx(self):
+    def _clean_sec_ctxt(self):
         # keep track of the auth vector that made everything fail
         self.UE.SEC['vec'] = self._vec
         # delete the corresponding NASKSI context, and associated data
-        del self.UE.SEC['KSI'][self.Kwargs['NASKSI']]
         self.UE.SEC['active'] = None
         self.UE.SEC['Fresh'] = False
         self.UE.SEC['Knas_enc'] = None
         self.UE.SEC['Knas_int'] = None
+        try:
+            del self.UE.SEC['KSI'][self.Kwargs['NASKSI']]
+        except:
+            pass
     
     def _reject(self):
         rej = EPS_AUTHENTICATION_REJECT()
-        self._clean_sec_ctx()
+        self._clean_sec_ctxt()
         # prepare an S1 UEContextRelease
         self.UE.s1_release_ctxt(('nas', 'authentication-failure'))
         # UE considered deregistered
@@ -425,7 +428,7 @@ class SecurityModeControl(UENASSigProc):
         if naspdu[2]() == 95:
             # UE did not accept our parameters, or MAC
             self._log('WNG', 'security mode rejected: {0}'.format(repr(naspdu[3])))
-            self._clean_sec_ctx()
+            self._clean_sec_ctxt()
             # TODO: stop S1 / radio connection
             return None
         #
@@ -440,7 +443,7 @@ class SecurityModeControl(UENASSigProc):
         self.UE.SEC['SMC'] = False
         return None
     
-    def _clean_sec_ctx(self):
+    def _clean_sec_ctxt(self):
         # delete the NASKSI context selected for SMC, and associated data
         del self.UE.SEC['KSI'][self.Kwargs['NASKSI']]
         self.UE.SEC['active'] = None
@@ -491,6 +494,7 @@ class Identification(UENASSigProc):
         ident_t = ident.type()
         #
         self._end()
+        ret = None
         #
         if ident_t != self.Kwargs['IDType']:
             stat = EMM_STATUS(EMMCause=95)
@@ -951,7 +955,7 @@ class Attach(UENASSigProc):
     
     def timeout(self):
         UENASSigProc.timeout(self)
-        self._end()
+        self._end(state='EMM-DEREGISTERED')
 
 # Detach, 5.5.2.2
 # UE: DETACH REQUEST -> MME [: DETACH ACCEPT -> UE]
@@ -1390,6 +1394,7 @@ class DefaultEPSBearerCtxtAct(UENASSigProc):
     
     def timeout(self):
         UENASSigProc.timeout(self)
+        del self.UE.ESM['RAB'][self.Kwargs['EBT']]
         self._end()
 
 
@@ -1838,8 +1843,9 @@ EMMSpecific_UEMsgType = [65, 67, 69, 70, 72, 74]
 EMMConMgt_MMEMsgType = [98, 104]
 EMMConMgt_UEMsgType = [76, 99, 105]
 #
-EMM_MMEMsgType = EMMCommon_MMEMsgType + EMMSpecific_MMEMsgType + EMMConMgt_MMEMsgType
-EMM_UEMsgType = EMMCommon_UEMsgType + EMMSpecific_UEMsgType + EMMConMgt_UEMsgType
+# all messages + STATUS
+EMM_MMEMsgType = EMMCommon_MMEMsgType + EMMSpecific_MMEMsgType + EMMConMgt_MMEMsgType + [96]
+EMM_UEMsgType = EMMCommon_UEMsgType + EMMSpecific_UEMsgType + EMMConMgt_UEMsgType + [96]
 
 # ESM procedures
 # MME-initiated default / dedicated bearer context management
@@ -1852,5 +1858,5 @@ ESMUE_UEMsgType = [208, 210, 212, 214]
 ESMMisc_MMEMsgType = [217, 219]
 EMMMisc_UEMsgType = [218]
 #
-ESM_MMEMsgType = ESMMME_MMEMsgType + ESMUE_MMEMsgType + ESMMisc_MMEMsgType
-ESM_UEMsgType = ESMMME_UEMsgType + ESMUE_UEMsgType + EMMMisc_UEMsgType
+ESM_MMEMsgType = ESMMME_MMEMsgType + ESMUE_MMEMsgType + ESMMisc_MMEMsgType + [232]
+ESM_UEMsgType = ESMMME_UEMsgType + ESMUE_UEMsgType + EMMMisc_UEMsgType + [232]
