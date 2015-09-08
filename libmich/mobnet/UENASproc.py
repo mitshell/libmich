@@ -108,6 +108,8 @@ class UENASSigProc(UESigProc):
         if self.TRACE:
             self._pdu.append( (time(), direction, pdu) )
         self.UE._log('TRACE_NAS_{0}'.format(direction), pdu.show())
+        if direction == 'DL':
+            self.UE._proc_out = self
     
     def process(self, naspdu=None):
         self._log('ERR', '[process] unsupported')
@@ -688,7 +690,11 @@ class PagingRequest(UENASSigProc):
     
     def timeout(self):
         UENASSigProc.timeout(self)
-        self._end()
+        # remove EMM / ESM the procedure (after verifying it's in the procedure stack)
+        if self.UE.Proc['EMM'] and self in self.UE.Proc['EMM']:
+            self.UE.Proc['EMM'].remove(self)
+        # restore (or force) the EMM / ESM state
+        self.UE.EMM['state'] = self._state_prev
 
 # SMS, 5.6.3, DOWNLINK NAS TRANSPORT
 # WNG: name is prefixed with NAS, not to clash with S1 procedure
@@ -919,7 +925,7 @@ class Attach(UENASSigProc):
         # TODO: EMMCause, T3402, T3423, PLMNList, ECNList, EPSFeatSup, AddUpdRes, T3412ext
         #
         self._trace('DL', attacc)
-        if self._esm_resp[3]() == 193:
+        if self._esm_resp[3]() == 193 and self.UE.ESM_CTXT_ACT:
             # if the PDN REQ can be honoured with a DEFAULT CTX SETUP
             # the setup of the DRB for the initial default ERAB-ID has been prepared in the DefaultEPSBearerCtxtAct procedure
             # and an ATTACH COMPLETE is to be received from the UE afterwards
@@ -1251,13 +1257,10 @@ class ServiceRequest(UENASSigProc):
                 self._log('WNG', 'no ERAB to activate')
         self._end()
         #
-        # check if there is MME-initiated procedure to run
-        if self.UE._proc_mme is not None:
-            if isinstance(self.UE._proc_mme, UENASSigProc):
-                proc = self.UE.init_nas_proc(self.UE._proc_mme[0])
-            elif isinstance(self.UE._proc_mme, (tuple, list)) and len(self.UE._proc_mme) >= 2:
-                proc = self.UE.init_nas_proc(self.UE._proc_mme[0], **self.UE._proc_mme[1])
-            self.UE._proc_mme = None
+        # check if there are MME-initiated procedures to run
+        if self.UE._proc_mme:
+            proc, kwargs = self.UE._proc_mme.popleft()
+            proc = self.UE.init_nas_proc(proc, **kwargs)
             return proc.output()
         else:
             return None
@@ -1394,7 +1397,11 @@ class DefaultEPSBearerCtxtAct(UENASSigProc):
     
     def timeout(self):
         UENASSigProc.timeout(self)
-        del self.UE.ESM['RAB'][self.Kwargs['EBT']]
+        try:
+            del self.UE.ESM['RAB'][self.Kwargs['EBT']]
+            self.UE.ESM['active'].remove(self.Kwargs['EBT'])
+        except:
+            pass
         self._end()
 
 

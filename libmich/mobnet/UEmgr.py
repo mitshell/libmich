@@ -118,6 +118,10 @@ class UEd(SigStack):
     SMC_ACT = True # enable / disable SMC procedure (if disabled, NAS security will fail)
     SMC_KSI = None # if an int (0<=X<=15) is set, it overrides the NASKSI from the SEC context
     #
+    # Service Request: if MME-initiated procedures are buffered
+    # they are all sent to the UE if set to False, or deleted if set to True
+    SERV_DEL_PROCBUF = False
+    #
     #------------#
     # ESM config #
     #------------#
@@ -179,9 +183,10 @@ class UEd(SigStack):
     # bit 0-5: value
     #T3412 = 0 # keep the UE default value
     #T3412 = 1 # TAU every 2 sec. (how is this possible ?)
-    T3412 = 17 # TAU every 1 mn
+    #T3412 = 17 # TAU every 1 mn
     #T3412 = 40 # TAU every 8 mn
-    #T3412 = 63 # TAU every 90 mn
+    T3412 = 63 # TAU every 31 mn
+    #T3412 = 95 # TAU every 186 mn
     #
     # other optional timers signalled to the UE
     # GPRS Timer
@@ -232,8 +237,10 @@ class UEd(SigStack):
         self.Proc_last = None
         # list of procedures processed, depends on self.TRACE_S1 and self.TRACE_NAS
         self._proc = []
-        # can contain an MME-initiated procedure to be run after a UE is paged
-        self._proc_mme = None
+        # last NAS procedure to output a NAS PDU
+        self._proc_out = None
+        # stack of waiting MME-initiated NAS procedures, to be run after a UE is paged
+        self._proc_mme = deque()
         #
         self.init_cap()
         self.init_s1()
@@ -372,7 +379,9 @@ class UEd(SigStack):
         self.S1['ENB_UE_ID'] = None
         self.S1['RRC-Establishment-Cause'] = None
         self.Proc['S1'] = {}
-        self._proc_mme = None
+        if self._proc_mme:
+            self._log('DBG', '[s1_unset] {0} MME-initiated procedure(s) resetted'.format(len(self._proc_mme)))
+        self._proc_mme = deque()
     
     def s1_setup_initial_ctxt(self, rabid_list):
         # 1 or multiple ERAB-ID can be provided
@@ -590,11 +599,13 @@ class UEd(SigStack):
         # InitialContextSetup,
         # UEContextRelease,
         #
+        # proc is a class
         if self.ENB is None or self.ENB.SK is None:
-            self._log('WNG', 'unable to initiate procedure {1} ({2}): no S1AP connection'\
-                      .format(proc.Name, proc.Code))
+            self._log('WNG', 'unable to initiate procedure {0} ({1}): no S1AP connection'\
+                      .format(proc.__name__, proc.Code))
             return
         proc = proc(self, **kwargs)
+        # now, proc is an instance
         if proc.Code in Class1UESigProc:
             if proc.Code in self.Proc['S1']:
                 self._log('WNG', '[ENB (S1AP): {0}] a procedure {1} ({2}) is already ongoing'\
@@ -619,7 +630,9 @@ class UEd(SigStack):
         if self.Proc['ESM']:
             for esm_proc in reversed(self.Proc['ESM']):
                 esm_proc._end()
-        self._proc_mme = None
+        if self._proc_mme:
+            self._log('DBG', '[nas_reset_proc] {0} MME-initiated procedure(s) resetted'.format(len(self._proc_mme)))
+        self._proc_mme = deque()
     
     def nas_build_ueseccap(self):
         # if we have UENetCap (and MSNetCap), we can build UESecCap
@@ -1186,10 +1199,10 @@ class UEd(SigStack):
         # 4) out of procedure EMM / ESM STATUS
         elif (pd, ty) == (7, 96):
             self._log('TRACE_NAS_UL', naspdu.show())
-            self._log('WNG', '[process_naspdu] EMM STATUS with cause: {1}'.format(repr(naspdu[3])))
+            self._log('WNG', '[process_naspdu] EMM STATUS with cause: {0}'.format(repr(naspdu[3])))
         elif (pd, ty) == (2, 232):
             self._log('TRACE_NAS_UL', naspdu.show())
-            self._log('WNG', '[process_naspdu] ESM STATUS with cause: {1}'.format(repr(naspdu[3])))        
+            self._log('WNG', '[process_naspdu] ESM STATUS with cause: {0}'.format(repr(naspdu[3])))        
         #
         # 5) EMM / ESM message out of any procedure
         else:
@@ -1224,6 +1237,10 @@ class UEd(SigStack):
         if self.ENB is not None:
             self._log('INF', '[page] UE already connected')
             return
+        # ensures a PagingRequest is not already ongoing
+        if self.Proc['EMM'] and self.Proc['EMM'][-1].Name == 'PagingRequest':
+            self._log('DBG', '[page] PagingRequest already ongoing')
+            return
         # get all eNB serving the TAC on which the UE is registered
         # and send the Paging command to each of it
         tac = self.S1['TAI'][1]
@@ -1243,10 +1260,26 @@ class UEd(SigStack):
     def _run(self, proc, **kwargs):
         # this is to run an MME-initiated procedure, possibly paging the UE first
         if self.ENB is not None:
-            proc_nas = self.init_nas_proc(proc, **kwargs)
-            proc_s1 = self.init_s1_proc(DownlinkNASTransport, NAS_PDU=self.nas_output_sec(proc_nas.output()))
-            for pdu in proc_s1.output():
-                self.MME.send_enb(self.ENB.SK, pdu)
+            # UE already connected
+            # 1) empty any possible buffered procedures
+            if self._proc_mme:
+                if self.SERV_DEL_PROCBUF:
+                    self._log('INF', '[_run] deleting {0} buffered NAS procedures'.format(len(self._proc_mme)))
+                    self._proc_mme = deque()
+                else:
+                    self._log('DBG', '[_run] firing {0} buffered NAS procedures'.format(len(self._proc_mme)))
+                    while self._proc_mme:
+                        proc_nas, kwargs = self._proc_mme.popleft()
+                        self.__run_single(proc_nas, **kwargs)
+            # 2) run the requested procedure
+            self.__run_single(proc, **kwargs)
         else:
-            self._proc_mme = (proc, kwargs)
+            # UE not connected, buffer the procedure and page it
+            self._proc_mme.append( (proc, kwargs) )
             self.page()
+    
+    def __run_single(self, proc, **kwargs):
+        proc_nas = self.init_nas_proc(proc, **kwargs)
+        proc_s1 = self.init_s1_proc(DownlinkNASTransport, NAS_PDU=self.nas_output_sec(proc_nas.output()))
+        for pdu in proc_s1.output():
+            self.MME.send_enb(self.ENB.SK, pdu)
