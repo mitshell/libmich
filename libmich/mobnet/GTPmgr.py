@@ -75,12 +75,12 @@ An example module TCPSYNACK is provided, it answers to TCP SYN packets sent by t
 3) That's all !
 '''
 # filtering exports
-__all__ = ['GTPUd', 'ARPd', 'DPI', 'TCPSYNACK']
+__all__ = ['GTPUd', 'ARPd', 'DPI', 'DNSRESP', 'TCPSYNACK']
 
 import os
 #import signal
 from select import select
-from random import randint
+from random import randint, _urandom
 #
 if os.name != 'nt':
     from fcntl import ioctl
@@ -177,6 +177,10 @@ def unset_promisc(sk):
 # send ARP request when needed to be able then to forward IP packet from mobile
 #
 class ARPd(object):
+    '''
+    ARP resolver
+    resolve Ethernet / IP address correspondence on behalf of connected UE
+    '''
     #
     # verbosity level: list of log types to display when calling 
     # self._log(logtype, msg)
@@ -260,8 +264,11 @@ class ARPd(object):
         if self._listening:
             self._listening = False
             sleep(self.SELECT_TO * 2)
-            self.sk_arp.close()
-            self.sk_ip.close()
+            try:
+                self.sk_arp.close()
+                self.sk_ip.close()
+            except Exception as err:
+                self._log('ERR', 'socket error: {0}'.format(err))
     
     def listen(self):
         # select() until we receive arp or ip packet
@@ -407,6 +414,10 @@ class ARPd(object):
 #
 
 class GTPUd(object):
+    '''
+    GTPU forwarder
+    bridge Ethernet to GTPU to handle IP data traffic of connected UE
+    '''
     #
     # verbosity level: list of log types to display when calling 
     # self._log(logtype, msg)
@@ -529,11 +540,14 @@ class GTPUd(object):
         if self._listening:
             self._listening = False
             sleep(self.SELECT_TO * 2)
-            # unset promiscuous mode
-            unset_promisc(self.ext_sk)
-            # closing sockets
-            self.int_sk.close()
-            self.ext_sk.close()
+            try:
+                # unset promiscuous mode
+                unset_promisc(self.ext_sk)
+                # closing sockets
+                self.int_sk.close()
+                self.ext_sk.close()
+            except Exception as err:
+                self._log('ERR', 'socket error: {0}'.format(err))
     
     def listen(self):
         # select() until we receive something on 1 side
@@ -800,9 +814,63 @@ class MOD(object):
     @classmethod
     def handle_dl(self, ipbuf):
         pass
+
+class DNSRESP(MOD):
+    # this module answers to any DNS request incoming from UE (UL direction) with a single or random IP address
+    # to be used with GTPUd.BLACKHOLING capability to avoid UE getting DNS responses from real servers
+    TYPE = 1
     
+    # put UDP checksum in DNS response
+    UDP_CS = True
+    # in case we want to answer random addresses
+    RAND = False
+    # the IPv4 address to answer all requests
+    IP_RESP = '192.168.1.50'
+    
+    @classmethod
+    def handle_ul(self, ipbuf):
+        # check if we have an UDP/53 request
+        ip_proto, (udpsrc, udpdst) = ord(ipbuf[9]), unpack('!HH', ipbuf[20:24])
+        if ip_proto != 17:
+            # not UDP
+            return
+        if udpdst != 53:
+            # not DNS
+            return
+        
+        # build the UDP / DNS response: invert src / dst UDP ports
+        udp = UDP(src=udpdst, dst=udpsrc, with_cs=self.UDP_CS)
+        # DNS request: transaction id, flags, questions, queries
+        dnsreq = ipbuf[28:]
+        transac_id, questions, queries = dnsreq[0:2], unpack('!H', dnsreq[4:6])[0], dnsreq[12:]
+        if questions > 1:
+            # not supported
+            return
+        # DNS response: transaction id, flags, questions, answer RRs, author RRs, add RRs,
+        # queries, answers, autor nameservers, add records
+        if self.RAND:
+            ip_resp = _urandom(4)
+        else:
+            ip_resp = inet_aton(self.IP_RESP)
+        dnsresp = '{0}\x81\x80\0\x01\0\x01\0\0\0\0{1}\xc0\x0c\0\x01\0\x01\0\0\0\x20\0\x04{2}'\
+                  .format(transac_id, queries, ip_resp)
+        
+        # build the IPv4 header: invert src / dst addr
+        ipsrc, ipdst = map(inet_ntoa, (ipbuf[12:16], ipbuf[16:20]))
+        iphdr = IPv4(src=ipdst, dst=ipsrc)
+        
+        p = Block()
+        p.append(iphdr)
+        p.append(udp)
+        p[-1].hierarchy = 1
+        p.append(dnsresp)
+        p[-1].hierarchy = 2
+        
+        # send back the DNS response
+        self.GTPUd.transfer_to_int(bytes(p))
+
 class TCPSYNACK(MOD):
-    # this modules answers to TCP SYN request incoming from UE (UL direction)
+    # this module answers to TCP SYN request incoming from UE (UL direction)
     # to be used with GTPUd.BLACKHOLING capability to avoid UE getting SYN-ACK from real servers
     TYPE = 1
     
