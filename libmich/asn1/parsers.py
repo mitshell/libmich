@@ -242,7 +242,9 @@ def get_typeref_infos(Obj, ref):
         Obj['typeref'] = ref.clone_const()
     #
     Obj['type'] = Obj['typeref']['type']
-    #Obj['tag'] = Obj['typeref']['tag'] # TODO: to be verified
+    # WNG: not sure not overwriting tag is OK
+    if Obj['tag'] is None and Obj['typeref'] is not None:
+        Obj['tag'] = Obj['typeref']['tag']
     Obj['ext'] = Obj['typeref']['ext']
     Obj['cont'] = Obj['typeref']['cont']
     Obj['const'] = Obj['typeref']['const']
@@ -288,11 +290,16 @@ def parse_content_integer(Obj, text=''):
             val_num = GLOBAL.VALUE[m.group(4)]['val']
         else:
             val_num = int(m.group(3))
-        try:
-            cont[m.group(1)] = val_num
-        except:
-            raise(ASN1_PROC_TEXT('%s: duplicated named number: %s'\
-                  % (Obj.get_fullname(), text_cont)))
+        named_num = m.group(1)
+        if named_num in cont:
+            if Obj._SAFE_COMP: 
+                raise(ASN1_PROC_TEXT('%s: duplicated named number: %s'\
+                      % (Obj.get_fullname(), text_cont)))
+            else:
+                log('WNG: %s: duplicated named bit %s (%s)'\
+                    % (Obj.get_fullname(), named_num, val_num))
+        cont[named_num] = val_num
+            
     if cont:
         Obj['cont'] = cont
     #
@@ -340,13 +347,16 @@ def parse_content_enum(Obj, text=''):
             while index in index_used:
                 index += 1
             ind_num = index
-        try:
-            O[m.group(1)] = ind_num
-        except:
-            raise(ASN1_PROC_TEXT('%s: duplicated enumeration: %s'\
-                  % (Obj.get_fullname(), text_cont)))
-        else:
-            index_used.append( ind_num )
+        name = m.group(1)
+        if name in O:
+            if Obj._SAFE_COMP:
+                raise(ASN1_PROC_TEXT('%s: duplicated enumeration: %s'\
+                      % (Obj.get_fullname(), text_cont)))
+            else:
+                log('WNG: %s: duplicated enumeration: %s'\
+                    % (Obj.get_fullname(), name))
+        O[name] = ind_num
+        index_used.append( ind_num )
     #
     #Obj['cont'] = OD()
     root = []
@@ -1508,6 +1518,8 @@ def parse_set_elements(Obj, text=''):
 # - CLASS field
 #   -> type inclusion referring to object information set, 
 #      constraint keeps track of the references' names
+# - CONSTRAINED BY constraint is parsed for OCTET STRING and CLASS
+#   but ignored at runtime
 
 def parse_constraint_integer(Obj, text=''):
     '''
@@ -1652,7 +1664,7 @@ def parse_constraint_str(Obj, text=''):
     
     returns the rest of the text
     '''
-    # SIZE constraint, CONTAINING constraint
+    # SIZE constraint, CONTAINING constraint, CONSTRAINED BY
     text_rest, text_const = extract_parenth(text)
     while text_const:
         _parse_constraint_str_pass(Obj, text_const)
@@ -1670,11 +1682,16 @@ def _parse_constraint_str_pass(Obj, text=''):
     if Obj['type'] in (TYPE_BIT_STR, TYPE_OCTET_STR):
         m = SYNT_RE_CONTAINING.match(text)
         if not m:
-            raise(ASN1_PROC_NOSUPP('%s: %s constraint not supported: %s'\
-                  % (Obj.get_fullname(), Obj['type'], text)))
-        Const = {'text':text,
-                 'type':CONST_CONTAINING,
-                 'keys':['ref']}
+            m2 = SYNT_RE_CONSTRAINED_BY.match(text)
+            if Obj['type'] == TYPE_OCTET_STR and m2:
+                _parse_constraint_const_by(Obj, text)
+                return
+            else:
+                raise(ASN1_PROC_NOSUPP('%s: %s constraint not supported: %s'\
+                      % (Obj.get_fullname(), Obj['type'], text)))
+        Const = {'text': text,
+                 'type': CONST_CONTAINING,
+                 'keys': ['ref']}
         ref = m.group(1)
         if ref not in GLOBAL.TYPE:
             raise(ASN1_PROC_LINK('%s: undefined CONTAINING type: %s'\
@@ -1702,6 +1719,23 @@ def _parse_constraint_str_pass(Obj, text=''):
         Const['alpha'] = parse_constraint_from(Obj, text_alpha)
         Obj['const'].append(Const)
 
+def parse_constraint_const_by(Obj, text=''):
+    text_rest, text_const = extract_parenth(text)
+    while text_const:
+        m = SYNT_RE_CONSTRAINED_BY.match(text_const)
+        if m:
+            _parse_constraint_const_by(Obj, text_const)
+            text_rest, text_const = extract_parenth(text_rest)
+    return text_rest
+
+def _parse_constraint_const_by(Obj, text=''):
+    Const = {'text': text,
+             'type': CONST_CONST_BY,
+             'keys': []}
+    log('WNG: %s: %s constraint CONSTRAINED BY ignored: %s'\
+        % (Obj.get_fullname(), Obj['type'], text))
+    Obj['const'].append(Const)
+
 def parse_constraint_from(Obj, text=''):
     # "0".."9" -> 0,1,2,3,4,5,6,7,8,9
     # "."|"-"|" " -> .,-, 
@@ -1726,7 +1760,11 @@ def parse_constraint_from(Obj, text=''):
     #
     # 3) it is a list of chars with '..' or '|' separator
     elif next == 2:
+        # remove whitespace
+        text = text.replace(' ', '')
+        # initalize alphabet list with 1st char
         L = [text[1]]
+        # initialize text cursor after 1st char
         cur = 3
         while cur < len(text)-3:
             if text[cur] == '|':
@@ -1744,7 +1782,7 @@ def parse_constraint_from(Obj, text=''):
                 cur += 5
             else:
                 raise(ASN1_PROC_TEXT('%s: invalid alphabet constraint: %s'\
-                      % (Obj.get_fullname, text)))
+                      % (Obj.get_fullname(), text)))
         return L
     #
     else:
@@ -1753,41 +1791,60 @@ def parse_constraint_from(Obj, text=''):
 
 def parse_constraint_clafield(Obj, text=''):
     '''
-    parses constraint in "(" ")" related to CLASS fields within ASN.1 types
+    parses constraints in "(" ")" related to CLASS fields within ASN.1 types
     
     appends a dict of constraint parameters ('text', 'type', 'keys', various)
     in Obj['const']
     
     returns the rest of the text
+    
+    a single CONST_SET_REF constraint is supported
     '''
-    # this corresponds to CLASS fields used within ASN.1 types, 
-    # constrained by object info sets
-    text, text_const = extract_parenth(text)
-    if not text_const:
-        return text
-    #
-    m = SYNT_RE_SET_REF.match(text_const)
-    if not m:
-        raise(ASN1_PROC_NOSUPP('%s: CLASS field constraint not supported: %s'\
+    text_rest, text_const = extract_parenth(text)
+    const_set_ref_num = 0
+    while text_const:
+        if const_set_ref_num > 1:
+            raise(ASN1_PROC_NOSUPP('%s: CLASS field mutliple SET_REF constraint '\
+                  'unsupported: %s' % (Obj.get_fullname(), text_const)))
+        m1 = SYNT_RE_SET_REF.match(text_const)
+        m2 = SYNT_RE_CONSTRAINED_BY.match(text_const)
+        if m1:
+            Const = {'text': text_const,
+                     'type': CONST_SET_REF,
+                     'keys': ['ref', 'at'],
+                     'ref': _resolve_set_ref(Obj, m1.group(1), 
+                                referrer=['const', len(Obj['const']), 'ref'])}
+            if m1.group(2) is not None:
+                Const['at'] = m1.group(2)
+                # TODO: check that this refers to a UNIQUE field 
+                # of the 'ref' ASN1Obj
+            else:
+                Const['at'] = None
+            #
+            # check for extension marker "! $typeref : $value"
+            text_const_rest = text_const[m1.end():].strip()
+            if text_const_rest:
+                m2 = SYNT_RE_SET_REF_EXT.match(text_const_rest)
+                if m2:
+                    Const['keys'].append('ext')
+                    Const['ext'] = (m2.group(1), m2.group(2))
+                    log('WNG: %s: %s constraint SET REF extension ignored: %s'\
+                        % (Obj.get_fullname(), Obj['type'], text_const_rest))
+                    text_const_rest = text_const_rest[m2.end():].strip()
+                if text_const_rest:
+                    raise(ASN1_PROC_TEXT('%s: CLASS field constraint has remaining'\
+                          ' text: %s' % (Obj.get_fullname(), text_const_rest)))
+            #
+            Obj['const'].append(Const)
+            const_set_ref_num += 1
+            text_rest, text_const = extract_parenth(text_rest)
+        elif m2:
+            _parse_constraint_const_by(Obj, text_const)
+            text_rest, text_const = extract_parenth(text_rest)
+        else:
+            raise(ASN1_PROC_NOSUPP('%s: CLASS field constraint not supported: %s'\
                   % (Obj.get_fullname(), text_const)))
-    Const = {'text':text_const,
-             'type':CONST_SET_REF,
-             'keys':['ref', 'at'],
-             'ref': _resolve_set_ref(Obj, m.group(1), 
-                        referrer=['const', len(Obj['const']), 'ref'])}
-    if m.group(2) is not None:
-        Const['at'] = m.group(2)
-        # TODO: check that this refers to a UNIQUE field of the 'ref' ASN1Obj
-    else:
-        Const['at'] = None
-    #
-    Obj['const'].append(Const)
-    #
-    text_more, text_const = extract_parenth(text)
-    if text_const:
-        raise(ASN1_PROC_NOSUPP('%s: more than 1 constraint: %s'\
-              % (Obj.get_fullname(), text_const)))
-    return text
+    return text_rest
 
 def _resolve_set_ref(Obj, ref='', referrer=[]):
     #

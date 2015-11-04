@@ -697,7 +697,7 @@ class BER(ASN1.ASN1Codec):
         # UNIVERSAL one (EXPLICIT case),
         # and returns:
         #   the length of the outermost BER_TLV
-        #   the ineermost BER_TLV
+        #   the innermost BER_TLV
         #
         tag = obj.get_tag()
         if tag is None:
@@ -1030,7 +1030,7 @@ class BER(ASN1.ASN1Codec):
                 obj._val[name] = self._decode_comp_val(obj, comp, tlv)
                 tags.remove(tag)
         #
-        for name in obj._root_comp:
+        for name in [n for n in obj._root_comp if n not in obj._root_opt]:
             if name not in obj._val:
                 # mandatory component was not present in the decoded "compts"
                 raise(ASN1_BER_DECODER('%s: missing mandatory component %s' \

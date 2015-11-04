@@ -191,6 +191,8 @@ class ASN1Obj(object):
     _DEBUG = 0
     # this adds controls when settings ASN.1 objects value manually
     _SAFE = True
+    # this allow to only log errors and continue ASN.1 module compilation
+    _SAFE_COMP = True
     
     # when set, shuts down codec error and tries to return without error
     # (however, the message will certainly be malformed)
@@ -564,7 +566,7 @@ class ASN1Obj(object):
                 self._set_val_seqof(val)
             elif self._type in (TYPE_SEQ, TYPE_SET, TYPE_CLASS):
                 self._set_val_seq(val)
-            elif self._type in (TYPE_OPEN, TYPE_ANY):
+            elif self._type in (TYPE_OPEN, TYPE_ANY, TYPE_EXT):
                 self._set_val_open(val)
             elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR):
                 self._set_val_str(val)
@@ -837,7 +839,8 @@ class ASN1Obj(object):
             else:
                 # there is no additional content possible when typeref is used
                 return text
-        elif self._type in (TYPE_NULL, TYPE_BOOL, TYPE_OID, TYPE_OPEN, TYPE_ANY,
+        elif self._type in (TYPE_NULL, TYPE_BOOL, TYPE_OID,
+                            TYPE_OPEN, TYPE_ANY, TYPE_EXT,
                             TYPE_OCTET_STR, TYPE_PRINT_STR, TYPE_IA5_STR, 
                             TYPE_NUM_STR, TYPE_VIS_STR):
             # there is no content for those types
@@ -854,9 +857,12 @@ class ASN1Obj(object):
         elif self._type == TYPE_CLASS:
             text = self._parse_content_class(text)
             return self._parse_syntax(text)
-        else:
+        elif self._SAFE_COMP:
             raise(ASN1_PROC_NOSUPP('%s: unsupported content for ASN.1 type '\
                   '%s: %s' % (self.get_fullname(), self._type, text)))
+        else:
+            log('WNG: %s: unsupported content for ASN.1 type %s: %s'\
+                % (self.get_fullname(), self._type, text))
     
     # content
     def _parse_content_subtype(self, text=''):
@@ -926,14 +932,22 @@ class ASN1Obj(object):
                 elif self._cont[name]._type in (TYPE_OPEN, TYPE_ANY):
                     # for untagged OPEN / ANY types, use (-1, -1) as tag value
                     tag = (-1, -1)
-                else:
+                elif self._SAFE_COMP:
                     raise(ASN1_PROC_TEXT('%s: untagged component %s' \
                           % (self.get_fullname(), name_chain+[name])))
-            # no duplicated tags are allowed at all
+                else:
+                    log('WNG: %s: untagged component %s' \
+                        % (self.get_fullname(), name_chain+[name]))
             if tag is not None:
                 if tag in tags:
-                    raise(ASN1_PROC_TEXT('%s: duplicated tag %s for component %s'\
-                          % (self.get_fullname(), tag, name_chain+[name])))
+                    # no duplicated tag should be allowed at all
+                    if self._SAFE_COMP:
+                        raise(ASN1_PROC_TEXT('%s: duplicated tag %s for '\
+                              'component %s' % (self.get_fullname(), tag, 
+                              name_chain+[name])))
+                    else:
+                        log('WNG: %s: duplicated tag %s for component %s'\
+                            % (self.get_fullname(), tag, name_chain+[name]))
                 tags[tag] = name_chain+[name]
     
     def _build_seq_cont_tags(self, tags=[], prev_opt=None, name_chain=[]):
@@ -950,15 +964,23 @@ class ASN1Obj(object):
                 elif self._cont[name]._type in (TYPE_OPEN, TYPE_ANY):
                     # for untagged OPEN / ANY types, use (-1, -1) as tag value
                     tag = (-1, -1)
-                else:
+                elif self._SAFE_COMP:
                     raise(ASN1_PROC_TEXT('%s: untagged component %s' \
                           % (self.get_fullname(), name_chain+[name])))
+                else:
+                    log('WNG: %s: untagged component %s' \
+                        % (self.get_fullname(), name_chain+[name]))
             # identical tag to previous component is not allowed
             # in case the previous one is OPTIONAL / DEFAULT
             if tag is not None:
                 if tag == prev_opt:
-                    raise(ASN1_PROC_TEXT('%s: duplicated tag %s for component %s'\
-                          % (self.get_fullname(), tag, name_chain+[name])))
+                    if self._SAFE_COMP:
+                        raise(ASN1_PROC_TEXT('%s: duplicated tag %s for '\
+                              'component %s' % (self.get_fullname(), tag, 
+                              name_chain+[name])))
+                    else:
+                        log('WNG: %s: duplicated tag %s for component %s'\
+                            % (self.get_fullname(), tag, name_chain+[name]))
                 tags.append( (tag, name_chain+[name]) )
                 #
                 if (self._cont[name]._flags is not None \
@@ -992,6 +1014,9 @@ class ASN1Obj(object):
         elif self._type in (TYPE_BIT_STR, TYPE_OCTET_STR, TYPE_PRINT_STR, 
                             TYPE_IA5_STR, TYPE_NUM_STR, TYPE_VIS_STR):
             return self._parse_constraint_str(text)
+        elif self._type in (TYPE_SET, TYPE_SEQ):
+            #return self._parse_constraint_const_by(text)
+            pass
         return text
     
     # constraints
@@ -1003,6 +1028,9 @@ class ASN1Obj(object):
     
     def _parse_constraint_clafield(self, text=''):
         return parsers.parse_constraint_clafield(self, text)
+    
+    def _parse_constraint_const_by(self, text=''):
+        return parsers.parse_constraint_const_by(text)
     
     # flags
     def _parse_flags(self, text=''):
@@ -1036,14 +1064,24 @@ class ASN1Obj(object):
                 return self._parse_value_choice(text)
             else:
                 # TODO: support constructed type value parsing
-                raise(ASN1_PROC_NOSUPP('%s: unsupported ASN.1 value for type %s: %s'\
-                      % (self.get_fullname(), self._type, text)))
+                if self._SAFE_COMP:
+                    raise(ASN1_PROC_NOSUPP('%s: unsupported ASN.1 value for '\
+                          'type %s: %s' % (self.get_fullname(), self._type, 
+                          text)))
+                else:
+                    log('WNG: %s: unsupported ASN.1 value for type %s: %s'\
+                        % (self.get_fullname(), self._type,  text))
             # ensures value fit within the given type
             self.set_val(self._val)
         elif self._mode == 2:
             return self.parse_set(text)
         # something went wrong
-        raise(ASN1_PROC_TEXT)
+        elif self._SAFE_COMP:
+            raise(ASN1_PROC_TEXT('%s: unknown error when parsing value'\
+                  % self.get_fullname()))
+        else:
+            log('WNG: %s: unknown error when parsing value'\
+                % self.get_fullname())
     
     def _parse_value_null(self, text=''):
         return parsers.parse_value_null(self, text)
@@ -1276,7 +1314,7 @@ class ASN1Obj(object):
                 val.append( cont_t._to_dict_val() )
             cont_t._val = None
             return val
-        elif self._type in (TYPE_OPEN, TYPE_ANY):
+        elif self._type in (TYPE_OPEN, TYPE_ANY, TYPE_EXT):
             if isinstance(self._val, str):
                 return str(self._val)
             elif isinstance(self._val, ASN1Obj):
@@ -1484,7 +1522,7 @@ class ASN1Obj(object):
                 val.append( cont_t._to_dict_val() )
             cont_t._val = None
             self._val = val
-        elif self._type in (TYPE_OPEN, TYPE_ANY):
+        elif self._type in (TYPE_OPEN, TYPE_ANY, TYPE_EXT):
             if isinstance(DictVal, str):
                 self._val = str(DictVal)
             elif isinstance(DictVal, dict):

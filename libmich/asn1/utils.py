@@ -220,6 +220,7 @@ TYPE_SET_OF         = 'SET OF'
 # wrapper types
 TYPE_OPEN           = 'OPEN_TYPE'
 TYPE_ANY            = 'ANY'
+TYPE_EXT            = 'EXTERNAL'
 # info object
 TYPE_CLASS          = 'CLASS'
 #
@@ -249,6 +250,7 @@ TAG_UNIV_TYPETOVAL = {
     TYPE_OCTET_STR : 4,
     TYPE_NULL : 5,
     TYPE_OID : 6,
+    TYPE_EXT: 8,
     TYPE_REAL : 9,
     TYPE_ENUM : 10,
     TYPE_SEQ : 16,
@@ -269,7 +271,7 @@ TAG_UNIV_VALTOTYPE = {
     5 : TYPE_NULL,
     6 : TYPE_OID,
     7 : 'ObjectDescriptor',
-    8 : 'EXTERNAL',
+    8 : TYPE_EXT,
     9 : TYPE_REAL, # actually unsupported, yet
     10 : TYPE_ENUM,
     11 : 'EMBEDDED PDV', 
@@ -300,8 +302,10 @@ CONST_SINGLE_VAL    = 'CONST_SINGLE_VAL' # keys: ('val':int, 'ext':bool)
 CONST_VAL_RANGE     = 'CONST_VAL_RANGE' # keys: ('lb':int, 'ub':int, 'ext':bool)
 CONST_CONTAINING    = 'CONST_CONTAINING' # keys: ('obj':ASN1Obj)
 CONST_SET_REF       = 'CONST_SET_REF' # keys: ('obj':ASN1Obj, 'at':str)
-CONST_ALPHABET      = 'CONST_ALPHABET' # keys:
-# unsupported ones (currently not used)
+CONST_ALPHABET      = 'CONST_ALPHABET' # keys: ('alpha': list)
+# constraints parsed but ignored at runtime
+CONST_CONST_BY      = 'CONST_CONST_BY' # keys: None
+# constraints unsupported (currently not used)
 CONST_TYPE_INCL     = 'CONST_TYPE_INCL'
 CONST_REGEXP        = 'CONST_REGEXP'
 CONST_ENCODE_BY     = 'CONST_ENCODE_BY'
@@ -357,6 +361,8 @@ SYNT_RE_VAL_RANGE = re.compile( \
     % (_RE_INTEGER, _RE_IDENT, _RE_INTEGER, _RE_IDENT))
 SYNT_RE_SET_REF = re.compile( \
     '\{(%s)\}(?:\{@(%s)\}){0,1}' % (_RE_TYPEREF, _RE_IDENT))
+SYNT_RE_SET_REF_EXT = re.compile( \
+    '(?:^\!\s{0,})(?:(%s)\s{0,}\:\s{0,}(%s))' % (_RE_TYPEREF, _RE_IDENT))
 SYNT_RE_PARAM_ARG = re.compile( \
     '(%s|%s|%s)|(?:\{\s{0,}(%s)\s{0,}\})'\
     % (_RE_INTEGER, _RE_IDENT, _RE_TYPEREF, _RE_TYPEREF))
@@ -364,6 +370,8 @@ SYNT_RE_SET_ELT = re.compile( \
     '(?:^\s{0,})(?:(%s)|(%s))(?:\s{0,}$)' % (_RE_TYPEREF, _RE_IDENT))
 SYNT_RE_CONTAINING = re.compile( \
     '(?:^\s{0,})(?:CONTAINING\s{1,}(%s))(?:\s{0,}$)' % (_RE_TYPEREF))
+SYNT_RE_CONSTRAINED_BY = re.compile( \
+    '(?:^\s{0,})(?:CONSTRAINED\s{1,}BY)')
 SYNT_RE_FLAG = re.compile('(?:^\s{0,})(OPTIONAL|UNIQUE|DEFAULT)')
 SYNT_RE_ALPHABET_LETTER = re.compile('^(?:\"(.)\"\|){0,}?(?:\"(.)\"){1}$')
 SYNT_RE_ALPHABET_WORD = re.compile('^\"(.*)\"$')
