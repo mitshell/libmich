@@ -113,7 +113,7 @@ class UENASSigProc(UESigProc):
     
     def process(self, naspdu=None):
         self._log('ERR', '[process] unsupported')
-        # feeds with any input NAS PDU value
+        # feeds with any input NAS PDU value received from the UE
     
     def postprocess(self, proc=None):
         # for postprocessing after a nested procedure has ended
@@ -121,7 +121,7 @@ class UENASSigProc(UESigProc):
     
     def output(self):
         self._log('ERR', '[output] unsupported')
-        # returns a dict ('Code', 'Kwargs') to configure the S1AP MME initiated procedure
+        # returns a NAS PDU to be sent to the UE
         return None
     
     def init_timer(self):
@@ -135,7 +135,7 @@ class UENASSigProc(UESigProc):
         # TODO: _end() the procedure
     
     def _end(self, state=None):
-        # remove EMM / ESM the procedure (after verifying it's on the procedure stack)
+        # remove the EMM / ESM procedure (after verifying it's on the procedure stack)
         if self.UE.Proc[self.Dom] and self == self.UE.Proc[self.Dom][-1]:
             self.UE.Proc[self.Dom].pop()
         # restore (or force) the EMM / ESM state
@@ -562,25 +562,24 @@ class EMMInformation(UENASSigProc):
         naspdu = EMM_INFORMATION()
         #
         if isinstance(self.Kwargs['NetFullName'], bytes):
-            naspdu.NetFullName.V > self.Kwargs['NetFullName']
-            naspdu.NetFullName.Trans = False
+            naspdu[3].V > self.Kwargs['NetFullName']
+            naspdu[3].Trans = False
         #
         if isinstance(self.Kwargs['NetShortName'], bytes):
-            naspdu.NetShortName.V > self.Kwargs['NetShortName']
-            naspdu.NetShortName.Trans = False
-        #
+            naspdu[4].V > self.Kwargs['NetShortName']
+            naspdu[4].Trans = False
         #
         if isinstance(self.Kwargs['TZ'], bytes):
-            naspdu.TZ.V > self.Kwargs['TZ'][0]
-            naspdu.TZ.Trans = False
+            naspdu[5].V > self.Kwargs['TZ'][0]
+            naspdu[5].Trans = False
         #
         if isinstance(self.Kwargs['TZTime'], bytes):
-            naspdu.TZTime.V > self.Kwargs['TZTime'][:7]
-            naspdu.TZTime.Trans = False
+            naspdu[6].V > self.Kwargs['TZTime'][:7]
+            naspdu[6].Trans = False
         #
         if isinstance(self.Kwargs['DTime'], bytes):
-            naspdu.DTime.V > self.Kwargs['DTime']
-            naspdu.DTime.Trans = False
+            naspdu[7].V > self.Kwargs['DTime']
+            naspdu[7].Trans = False
         #
         self._trace('DL', naspdu)
         self._end()
@@ -664,8 +663,8 @@ class PagingRequest(UENASSigProc):
         #
         if self.Kwargs['UEPagingID'] is None:
             if self.UE.EMM['TMSI'] is None:
-                # paging with IMSI
-                self.Kwargs['UEPagingID'] = ('iMSI', str(ID(self.UE.IMSI, 'IMSI')))
+                # paging with IMSI, BCD-encoded
+                self.Kwargs['UEPagingID'] = ('iMSI', encode_bcd(self.UE.IMSI))
             else:
                 # paging with MMEC, M-TMSI
                 self.Kwargs['UEPagingID'] = ('s-TMSI', {'mMEC': self.MME.MME_MMEC_BUF, 
@@ -704,8 +703,18 @@ class NASDownlinkNASTransport(UENASSigProc):
     Filter = []
     Timer = None
     Kwargs = {
-        'NASContainer': None, # contains the SMS-TP msg
+        'NASContainer': None, # contains the SMS-CP msg
         }
+    
+    def output(self):
+        naspdu = DOWNLINK_NAS_TRANSPORT()
+        #
+        if self.Kwargs['NASContainer'] is not None:
+            naspdu[3].V.Pt = self.Kwargs['NASContainer']
+        #
+        self._trace('DL', naspdu)
+        self._end()
+        return naspdu
 
 # LPP, 5.6.4, DOWNLINK GENERIC NAS TRANSPORT
 class DownlinkGenericNASTransport(UENASSigProc):
@@ -735,7 +744,7 @@ class DownlinkGenericNASTransport(UENASSigProc):
 class Attach(UENASSigProc):
     Dom = 'EMM'
     Type = (7, 65)
-    Filter = [(7, 67)] # an ATTACH COMPLETE to be sent by the UE, only if EPS bearer is activated
+    Filter = [(7, 67)] # an ATTACH COMPLETE to be sent by the UE, only if EPS bearer is activated or GUTI is correctly reallocated
     Timer = 'T3450' # only if EPS bearer is activated
     Kwargs = {
         # for ACCEPT
@@ -925,20 +934,13 @@ class Attach(UENASSigProc):
         # TODO: EMMCause, T3402, T3423, PLMNList, ECNList, EPSFeatSup, AddUpdRes, T3412ext
         #
         self._trace('DL', attacc)
-        if self._esm_resp[3]() == 193 and self.UE.ESM_CTXT_ACT:
-            # if the PDN REQ can be honoured with a DEFAULT CTX SETUP
-            # the setup of the DRB for the initial default ERAB-ID has been prepared in the DefaultEPSBearerCtxtAct procedure
-            # and an ATTACH COMPLETE is to be received from the UE afterwards
-            self.init_timer()
-        else:
-            # otherwise, the Attach procedure ends up here
-            self._end(state='EMM-REGISTERED')
-            self._log('INF', 'completed, GUTI reallocated, TMSI {0}, PDN connection not setup'.format(hexlify(self._tmsi)))
+        # we always reassign GUTI, so an Attach complete is always expected
+        self.init_timer()
         return attacc
     
     def _process_complete(self, naspdu):
-        #
-        # process potential ESM msg
+        # We got the Attach complete
+        # process potential piggy-backed ESM msg
         esmpdu = naspdu[3].getobj()
         esm_resp = self.UE._process_naspdu(esmpdu)
         #assert(esm_resp is None)
@@ -1278,6 +1280,26 @@ class NASUplinkNASTransport(UENASSigProc):
     Filter = []
     Timer = None
     Kwargs = {}
+    
+    def process(self, naspdu):
+        # trace the NAS msg content
+        self._trace('UL', naspdu)
+        #
+        # process the NAS container in the UE SMS-CP stack
+        smscp_resp = self.UE.process_smscp( naspdu[3].V() )
+        self._end()
+        if smscp_resp is not None:
+            # if multiple SMS-CP PDU have to be returned to the UE
+            if isinstance(smscp_resp, list):
+                ret = []
+                for resp in smscp_resp:
+                    proc = self.UE.init_nas_proc(NASDownlinkNASTransport, NASContainer=resp)
+                    ret.append( proc.output() )
+                return ret
+            else:
+                # if a single SMS-CP PDU has to be returned to the UE
+                proc = self.UE.init_nas_proc(NASDownlinkNASTransport, NASContainer=smscp_resp)
+                return proc.output()
 
 # LPP / LCS, 5.6.4, UPLINK GENERIC NAS TRANSPORT
 class UplinkGenericNASTransport(UENASSigProc):

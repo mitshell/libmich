@@ -185,6 +185,12 @@ def get_imsi(naspdu):
     else:
         return None
 
+def encode_bcd(s):
+    if len(s) % 2:
+        s += '?'
+    digits = [ord(c)-48 for c in s]
+    return ''.join([chr(i[0]+(i[1]<<4)) for i in zip(digits[::2], digits[1::2])])
+
 def convert_str_bitstr(s=''):
     h = hexlify(s)
     return (int(h, 16), len(h)*4)
@@ -259,3 +265,11 @@ def decode_UERadioCapability(buf=''):
     #
     PER.VARIANT = per_v
     return UERadCap
+
+def map_bytes(arg):
+    if isinstance(arg, list):
+        return map(map_bytes, arg)
+    elif arg is None:
+        return None
+    else:
+        return bytes(arg)

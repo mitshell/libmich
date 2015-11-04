@@ -30,7 +30,7 @@
 # TS 36.413 #
 #############
 
-from socket import inet_ntoa
+from socket import inet_ntoa, inet_aton
 from .utils import *
 
 #-----------------#
@@ -128,6 +128,11 @@ class UES1SigProc(UESigProc):
         if nas_resp:
             # check if the NAS response needs to be wrapped in a specific S1AP message
             if self.UE._s1dl_struct is not None:
+                if isinstance(nas_resp, list):
+                    # this case should never happened
+                    self._log('ERR', 'packaging multiple DL NAS PDU within S1 ERAB procedure is not supported')
+                    self.UE._s1dl_struct = None
+                    return  
                 # S1 specific parameters are stored in self.UE._s1dl_struct
                 s1_struct = self.UE._s1dl_struct
                 if s1_struct['Code'] == 5:
@@ -158,8 +163,14 @@ class UES1SigProc(UESigProc):
                     self._ret_pdu.extend(proc.output())
                 self.UE._s1dl_struct = None
             else:
-                proc = self.UE.init_s1_proc(DownlinkNASTransport, NAS_PDU=nas_resp)
-                self._ret_pdu.extend(proc.output())
+                if isinstance(nas_resp, list):
+                    proc = []
+                    for nr in nas_resp:
+                        proc.append( self.UE.init_s1_proc(DownlinkNASTransport, NAS_PDU=nr) )
+                        self._ret_pdu.extend(proc[-1].output())
+                else:
+                    proc = self.UE.init_s1_proc(DownlinkNASTransport, NAS_PDU=nas_resp)
+                    self._ret_pdu.extend(proc.output())
         #
         elif self.UE._s1dl_struct is not None:
             s1_struct = self.UE._s1dl_struct
@@ -925,6 +936,46 @@ class DownlinkS1cdma2000tun(UES1SigProc):
 # Trace, 8.10.1, class 2
 class TraceStart(UES1SigProc):
     Code = 27
+    #
+    Kwargs = {
+        'E_UTRAN_Trace-ID': '\x02\xf8\x96\0\0\0\0\x01',
+        'InterfacesToTrace': (0b11100000, 8),
+        'TraceDepth': 'medium',
+        'TransportLayerAddress': (unpack('!I', inet_aton('127.0.1.100'))[0], 32), # traceCollectionEntityIPAddress
+        }
+    
+    def output(self):
+        # pack everything in the TraceActivation
+        traceActivation = {
+            'e-UTRAN-Trace-ID': self.Kwargs['E_UTRAN_Trace-ID'],
+            'interfacesToTrace': self.Kwargs['InterfacesToTrace'],
+            'traceDepth': self.Kwargs['TraceDepth'],
+            'traceCollectionEntityIPAddress': self.Kwargs['TransportLayerAddress']}
+        
+        # stack all protocol IEs
+        pIEs = []
+        pIEs.append({'value': ('MME-UE-S1AP-ID', self.MME_UE_ID),
+                     'criticality': 'reject',
+                     'id': 0})
+        #
+        pIEs.append({'value': ('ENB-UE-S1AP-ID', self.ENB_UE_ID),
+                     'criticality': 'reject',
+                     'id': 8})
+        #
+        pIEs.append({'value': ('TraceActivation', traceActivation),
+                     'criticality': 'ignore',
+                     'id': 25})
+        #
+        pdu = ('initiatingMessage',
+               {'procedureCode': self.Code,
+                'value': ('TraceStart', {'protocolIEs':pIEs}),
+                'criticality': 'ignore'})
+        #
+        # remove the procedure from the UE S1 procedure stack
+        if self.Code in self.UE.Proc['S1']:
+            del self.UE.Proc['S1'][self.Code]
+        self._trace('DL', pdu)
+        return [pdu]
 
 # Trace, 8.10.3, class 2
 class DeactivateTrace(UES1SigProc):
@@ -933,10 +984,82 @@ class DeactivateTrace(UES1SigProc):
 # Location reporting, 8.11.1, class 2
 class LocationReportingCtrl(UES1SigProc):
     Code = 31
+    #
+    Kwargs = {
+        'EventType': 'direct', # direct, change-of-serve-cell, stop-change-of-serve-cell
+        'ReportArea': 'ecgi'
+        }
+    
+    def output(self):
+        # pack everything in the TraceActivation
+        requestType = {
+            'eventType': self.Kwargs['EventType'],
+            'reportArea': self.Kwargs['ReportArea']}
+        
+        # stack all protocol IEs
+        pIEs = []
+        pIEs.append({'value': ('MME-UE-S1AP-ID', self.MME_UE_ID),
+                     'criticality': 'reject',
+                     'id': 0})
+        #
+        pIEs.append({'value': ('ENB-UE-S1AP-ID', self.ENB_UE_ID),
+                     'criticality': 'reject',
+                     'id': 8})
+        #
+        pIEs.append({'value': ('RequestType', requestType),
+                     'criticality': 'ignore',
+                     'id': 98})
+        #
+        pdu = ('initiatingMessage',
+               {'procedureCode': self.Code,
+                'value': ('LocationReportingControl', {'protocolIEs':pIEs}),
+                'criticality': 'ignore'})
+        #
+        # remove the procedure from the UE S1 procedure stack
+        if self.Code in self.UE.Proc['S1']:
+            del self.UE.Proc['S1'][self.Code]
+        self._trace('DL', pdu)
+        return [pdu]
+    
 
 # LPPa transport, 8.17.2, class 2
 class DownlinkUELPPaTransport(UES1SigProc):
     Code = 44
+    #
+    Kwargs = {
+        'Routing_ID': 0,
+        'LPPa_PDU': '\0\0'
+        }
+    
+    def output(self):
+        # stack all protocol IEs
+        pIEs = []
+        pIEs.append({'value': ('MME-UE-S1AP-ID', self.MME_UE_ID),
+                     'criticality': 'reject',
+                     'id': 0})
+        #
+        pIEs.append({'value': ('ENB-UE-S1AP-ID', self.ENB_UE_ID),
+                     'criticality': 'reject',
+                     'id': 8})
+        #
+        pIEs.append({'value': ('Routing-ID', self.Kwargs['Routing_ID']),
+                     'criticality': 'reject',
+                     'id': 148})
+        #
+        pIEs.append({'value': ('LPPa-PDU', self.Kwargs['LPPa_PDU']),
+                     'criticality': 'reject',
+                     'id': 147})
+        #
+        pdu = ('initiatingMessage',
+               {'procedureCode': self.Code,
+                'value': ('DownlinkUEAssociatedLPPaTransport', {'protocolIEs':pIEs}),
+                'criticality': 'ignore'})
+        #
+        # remove the procedure from the UE S1 procedure stack
+        if self.Code in self.UE.Proc['S1']:
+            del self.UE.Proc['S1'][self.Code]
+        self._trace('DL', pdu)
+        return [pdu]
 
 #--------------------------#
 # unimplemented procedures #

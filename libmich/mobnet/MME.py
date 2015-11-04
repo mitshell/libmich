@@ -76,6 +76,8 @@ class MMEd(object):
     TRACE_SEC = True
     # for logging NAS PDU decoded / encoded
     TRACE_NAS = True
+    # for logging SMS-CP PDU decoded / encoded
+    TRACE_SMS = True
     #
     #---------------------#
     # MME server settings #
@@ -163,19 +165,18 @@ class MMEd(object):
     def _log(self, logtype='DBG', msg=''):
         #
         # logtype: 'ERR', 'WNG', 'INF', 'DBG'
-        # specials: 'TRACE_SK', 'TRACE_ASN1', 'TRACE_NAS'
+        # specials: 'TRACE_SK', 'TRACE_ASN1', 'TRACE_SEC', 'TRACE_NAS', 'TRACE_SMS'
         #
-        if logtype[:8] == 'TRACE_SK' and self.TRACE_SK:
-            log('[{0}] [MME: {1}] {2}'.format(logtype, self.MME_GUMMEI, hexlify(msg)))
-        elif logtype[:10] == 'TRACE_ASN1' and self.TRACE_ASN1:
-            hdr, cont = msg.split('\n', 1)
-            log('[{0}] [MME: {1}] {2}\n{3}{4}{5}'.format(logtype, self.MME_GUMMEI, hdr, TRA_COLOR_START, cont, TRA_COLOR_END))
-        elif logtype[:9] == 'TRACE_SEC' and self.TRACE_SEC:
-            hdr, cont = msg.split('\n', 1)
-            log('[{0}] [MME: {1}] {2}\n{3}{4}{5}'.format(logtype, self.MME_GUMMEI, hdr, TRA_COLOR_START, cont, TRA_COLOR_END))
-        elif logtype[:9] == 'TRACE_NAS' and self.TRACE_NAS:
-            hdr, cont = msg.split('\n', 1)
-            log('[{0}] [MME: {1}] {2}\n{3}{4}{5}'.format(logtype, self.MME_GUMMEI, hdr, TRA_COLOR_START, cont, TRA_COLOR_END))
+        if logtype[:6] == 'TRACE_':
+            tracetype = logtype[6:]
+            if tracetype[:2] == 'SK' and self.TRACE_SK:
+                log('[{0}] [MME: {1}] {2}'.format(logtype, self.MME_GUMMEI, hexlify(msg)))
+            elif (tracetype[:4] == 'ASN1' and self.TRACE_ASN1) \
+              or (tracetype[:3] == 'SEC' and self.TRACE_SEC) \
+              or (tracetype[:3] == 'NAS' and self.TRACE_NAS) \
+              or (tracetype[:3] == 'SMS' and self.TRACE_SMS) :
+                hdr, cont = msg.split('\n', 1)
+                log('[{0}] [MME: {1}] {2}\n{3}{4}{5}'.format(logtype, self.MME_GUMMEI, hdr, TRA_COLOR_START, cont, TRA_COLOR_END))
         elif logtype in self.DEBUG:
             log('[{0}] [MME: {1}] {2}'.format(logtype, self.MME_GUMMEI, msg))
     
@@ -206,6 +207,9 @@ class MMEd(object):
         #
         self.UE = {}
         self.UEConfig = {}
+        # for joining UE though their network identities (IP@, phone num for SMS)
+        self.IP_IMSI = {}
+        self.Num_IMSI = {}
         if 'ue' in config:
             for imsi in config['ue']:
                 self.init_ue(imsi, **config['ue'][imsi])
@@ -344,9 +348,16 @@ class MMEd(object):
         self.UEConfig[imsi] = {}
         if 'IP' in kwargs:
             self.UEConfig[imsi]['IP'] = kwargs['IP']
+            self.IP_IMSI[kwargs['IP']] = imsi
         else:
             self.UEConfig[imsi]['IP'] = None
             self._log('WNG', 'missing GTP IP address for IMSI {0}'.format(imsi))
+        if 'Num' in kwargs:
+            self.UEConfig[imsi]['Num'] = kwargs['Num']
+            self.Num_IMSI[kwargs['Num']] = imsi
+        else:
+            self.UEConfig[imsi]['Num'] = None
+            self._log('WNG', 'missing phone number for IMSI {0}'.format(imsi))
     
     def init_enb(self, enb_gid, **kwargs):
         # kwargs keys: None, yet
@@ -846,3 +857,7 @@ class MMEd(object):
                     for esm_proc in reversed(ue.Proc['ESM']):
                         if hasattr(esm_proc, 'TimerStop') and T > esm_proc.TimerStop:
                             esm_proc.timeout()
+                if ue.Proc['SMS']:
+                    for sms_proc in ue.Proc['SMS'].values():
+                        if hasattr(sms_proc, 'TimerStop') and T > sms_proc.TimerStop:
+                            sms_proc.timeout()

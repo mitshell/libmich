@@ -37,6 +37,7 @@ from libmich.formats.L3Mobile import parse_L3, L3Call
 from libmich.formats.L3Mobile_NAS import Layer3NAS
 from libmich.formats.L3Mobile_EMM import *
 from libmich.formats.L3Mobile_ESM import *
+from libmich.formats.L3Mobile_SMS import CP_DATA, CP_ACK, CP_ERROR
 from libmich.formats.L3Mobile_IE import * # GUTI, TAIList, PLMN, UESecCap
 from libmich.formats.PPP import *
 
@@ -48,6 +49,7 @@ from CryptoMobile.Milenage import *
 from .utils import *
 from .UES1proc import *
 from .UENASproc import *
+from .UESMSproc import *
 from .ENBmgr import Paging
 
 
@@ -74,11 +76,12 @@ class UEd(SigStack):
         Proc_last: procedure code of the last S1 procedure to have sent an S1AP PDU to the eNB
     '''
     #
-    # to keep track of all S1 / NAS procedures and associated PDU
+    # to keep track of all S1 / NAS / SMS procedures and associated PDU
     # WNG: it can consume memory (nothing will be garbage-collected)
     # WNG: this is different from the MMEd.TRACE_* attributes
     TRACE_S1 = True
     TRACE_NAS = True
+    TRACE_SMS = True
     #
     #--------------#
     # NAS security #
@@ -166,9 +169,9 @@ class UEd(SigStack):
     # ESM procedures specific behaviour
     ESM_CTXT_ACT = True # to setup a DRB context when UE activate context / requests service and has E-RAB configured
     #
-    #------------------#
-    # EMM / ESM timers #
-    #------------------#
+    #------------------------#
+    # EMM / ESM / SMS timers #
+    #------------------------#
     #
     # GUTI realloc / attach accept
     T3450 = 1
@@ -209,9 +212,12 @@ class UEd(SigStack):
     # EPS bearer ctx deact (net-initiated), when not packed inside EMM message
     T3495 = 1
     #
-        
+    # SMS-CP
+    TC1star = 4
+    
+    
     def _log(self, logtype='DBG', msg=''):
-        if logtype[:9] == 'TRACE_NAS':
+        if logtype[:9] in ('TRACE_NAS', 'TRACE_SMS'):
             self.MME._log(logtype, '[UE: {0}]\n{1}'.format(self.IMSI, msg))
         else:
             self.MME._log(logtype, '[UE: {0}] {1}'.format(self.IMSI, msg))
@@ -247,6 +253,7 @@ class UEd(SigStack):
         self.init_sec()
         self.init_emm()
         self.init_esm()
+        self.init_sms()
     
     def init_cap(self):
         if not hasattr(self, 'CAP'):
@@ -326,6 +333,15 @@ class UEd(SigStack):
         elif apn in self.ESM_PDN:
             self.ESM_PDN[apn]['IP'][1] = ip
     
+    def init_sms(self):
+        if not hasattr(self, 'SMS'):
+            self.SMS = {}
+        # SMS-RP buffers, indexed by SMS-CP transaction ID
+        self.SMS['trans'] = {}
+        #
+        # SMS-CP procedures, indexed by SMS-CP transaction ID
+        self.Proc['SMS'] = {}
+    
     #--------------#
     # printing     #
     # device infos #
@@ -351,6 +367,8 @@ class UEd(SigStack):
             print('MS Classmark 3:\n{0}\n'.format(self.CAP['MSCm3'].show()))
         if self.CAP['DRX']:
             print('Discontinuous Rx:\n{0}\n'.format(self.CAP['DRX'].show()))
+        if self.CAP['VoicePref']:
+            print('Voice Preference:\n{0}\n'.format(self.CAP['VoicePref'].show()))
         if with_asn1 and self.CAP['UERadCap']:
             if len(self.CAP['UERadCap']) == 1:
                 print('UE Radio Capability (undecoded):\n{0}\n'.format(hexlify(self.CAP['UERadCap'][0])))
@@ -630,6 +648,9 @@ class UEd(SigStack):
         if self.Proc['ESM']:
             for esm_proc in reversed(self.Proc['ESM']):
                 esm_proc._end()
+        if self.Proc['SMS']:
+            for sms_proc in self.Proc['SMS'].values():
+                sms_proc._end()
         if self._proc_mme:
             self._log('DBG', '[nas_reset_proc] {0} MME-initiated procedure(s) resetted'.format(len(self._proc_mme)))
         self._proc_mme = deque()
@@ -849,7 +870,12 @@ class UEd(SigStack):
         # - SMC, which is used to force an SMC to happen
         # - Fresh, which indicates a new fresh NAS sec ctxt is available
         # see 33.401, 7.2.5.2.3
-        return self.SEC['SMC'] or self.SEC['Fresh']
+        fresh = self.SEC['Fresh']
+        if not self.ESM_CTXT_ACT and self.SEC['Fresh']:
+            # no DRB is going to be enabled, so we can disable the key freshness here
+            # instead of within s1_setup_initial_ctxt()
+            self.SEC['Fresh'] = False
+        return self.SEC['SMC'] or fresh
     
     #----------#
     # NAS-PDU  #
@@ -993,6 +1019,17 @@ class UEd(SigStack):
         return proc.process(sec_naspdu)
     
     def nas_output_sec(self, naspdu):
+        # Few procedures might return multiple NAS-PDU from a single uplink message (e.g. SMS)
+        # -> this specific message dispatch is handled here
+        if isinstance(naspdu, list):
+            retpdu = []
+            for np in naspdu:
+                retpdu.append( self._nas_output_sec(np) )
+            return retpdu
+        else:
+            return self._nas_output_sec(naspdu)
+    
+    def _nas_output_sec(self, naspdu):
         # apply the current security context to the NASPDU to output
         #
         # 1) if NAS security not activated, just void SH
@@ -1220,10 +1257,10 @@ class UEd(SigStack):
             self._proc.append(proc)
         return proc
     
-    #---------------#
-    # MME-initiated #
-    # procedures    #
-    #---------------#
+    #----------------#
+    # MME-initiated  #
+    # NAS procedures #
+    #----------------#
     
     def release_ctxt(self, cause=('nas', 'unspecified')):
         if self.ENB is None:
@@ -1250,7 +1287,11 @@ class UEd(SigStack):
         proc_nas = self.init_nas_proc(PagingRequest)
         # .output() generates self._s1dl_struct for the S1AP Paging command, but returns nothing (no NAS msg)
         proc_nas.output()
-        proc_nas.init_timer()
+        # if paging with IMSI, no timer is started, procedure just ends
+        if self.EMM['TMSI'] is not None:
+            proc_nas.init_timer()
+        else:
+            proc_nas._end()
         for enb_gid in self.MME.TA[tac]:
             enb = self.MME.ENB[enb_gid]
             # sending Paging to the enb
@@ -1283,3 +1324,95 @@ class UEd(SigStack):
         proc_s1 = self.init_s1_proc(DownlinkNASTransport, NAS_PDU=self.nas_output_sec(proc_nas.output()))
         for pdu in proc_s1.output():
             self.MME.send_enb(self.ENB.SK, pdu)
+    
+    
+    #------------#
+    # SMS-CP PDU #
+    # dispatcher #
+    #------------#
+    
+    def process_smscp(self, cpstr):
+        '''
+        process the SMS-CP PDU, as received within the NAS Container within the Uplink NAS transport
+        return an SMS-CP PDU (according to any ongoing SMS-CP procedure) or None
+        '''
+        # WNG: at this stage, cpstr is a str (bytes)
+        # check the Protocol Discriminator and SMS-CP Type
+        if len(cpstr) < 2:
+            self._log('WNG', '[process_smscp] SMS-CP message too short: {0}'.format(hexlify(cpstr)))
+            return None
+        if len(cpstr) > 1:
+            cpstr_0 = ord(cpstr[0])
+            ti, tio = cpstr_0>>7, (cpstr_0>>4)&0x7
+            pd, ty = cpstr_0&0xF, ord(cpstr[1])
+        #
+        # 0) check for invalid messages
+        if pd != 9 or ty not in (1, 4, 16):
+            #self._log('TRACE_SMS_UL', hexlify(cpstr))
+            self._log('WNG', '[process_smscp] invalid SMS-CP message, sending CP-ERROR 97: {0}'.format(hexlify(cpstr)))
+            # CP-ERROR, cause 97, message type non existent
+            cperr = CP_ERROR(TI=(1, 0)[ti], TIO=tio, CPCause=97)
+            self._log('TRACE_SMS_DL', cperr.show())
+            return bytes(cperr)
+        #
+        # 1) check for MO CP procedure
+        if ty == 1:
+            cppdu = CP_DATA()
+            cppdu.map(cpstr)
+            if tio in self.Proc['SMS']:
+                # SMS transaction already running for this slot
+                self._log('TRACE_SMS_UL', cppdu.show())
+                self._log('WNG', '[process_smsp] SMS-CP transaction ID already in use, sending STATUS 81')
+                cperr = CP_ERROR(TI=(1, 0)[ti], TIO=tio, CPCause=81)
+                self._log('TRACE_SMS_DL', cperr.show())
+                return bytes(cperr)
+            else:
+                # start a new SMS transaction
+                proc = SmsCpMo(self)
+                self.Proc['SMS'][tio] = proc
+                if self.TRACE_SMS:
+                    self._proc.append(proc)
+                return map_bytes( proc.process(cppdu) )
+        #
+        # 2) check for CP-ACK / CP-ERROR from UE
+        elif ty == 4:
+            cppdu = CP_ACK()
+        else:
+            cppdu = CP_ERROR()
+        cppdu.map(cpstr)
+        #
+        if tio not in self.Proc['SMS']:
+            # SMS transaction unknown
+            self._log('TRACE_SMS_UL', cppdu.show())
+            self._log('WNG', '[process_smsp] SMS-CP unknown transaction ID, sending STATUS 81')
+            cperr = CP_ERROR(TI=(1, 0)[ti], TIO=tio, CPCause=81)
+            self._log('TRACE_SMS_DL', cperr.show())
+            return bytes(cperr)
+        else:
+            proc = self.Proc['SMS'][tio]
+            return map_bytes( proc.process(cppdu) )
+    
+    def init_sms_proc(self, proc, **kwargs):
+        if 'TIO' not in kwargs:
+            # get any available TIO slot
+            kwargs['TIO'] = -1
+            for tio in range(0, 8):
+                if tio not in self.Proc['SMS']:
+                    kwargs['TIO'] = tio
+            if kwargs['TIO'] == -1:
+                self._log('ERR', '[init_sms_proc] no SMS-CP TIO available: unable to start procedure')
+                return None
+        proc = proc(self, **kwargs) 
+        self.Proc['SMS'][kwargs['TIO']] = proc
+        if self.TRACE_SMS:
+            self._proc.append(proc)
+        return proc
+    
+    #----------------#
+    # MME-initiated  #
+    # SMS procedures #
+    #----------------#
+    
+    def _run_smscpmt(self, **kwargs):
+        proc_cp = SmsCpMt(**kwargs)
+        proc_nas = self._run(NASDownlinkNASTransport, NASContainer=proc_cp.output())
