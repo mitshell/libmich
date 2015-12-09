@@ -62,7 +62,7 @@ class Record(Layer):
         ]
     
     def __init__(self, **kwargs):
-        Layer.__init_(self, **kwargs)
+        Layer.__init__(self, **kwargs)
         for i in self:
             i._endian = 'l'
 
