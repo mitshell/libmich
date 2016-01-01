@@ -277,6 +277,8 @@ class PER(ASN1.ASN1Codec):
     # CODEC customizations:
     # to build dictionnary for encoded ENUMERATED, CHOICE, ...
     _ENUM_BUILD_DICT = True
+    # to pad BIT STRING with CONTAINING object to octet-align it
+    _U_BITSTR_CONTAIN_PAD = True
     #
     # libmich layers' representation (only for basic types)
     _REPR_P = 'bin' # padding
@@ -610,12 +612,12 @@ class PER(ASN1.ASN1Codec):
         if isinstance(obj._cont, ASN1.ASN1Obj) and isinstance(obj._val, tuple) \
         and obj._val[0] == obj._cont._name:
             # corresponds to CONTAINING constraint type and value
-            # TODO: check if padding is required
             obj._cont._val = obj._val[1]
             # encode (octet-aligned)
             obj._cont._encode(offset=0)
-            # TODO: confirm padding is required
-            obj._cont._codec._add_P(obj._cont)
+            # padding is handled as a codec option
+            if self.is_aligned() or self._U_BITSTR_CONTAIN_PAD:
+                obj._cont._codec._add_P(obj._cont)
             val = obj._cont._msg
             size = val.bit_len()
             obj._cont._msg = None
@@ -698,7 +700,6 @@ class PER(ASN1.ASN1Codec):
         if isinstance(obj._cont, ASN1.ASN1Obj) and isinstance(obj._val, tuple) \
         and obj._val[0] == obj._cont._name:
             # corresponds to CONTAINING constraint type and value
-            # TODO: check if padding is required
             obj._cont._val = obj._val[1]
             # encode (octet-aligned)
             obj._cont._encode(offset=0)
@@ -1161,7 +1162,8 @@ class PER(ASN1.ASN1Codec):
         if pad_len:
             p = Bit('P', Pt=0, BitLen=pad_len, Repr=self._REPR_P)
             buf = p.map_ret(buf)
-            assert( p() == 0 )
+            if self._SAFE:
+                assert( p() == 0 )
             obj._msg.append( p )
             self._off += pad_len
         return buf
@@ -1487,10 +1489,10 @@ class PER(ASN1.ASN1Codec):
             # CONTAINING reference is used to decode the buffer
             obj._cont = contain['ref'].clone_light()
             buf = obj._cont._decode(buf)
-            # TODO: confirm padding is required
-            buf = obj._cont._codec._get_P(obj._cont, buf)
-            if self._SAFE:
-                assert(obj._cont._msg.bit_len() == size)
+            # padding may be used by the encoder
+            pad_len = size - obj._cont._msg.bit_len()
+            if pad_len:
+                buf = obj._cont._codec._get_P(obj._cont, buf)
             obj._msg.append(obj._cont._msg)
             obj._val = (obj._cont._name, obj._cont._val)
             obj._cont._msg = None
