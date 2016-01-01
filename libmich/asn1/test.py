@@ -830,14 +830,14 @@ def _test_rrc3g_prep():
     'cdcc61022a010310c8ef8ce91bca2c55c4a2f65cca2485d4a2375dca2bf5e4a28d5eca298df4a2e15fca2f9c',
     '208803b8fc128a5d43288294528b154728825492883f4b28b3f4d288234f28b395128b435328a5b5528bcd5728bd959289215b288dd5d2888d5f28afd6128b316328a1d6528a356728a636928b856b28be76d289a16f2888371289357328b3d7528831772893f7928a3d7b28b637d288c97f289714c4585858b82180bb2b7510a0160293ecadd4ff9c20',
     # RadioBearerReleaseFailure (UL-DCCH)
-    # here, the RNC encodes:
+    # here, the UE encodes:
     # laterNonCriticalExtensions, 
     # which is however empty (it contains only OPTIONAL components, and none 
     # are encoded...) and this is handled differently in Paging frames, where 
     # the laterNonCriticalExtensions are not encoded at all: damned RNC !!!
     '39a0',
     # RRCConnectionSetupComplete (UL-DCCH)
-    # here, the RNC encodes:
+    # here, the UE encodes:
     # dl-PhysChCapabilityFDD-v380ext, rrcConnectionSetupComplete-v3a0ext,
     # rrcConnectionSetupComplete-v3g0ext, 
     # which are however empty (they contain only OPTIONAL components, and none 
