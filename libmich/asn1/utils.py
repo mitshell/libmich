@@ -3,7 +3,7 @@
 # * Software Name : libmich 
 # * Version : 0.2.3
 # *
-# * Copyright © 2014. Benoit Michau. ANSSI.
+# * Copyright Â© 2014. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -144,7 +144,7 @@ class MODULE_OPT(object):
     EXT = None # None, 'IMPLIED'
 
 # GLOBAL: specific ASN.1 global tables
-def _make_GLOBAL():
+def _make_GLOBAL(glob_name=None):
     
     class GLOBAL(object):
         #
@@ -172,6 +172,9 @@ def _make_GLOBAL():
         def clear_tmp(cla):
             del cla.OBJ[:]
             del cla.SELF[:]
+    
+    if isinstance(glob_name, str):
+        GLOBAL.__name__ = glob_name
     
     return GLOBAL
 
