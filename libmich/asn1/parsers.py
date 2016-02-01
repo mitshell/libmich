@@ -3,7 +3,7 @@
 # * Software Name : libmich 
 # * Version : 0.2.3
 # *
-# * Copyright © 2014. Benoit Michau. ANSSI.
+# * Copyright Â© 2014. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -1379,7 +1379,10 @@ def _parse_value_class_type_enforce(Obj):
             # global reference to the subtype
             if val_str in GLOBAL.TYPE:
                 Obj['val'][ident] = GLOBAL.TYPE[val_str].clone_light()
-            # TODO: support integrated textual definition of the subtype
+            elif val_str == TYPE_NULL:
+                Obj['val'][ident] =  ASN1.ASN1Obj(type=TYPE_NULL, mode=0)
+            # TODO: support better integrated textual definition of the subtype
+            # not only NULL
             else:
                 raise(ASN1_PROC_LINK('%s: undefined CLASS open type: %s'\
                       % (Obj.get_fullname(), val_str)))
