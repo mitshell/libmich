@@ -33,7 +33,7 @@ from libmich.core.element import Bit, Str, Int, Layer, Block, show, debug
 
 class RTP(Layer):
     constructorList = [
-        Bit('ver', Pt=2,BitLen=2, Repr='hum'),
+        Bit('ver', Pt=2, BitLen=2, Repr='hum'),
         Bit('pad', Pt=0, BitLen=1),
         Bit('ext', Pt=0, BitLen=1),
         Bit('src', ReprName='Contributing source identifiers', Pt=0, \
@@ -76,6 +76,7 @@ codecs_dict = {
 #   - padding (\0) to align the payload on byte
 #
 class AMReff(Layer):
+    _byte_aligned = False
     constructorList = [
         Bit('CMR', ReprName='Codec Mode Request', Pt=0, BitLen=4, \
             Dict=codecs_dict, Repr='hum')]
@@ -85,6 +86,7 @@ class AMReff(Layer):
             self.extend(ToCeff)
 
 class ToCeff(Layer):
+    _byte_aligned = False
     constructorList = [
         Bit('F', ReprName='Frame following', Pt=0, BitLen=1),
         Bit('FT', ReprName='Frame Type index', Pt=0, BitLen=4, \

@@ -24,18 +24,17 @@
 # * Created : 2012-08-27 
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
+#*/
 
-#!/usr/bin/env python
-
-from libmich.core.element import Bit, Int, Str, Layer, \
-    show, debug
+from libmich.core.element import Bit, Int, Str, Layer
 from libmich.core.IANA_dict import IANA_dict
-from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
-    Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, \
-    Layer3
-from libmich.formats.L3Mobile_MM import CKSN_dict, IDType_dict
-from libmich.formats.L3Mobile_IE import ID, MSCm2, PLMNList, MSCm3
+#
+from .L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, Type4_LV, \
+     Type4_TLV, PD_dict, Layer3
+#
+# these are the libraries for IE interpretation
+from .L3Mobile_IE import ID, MSCm2, PLMNList, MSCm3
+from .L3Mobile_IEdict import *
 
 # TS 24.008 defines L3 signalling for mobile networks
 #
@@ -80,59 +79,6 @@ PS_MM_dict = {
     33:"GPRS - GMM information",
     }
 
-# 24008, 10.5.5.2
-AttachTypeFOR_dict = {
-    0 : 'No follow-on request pending',
-    1 : 'follow-on request pending',
-    }
-AttachType_dict = {
-    0 : 'GPRS Attach',
-    1 : 'GPRS Attach',
-    2 : 'Not used (only in old release)',
-    3 : 'Combined GPRS / IMSI attach',
-    4 : 'Emergency attach',
-    5 : 'GPRS Attach',
-    6 : 'GPRS Attach',
-    7 : 'GPRS Attach',
-    }
-# 24008, 10.5.5.1
-AttachRes_dict = {
-    1 : 'GPRS Attach',
-    3 : 'Combined GPRS / IMSI attach',
-    }
-AttachResFOP_dict = {
-    0 : 'Follow-on proceed',
-    1 : 'No follow-on proceed',
-    }
-
-# 24008, 10.5.5.18
-UpdateType_dict = {
-    0 : 'RA updating',
-    1 : 'Combined RA/LA updating',
-    2 : 'Combined RA/LA updating with IMSI attach',
-    3 : 'Periodic updating',
-    }
-
-# 24008, 10.5.5.17
-UpdateRes_dict = {
-    0 : 'RA updated',
-    1 : 'Combined RA/LA updated',
-    4 : 'RA updated and ISR activated',
-    5 : 'Combined RA/LA updated and ISR activated',
-    }
-
-# 24008, 10.5.5.4
-TMSIStatus_dict = {
-    0 : 'No valid TMSI available',
-    1 : 'valid TMSI available',
-    }
-
-# 24008, 10.5.5.7
-ForceStdby_dict = {
-    0 : 'Force to standby not indicated',
-    1 : 'Force to standby indicated',
-    }
-
 # 24008, 10.5.5.14
 GMMCause_dict = IANA_dict({ \
     0:'Protocol error, unspecified',
@@ -173,42 +119,6 @@ GMMCause_dict = IANA_dict({ \
     101:'Message not compatible with the protocol state',
     102:'Protocol error, unspecified',
     })
-
-# 24008, 10.5.5.5
-DetachTypeNet_dict = {
-    1:'Re-attach required',
-    2:'Re-attach not required',
-    3:'IMSI detach (after VLR failure)',
-    }
-DetachTypeMS_dict = {
-    1:'GPRS detach',
-    2:'IMSI detach',
-    3:'Combined GPRS/IMSI detach',
-    9:'Power switched off; GPRS detach',
-    10:'Power switched off; IMSI detach',
-    11:'Power switched off; combined GPRS/IMSI detach',
-    }
-
-# 24008, 10.5.5.3
-CiphAlg_dict = {
-    0 : 'ciphering not used',
-    1 : 'GEA/1',
-    2 : 'GEA/2',
-    3 : 'GEA/3',
-    4 : 'GEA/4',
-    5 : 'GEA/5',
-    6 : 'GEA/6',
-    7 : 'GEA/7',
-    }
-
-# 24008, 10.5.5.20
-ServiceType_dict = {
-    0 : 'Signalling',
-    1 : 'Data',
-    2 : 'Paging response',
-    3 : 'MBMS multicast service reception',
-    4 : 'MBMS broadcast service reception',
-    }
 
 ###################
 # message formats #

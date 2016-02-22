@@ -134,17 +134,18 @@ class Layer3NAS(Layer3):
             #if sh in (1, 3) or self.EEA not in (EEA1, EEA2, EEA3):
                 # if no payload is already there, just add a ciphered-like one
                 if len(self.elementList) == 4:
-                    self << Str('_enc')
+                    self.append( Str('_enc') )
                 # map directly the buffer onto the NAS payload
                 Layer3.map(self, s)
                 self._map_eps_id()
             else:
-                # keep track of all IE of the original packet
-                self._pay = self[4:]
-                # replace them with a dummy string
-                for ie in self._pay:
-                    self.remove(ie)
-                self << Str('_enc')
+                if len(self.elementList) > 4:
+                    # keep track of all IE of the original packet
+                    self._pay = self[4:]
+                    # replace them with a dummy string
+                    for ie in self._pay:
+                        self.remove(ie)
+                self.append( Str('_enc') )
                 Layer3.map(self, s)
         else:
             log(ERR, '[ERR] invalid Security Header value %i' % sh)

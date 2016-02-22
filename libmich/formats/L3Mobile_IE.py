@@ -31,32 +31,31 @@
 # exporting
 __all__ = [# 2G / 3G:
            'StrBCD', 'BCDNumber', 'BCDType_dict', 'NumPlan_dict',
-           'LAI', 'RAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3',
-           'PLMN', 'PLMNList', 'AuxState',
+           'LAI', 'RAI', 'ID', 'MSCm1', 'MSCm2', 'MSCm3', 'DRX', 'VoicePref',
+           'SuppCodecs', 'PLMN', 'PLMNList', 'AuxState', 'NetName',
            'BearerCap', 'CCCap', 'AccessTechnoType_dict', 'MSNetCap', 'MSRACap',
            'PDPAddr', 'QoS', 'ProtID', 'ProtConfig', 'PacketFlowID',
            # Supplementary Services
-           'Facility', 'SSversion',
-           'SS_Invoke', 'SS_ReturnResult', 'SS_ReturnError', 'SS_Reject',
+           'SSversion',
+           #'Facility', 'SS_Invoke', 'SS_ReturnResult', 'SS_ReturnError', 'SS_Reject',
            # LTE / EPC specifics:
            'IntegAlg_dict', 'CiphAlg_dict', 'NASKSI_dict', 'NASSecToEUTRA',
            'GUTI', 'EPSFeatSup', 'TAI', 'PartialTAIList', 'PartialTAIList0',
            'PartialTAIList1', 'PartialTAIList2', 'TAIList', 'UENetCap',
-           'UESecCap', 'APN_AMBR'
+           'UESecCap', 'APN_AMBR',
+           # SIM / USIM specifics:
+           'AccessTechnology'
            ]
 
 from struct import unpack
-# for convinience
-from binascii import hexlify
 #
-from libmich.core.element import Bit, Int, Str, Layer, \
-    show, debug, log, ERR, WNG, DBG
+from libmich.core.element import Bit, Int, Str, Layer
 from libmich.core.shtr import shtr
 from libmich.core.IANA_dict import IANA_dict
 from libmich.core.CSN1 import CSN1, BREAK, BREAK_LOOP
 #
-from libmich.formats.MCCMNC import MCC_dict, MNC_dict
-from libmich.formats.PPP import *
+from .MCCMNC import MCC_dict, MNC_dict
+from .PPP import *
 
 
 # TS 24.008 defines L3 signalling for mobile networks
@@ -594,7 +593,39 @@ class MSCm3(CSN1):
         Bit('EUTRAMeasurementAndReportingSupport', Pt=0, BitLen=1),
         Bit('PriorityBasedReselectionSupport', Pt=0, BitLen=1),
         Bit('spare', Pt=0, BitLen=1),
-        ]       
+        # Rel.9:
+        Bit('UTRACSGCellsReporting', Pt=0, BitLen=1),
+        Bit('VAMOSLevel', Pt=0, BitLen=2),
+        # Rel.10:
+        Bit('TIGHTERCapability', Pt=0, BitLen=2),
+        Bit('SelectiveCipheringDownlinkSACCH', Pt=0, BitLen=1),
+        # Rel.11:
+        Bit('CStoPSSRVCCfromGERANtoUTRA', Pt=0, BitLen=2),
+        Bit('CStoPSSRVCCfromGERANtoEUTRA', Pt=0, BitLen=2),
+        Bit('GERANNetworkSharing', Pt=0, BitLen=1),
+        Bit('EUTRAWidebandRSRQmeasurements', Pt=0, BitLen=1),
+        # Rel.12:
+        Bit('ERBand', Pt=0, BitLen=1),
+        Bit('UTRAMultipleFrequencyBandInd', Pt=0, BitLen=1),
+        Bit('EUTRAMultipleFrequencyBandInd', Pt=0, BitLen=1),
+        Bit('Extended TSCSetCapability', Pt=0, BitLen=1),
+        Bit('ExtendedEARFCNValueRange', Pt=0, BitLen=1)
+        ]
+
+# section 10.5.3.5a
+# Network name
+CodingScheme_dict = {
+    0 : 'GSM 7 bit default alphabet',
+    1 : 'UCS2 (16 bit)'
+    }    
+class NetName(Layer):
+    constructorList = [
+        Bit('ext', Pt=1, BitLen=1, Repr='hum'),
+        Bit('coding', Pt=0, BitLen=3, Repr='hum', Dict=CodingScheme_dict),
+        Bit('AddCI', Pt=0, BitLen=1, Repr='hum'),
+        Bit('spare_bits', Pt=0, BitLen=3, Repr='hum'),
+        Str('text', Pt='', Repr='hex')
+        ]
 
 # section 10.5.4.4
 # Auxiliary states
@@ -901,6 +932,109 @@ class PacketFlowID(Layer):
         Bit('spare', Pt=0, BitLen=1),
         Bit('PFlowID', Pt=0, BitLen=7, Dict=PFlowID_dict, Repr='hum'),
         ]
+
+#
+# 24.008, 10.5.5.6
+DRXS1_dict = {
+    0: 'unspecified',
+    6: '32',
+    7: '64',
+    8: '128',
+    9: '256',
+    }
+class DRX(Layer):
+    constructorList = [
+        Int('SPLIT_PG_CYCLE_CODE', Pt=0, Type='uint8'),
+        Bit('DRX_S1mode', Pt=0, BitLen=4, Repr='hum', Dict=DRXS1_dict),
+        Bit('SPLIT_on_CCCH', Pt=0, BitLen=1, Repr='hum'),
+        Bit('nonDRX_timer', Pt=0, BitLen=3, Repr='bin')
+        ]
+
+#
+# 24.008, 10.5.5.28, Voice domain preference
+VoiceDom_dict = {
+    0:'CS Voice only',
+    1:'IMS PS Voice only',
+    2:'CS voice preferred, IMS PS Voice as secondary',
+    3:'IMS PS voice preferred, CS Voice as secondary'
+    }
+class VoicePref(Layer):
+    constructorList = [
+        Bit('spare', Pt=0, BitLen=5, Repr='bin'),
+        Bit('UEusage', Pt=0, BitLen=1, Repr='hum',
+            Dict={0:'voice centric', 1:'data centric'}),
+        Bit('VoiceDom', ReprName='Voice domain preference for E-UTRAN', Pt=0,
+            BitLen=2, Repr='hum', Dict=VoiceDom_dict)
+        ]
+
+#
+# 24.008, 10.5.4.32, Supported codec list
+CodecSysID_dict = {
+    0:'GSM',
+    4:'UMTS'
+    }
+class CodecBitmap(Layer):
+    constructorList = [
+        Bit('TDMA_EFR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UMTS_AMR2', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UMTS_AMR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('HR_AMR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('FR_AMR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GSM_EFR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GSM_HR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GSM_FR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('reserved', Pt=0, BitLen=1, Repr='hum'),
+        Bit('reserved', Pt=0, BitLen=1, Repr='hum'),
+        Bit('OHR_AMR-WB', Pt=0, BitLen=1, Repr='hum'),
+        Bit('OFR_AMR-WB', Pt=0, BitLen=1, Repr='hum'),
+        Bit('OHR_AMR', Pt=0, BitLen=1, Repr='hum'),
+        Bit('UMTS_AMR-WB', Pt=0, BitLen=1, Repr='hum'),
+        Bit('FR_AMR-WB', Pt=0, BitLen=1, Repr='hum'),
+        Bit('PDC_EFR', Pt=0, BitLen=1, Repr='hum'),
+        ]
+    
+    def map(self, buf=''):
+        if len(buf) == 1:
+            for i in range(8, 16):
+                self[i].Trans = True
+        Layer.map(buf)
+
+class CodecSysID(Layer):
+    constructorList = [
+        Int('SysID', Pt=0, Type='uint8', Dict=CodecSysID_dict),
+        Int('BMLen', Type='uint8'),
+        CodecBitmap()
+        ]
+    
+    def __init__(self, **kwargs):
+        Layer.__init__(self, **kwargs)
+        self.BMLen.Pt = self[2]
+        self.BMLen.PtFunc = lambda x: len(x)
+    
+    def map(self, buf=''):
+        self[0:2].map(buf)
+        Len = self.BMLen()
+        if Len == 1:
+            self[2].map(buf[2:3])
+        elif Len == 2:
+            self[2].map(buf[2:4])
+        elif Len > 2:
+            self[2].map(buf[2:4])
+            self.append(Str('extra', Val=buf[4:2+Len], Len=Len-2, Repr='hex'))
+
+class SuppCodecs(Layer):
+    constructorList = [
+        CodecSysID()
+        ]
+    
+    def map(self, buf=''):
+        self[0].map(buf)
+        buf = buf[len(self[0]):]
+        while buf:
+            self.append( CodecSysID() )
+            self[-1].map(buf)
+            buf = buf[len(self[-1]):]
+
 #
 # 24.008, 10.5.5.12, MS network capability
 class ExtGEABits(CSN1):
@@ -1432,7 +1566,7 @@ class UENetCap(Layer):
         Bit('UEA4', Pt=0, BitLen=1, Repr='hum'),
         Bit('UEA5', Pt=0, BitLen=1, Repr='hum'),
         Bit('UEA6', Pt=0, BitLen=1, Repr='hum'),
-        Bit('UEA7', Pt=0, BitLen=1, Repr='hum'), # 1 byte
+        Bit('UEA7', Pt=0, BitLen=1, Repr='hum'), # EOO 5
         Bit('UCS2', Pt=0, BitLen=1, Repr='hum'),
         Bit('UIA1', Pt=0, BitLen=1, Repr='hum'),
         Bit('UIA2', Pt=0, BitLen=1, Repr='hum'),
@@ -1440,17 +1574,20 @@ class UENetCap(Layer):
         Bit('UIA4', Pt=0, BitLen=1, Repr='hum'),
         Bit('UIA5', Pt=0, BitLen=1, Repr='hum'),
         Bit('UIA6', Pt=0, BitLen=1, Repr='hum'),
-        Bit('UIA7', Pt=0, BitLen=1, Repr='hum'), # 2 bytes
-        Bit('spare', Pt=0, BitLen=2),
+        Bit('UIA7', Pt=0, BitLen=1, Repr='hum'), # EOO 6
+        Bit('ProSe-dd', Pt=0, BitLen=1, Repr='hum'),
+        Bit('ProSe', Pt=0, BitLen=1, Repr='hum'),
         Bit('H245_ASH', Pt=0, BitLen=1, Repr='hum'),
         Bit('ACC_CSFB', Pt=0, BitLen=1, Repr='hum'),
         Bit('LPP', Pt=0, BitLen=1, Repr='hum'), 
         Bit('LCS', Pt=0, BitLen=1, Repr='hum'), 
         Bit('SRVCC_CDMA', Pt=0, BitLen=1, Repr='hum'), 
-        Bit('NF', Pt=0, BitLen=1, Repr='hum'), # 3 bytes
-        Str('spare', Pt=8*'\0', Len=8, Repr='hex', Trans=True)
+        Bit('NF', Pt=0, BitLen=1, Repr='hum'), # EEO 7
+        Bit('spare', Pt=0, BitLen=7),
+        Bit('ProSe-dc', Pt=0, BitLen=1, Repr='hum'), # EEO 8
+        Str('spare', Pt=7*'\0', Len=7, Repr='hex', Trans=True)
         ]
-    def map(self, s=2*'\0'):
+    def map(self, s='\0\0'):
         s_len = len(s)
         if s_len == 2:
             for ie in self[16:]:
@@ -1461,9 +1598,15 @@ class UENetCap(Layer):
         elif s_len == 4:
             for ie in self[32:]:
                 ie.Trans = True
-        elif s_len > 4:
+        elif s_len == 5:
+            for ie in self[40:]:
+                ie.Trans = True
+        elif s_len == 6:
+            for ie in self[42:]:
+                ie.Trans = True
+        elif s_len > 6:
             self[-1].Trans = False
-            self.spare.Len = max(s_len-5, 8)
+            self.spare.Len = max(s_len-6, 7)
         Layer.map(self, s)
 
 class UESecCap(Layer):
@@ -1584,6 +1727,14 @@ class APN_AMBR(Layer):
 # TS 24.080: Supplementary Services IE
 # section 3
 ###
+# WNG: This implementation of SS is not working well
+# better use the ASN.1 version
+# >>> from libmich.asn1.processor import *
+# >>> ASN1.ASN1Obj.CODEC = BER
+# >>> load_mobule('SS')
+# >>> GLOBAL.TYPE['Facility']
+###
+'''
 #
 # section 3.6.1: Facility Component
 # ASN.1 BER codec (Tag-Length-Value style)
@@ -1938,6 +2089,7 @@ class Facility(Layer):
         else:
             self.append( BER_TLV() )
         Layer.map(self, s)
+'''
 
 # 24.080, section 3.7.2, SS version IE
 SSversion_dict = IANA_dict({
@@ -1948,3 +2100,30 @@ class SSversion(Layer):
     constructorList = [
         Int('SSversion', Pt=0, Type='uint8', Dict=SSversion_dict)
         ]
+
+# 31.102, USIM files
+# Access Technology
+class AccessTechnology(Layer):
+    constructorList = [
+        Bit('UTRAN', Pt=0, BitLen=1, Repr='hum'),
+        Bit('E_UTRAN', Pt=0, BitLen=1, Repr='hum'),
+        Bit('RFU', Pt=0, BitLen=6, Repr='bin'),
+        Bit('GSM', Pt=0, BitLen=1, Repr='hum'),
+        Bit('GSM_COMPACT', Pt=0, BitLen=1, Repr='hum'),
+        Bit('CDMA2000_HRPD', Pt=0, BitLen=1, Repr='hum'),
+        Bit('CDMA2000_1xRTT', Pt=0, BitLen=1, Repr='hum'),
+        Bit('RFU', Pt=0, BitLen=4, Repr='bin'),
+        ]
+    
+    def get_AT(self):
+        AT = []
+        if self.GSM(): AT.append('GSM')
+        if self.GSM_COMPACT(): AT.append('GSM COMPACT')
+        if self.CDMA2000_1xRTT(): AT.append('CDMA2000 1xRTT')
+        if self.CDMA2000_HRPD(): AT.append('CDMA2000 HRPD')
+        if self.UTRAN(): AT.append('UTRAN')
+        if self.E_UTRAN(): AT.append('E-UTRAN')
+        return AT
+    
+    def __repr__(self):
+        return '<[AT]: {0}>'.format('|'.join(self.get_AT()))

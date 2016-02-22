@@ -24,17 +24,18 @@
 # * Created : 2011-08-28 
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
+#*/
 
-#!/usr/bin/env python
-
-from libmich.core.element import Bit, Int, Str, Layer, \
-    show, debug
+from libmich.core.element import Bit, Int, Str, Layer
 from libmich.core.IANA_dict import IANA_dict
-from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
-    Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, \
-    Layer3
-from libmich.formats.L3Mobile_IE import LAI, ID, MSCm1, MSCm2, PLMNList
+#
+from .L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, Type4_LV, \
+     Type4_TLV, PD_dict, Layer3
+#
+# these are the libraries for IE interpretation
+from .L3Mobile_IE import LAI, ID, MSCm1, MSCm2, PLMNList
+from .L3Mobile_IEdict import *
+
 
 # TS 24.008 defines L3 signalling for mobile networks
 #
@@ -121,46 +122,6 @@ Reject_dict = IANA_dict({ \
     102:'private',
     111:'Protocol error, unspecified',
     112:'private'})
-
-# 24008, section 10.5.3.3
-# CM Service type
-CMService_dict = {
-    1:'Mobile originating call /'\
-      'packet mode connection',
-    2:'Emergency call',
-    4:'SMS',
-    8:'Supplementary service',
-    9:'Voice group call',
-    10:'Voice broadcast call',
-    11:'Location service'}
-
-# 24008, section 10.5.3.4
-# Identity type
-IDType_dict = IANA_dict({
-    0:'private',
-    1:'IMSI',
-    2:'IMEI',
-    3:'IMEISV',
-    4:'TMSI',
-    5:'private'})
-
-# 24008, section 10.5.3.5
-# Location updating type
-LUType_dict = {
-    0:'Normal location updating',
-    1:'Periodic updating',
-    2:'IMSI attach',
-    3:'Reserved',
-    8:'Normal location updating - request pending',
-    9:'Periodic updating - request pending',
-    10:'IMSI attach - request pending',
-    11:'Reserved - request pending'}
-
-# 24008, section 10.5.1.2
-# Ciphering Key Sequence Number unavailibility
-CKSN_dict={7:'No key is available (from MS)'\
-             '/ reserved (from network)'}
-
 
 ###################
 # message formats #

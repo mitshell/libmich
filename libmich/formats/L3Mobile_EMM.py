@@ -24,8 +24,7 @@
 # * Created : 2013-10-02
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-#!/usr/bin/env python
+#*/
 
 # exporting
 __all__ = ['EMMHeader', 'Layer3NASEMM',
@@ -45,29 +44,24 @@ __all__ = ['EMMHeader', 'Layer3NASEMM',
            'DOWNLINK_NAS_TRANSPORT', 'UPLINK_NAS_TRANSPORT',
            'CS_SERVICE_NOTIFICATION',
            'DOWNLINK_GENERIC_NAS_TRANSPORT', 'UPLINK_GENERIC_NAS_TRANSPORT',
-           'EMM_dict', 'EMMCause_dict', 'EPSAttRes_dict', 'EPSAttType_dict',
-           'MEDetType_dict', 'NetDetType_dict', 'EPSUpdType_dict',
-           'EPSUpdRes_dict', 'GUTIType_dict', 'PagingID_dict',
-           'GeneContType_dict', 'ServType_dict', 'CSFBResp_dict',
+           'EMM_dict', 'EMMCause_dict'
            ]
 
 
-from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
-     Block, show, log, ERR, WNG, DBG
+from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer
 
 # these are the libraries for the handling of L3 NAS msg
-from L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, \
-     Type4_LV, Type4_TLV, Type6_LVE, Type6_TLVE, PD_dict, Layer3
-from L3Mobile_NAS import Layer3NAS, SecHdr_dict
+from .L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, Type4_LV, \
+     Type4_TLV, Type6_LVE, Type6_TLVE, PD_dict, Layer3
+from .L3Mobile_NAS import Layer3NAS, SecHdr_dict
 #
 # for handling ESM container
-from L3Mobile_ESM import *
+from .L3Mobile_ESM import *
 #
-# these are the libraries for IE interpretation 
-from L3Mobile_MM import IDType_dict
-from L3Mobile_GMM import TMSIStatus_dict, CKSN_dict
-from L3Mobile_IE import LAI, ID, MSCm1, MSCm2, MSCm3, PLMNList, BCDNumber, \
+# these are the libraries for IE interpretation
+from .L3Mobile_IE import LAI, ID, MSCm1, MSCm2, MSCm3, PLMNList, BCDNumber, \
      NASKSI_dict
+from .L3Mobile_IEdict import *
 
 ###
 # TS 24.301, 11.5.0 specification
@@ -157,116 +151,10 @@ EMMCause_dict = {
     111 : "Protocol error, unspecified"
     }
 
-# section 9.9.3.10
-EPSAttRes_dict = {
-    1 : 'EPS only',
-    2 : 'combined EPS / IMSI attach'
-    }
-
-# section 9.9.3.11
-EPSAttType_dict = {
-    1 : 'EPS Attach',
-    2 : 'combined EPS / IMSI attach',
-    6 : 'EPS emergency attach',
-    7 : 'reserved'
-    }
-
-# section 9.9.3.7
-MEDetType_dict = {
-    0 : 'Combined EPS/IMSI detach',
-    1 : 'EPS detach',
-    2 : 'IMSI detach',
-    3 : 'Combined EPS/IMSI detach',
-    4 : 'Combined EPS/IMSI detach',
-    5 : 'Combined EPS/IMSI detach',
-    6 : 'reserved',
-    7 : 'reserved',    
-    8 : 'Combined EPS/IMSI detach; UE switch off',
-    9 : 'EPS detach; UE switch off',
-    10 : 'IMSI detach; UE switch off',
-    11 : 'Combined EPS/IMSI detach; UE switch off',
-    12 : 'Combined EPS/IMSI detach; UE switch off',
-    13 : 'Combined EPS/IMSI detach; UE switch off',
-    14 : 'reserved; UE switch off',
-    15 : 'reserved; UE switch off'
-    }
-NetDetType_dict = {
-    1 : 'Re-attach required',
-    2 : 'Re-attach not required',
-    3 : 'IMSI detach',
-    4 : 'Re-attach not required',
-    5 : 'Re-attach not required',
-    6 : 'reserved',
-    7 : 'reserved'
-    }
-
-# section 9.9.3.14
-EPSUpdType_dict = {
-    0 : 'TA updated',
-    1 : 'Combined TA / LA updating',
-    2 : 'Combined TA / LA updating with IMSI attach',
-    3 : 'periodic updating',
-    4 : 'unused (TA updating)',
-    5 : 'unused (TA updating)',
-    8 : 'TA updated; bearer establishment requested',
-    9 : 'Combined TA / LA updating; bearer establishment requested',
-    10 : 'Combined TA / LA updating with IMSI attach; '\
-         'bearer establishment requested',
-    11 : 'periodic updating; bearer establishment requested',
-    12 : 'unused (TA updating); bearer establishment requested',
-    13 : 'unused (TA updating); bearer establishment requested'
-    }
-
-# section 9.9.3.13
-EPSUpdRes_dict = {
-    0 : 'TA updated',
-    1 : 'Combined TA / LA updated',
-    4 : 'TA updated and ISR activated',
-    5 : 'Combined TA / LA updated and ISR activated'
-    }
-
-# section 9.9.3.45
-GUTIType_dict = {
-    0 : 'Native GUTI',
-    1 : 'Mapped GUTI'
-    }
-
-# section 9.9.3.25A
-PagingID_dict = {
-    0 : 'IMSI',
-    1 : 'TMSI'
-    }
-
-# section 9.9.3.42
-GeneContType_dict = {
-    0 : 'reserved',
-    1 : 'LTE Positioning Protocol (LPP)',
-    2 : 'Location Services (LCS)'
-    }
-
-# section 9.9.3.27
-ServType_dict = {
-    0 : 'Mobile originating CS fallback or 1xCS fallback',
-    1 : 'Mobile terminating CS fallback or 1xCS fallback',
-    2 : 'Mobile originating CS fallback emergency call or 1xCS fallback ' \
-        'emergency call',
-    3 : 'Unused; mobile originating CS fallback or 1xCS fallback',
-    4 : 'Unused; mobile originating CS fallback or 1xCS fallback',
-    8 : 'Packet services via S1',
-    9 : 'Unused; packet services via S1',
-    10 : 'Unused; packet services via S1',
-    11 : 'Unused; packet services via S1'
-    }
-
-# section 9.9.3.5
-CSFBResp_dict = {
-    0 : 'CS fallback rejected by the UE',
-    1 : 'CS fallback accepted by the UE'
-    }
-
 ###
 # NAS EMM message can embed ESM message into ESMContainer
 ###
+
 L3Mobile_ESM_Call = {
     193:ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST,
     194:ACTIVATE_DEFAULT_EPS_BEARER_CTX_ACCEPT,
@@ -292,6 +180,7 @@ L3Mobile_ESM_Call = {
     219:ESM_NOTIFICATION,
     232:ESM_STATUS
     }
+
 class Layer3NASEMM(Layer3NAS):
     # this is done the dirty way...
     #
@@ -365,14 +254,15 @@ class ATTACH_REQUEST(Layer3NASEMM):
             Type4_TLV('SuppCodecs', ReprName='Supported Codecs List',
                       T=0x40, V='\0\0\0'),
             Type1_TV('AddUpdType', ReprName='Additional Update Type', T=0xF,
-                     V=0),
+                     V=0, Dict=AddUpdType_dict),
             Type4_TLV('VoicePref', ReprName='Voice Domain Preference', T=0x5D,
                       V='\0'),
-            Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0),
+            Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0,
+                     Dict=DevProp_dict),
             Type1_TV('GUTIType', ReprName='Old GUTI Type', T=0xE, V=0,
                      Dict=GUTIType_dict),
             Type1_TV('MSFeatSup', ReprName='MS Net Feature Support', 
-                     T=0xC, V=0),
+                     T=0xC, V=0, Dict=MSFeatSup_dict),
             Type4_TLV('NRIContainer', ReprName='TMSI-based NRI Container',
                       T=0x10, V=2*'\0')
             ])
@@ -513,14 +403,15 @@ class TRACKING_AREA_UPDATE_REQUEST(Layer3NASEMM):
             Type4_TLV('SuppCodecs', ReprName='Supported codecs list',
                       T=0x40, V='\0\0\0'),
             Type1_TV('AddUpdType', ReprName='Additional Update Type', T=0xF,
-                     V=0),
+                     V=0, Dict=AddUpdType_dict),
             Type4_TLV('VoicePref', ReprName='Voice domain preference', T=0x5D,
                       V='\0'),
             Type1_TV('GUTIType', ReprName='Old GUTI Type', T=0xE, V=0, 
                      Dict=GUTIType_dict),
-            Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0),
+            Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0,
+                     Dict=DevProp_dict),
             Type1_TV('MSFeatSup', ReprName='MS Net Feature Support', 
-                     T=0xC, V=0),
+                     T=0xC, V=0, Dict=MSFeatSup_dict),
             Type4_TLV('NRIContainer', ReprName='TMSI-based NRI Container',
                       T=0x10, V=2*'\0')
             ])
@@ -622,7 +513,8 @@ class EXTENDED_SERVICE_REQUEST(Layer3NASEMM):
             Type1_TV('CSFBResp', T=0xB, V=0, Dict=CSFBResp_dict),
             Type4_TLV('EPSCtxStat', ReprName='EPS Bearer Context Status',
                       T=0x57, V=2*'\0'),
-            Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0)
+            Type1_TV('DevProp', ReprName='Device Properties', T=0xD, V=0,
+                     Dict=DevProp_dict)
             ])
         self._post_init(with_options, **kwargs)
 
@@ -788,8 +680,8 @@ class EMM_INFORMATION(Layer3NASEMM):
     def __init__(self, with_options=False, with_security=False, **kwargs):
         Layer3NASEMM.__init__(self, with_security)
         self.extend([ \
-            Type4_TLV('NetFullName', T=0x43, V='\0'),
-            Type4_TLV('NetShortName', T=0x45, V='\0'),
+            Type4_TLV('NetFullName', T=0x43, V='\x80'),
+            Type4_TLV('NetShortName', T=0x45, V='\x80'),
             Type3_TV('TZ', ReprName='Local Time Zone', T=0x46, \
                      V='\0', Len=1),
             Type3_TV('TZTime', ReprName='Time Zone and Time',\

@@ -129,7 +129,7 @@ def load_module(name='', GLOB=GLOBAL):
             GLOB.VALUE[obj_name] = obj
         elif obj['mode'] == 2:
             GLOB.SET[obj_name] = obj
-    log('%s: %s objects loaded into GLOBAL' % (name, len(obj_list)))
+    log('%s: %s objects loaded into %s' % (name, len(obj_list), GLOB.__name__))
 
 def generate_modules(mods=MODULES):
     '''
@@ -535,8 +535,7 @@ def process_module_content_pass(obj_num, obj_list):
         log('unable to process %s objects:' % obj_num[-1])
         for obj in GLOBAL.OBJ:
             log(obj['name'])
-        log('can be a missing IMPORT directive, a circular reference '\
-            'or a self reference')
+        log('can be a missing IMPORT directive or a circular reference')
         raise(ASN1_PROC_LINK('bad reference... no luck'))
 
 #------------------------------------------------------------------------------#

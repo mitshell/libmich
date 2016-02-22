@@ -28,12 +28,15 @@
 
 #!/usr/bin/env python
 
-from libmich.core.element import Bit, Int, Str, Layer, \
-    show, debug
+from libmich.core.element import Bit, Int, Str, Layer
 from libmich.core.IANA_dict import IANA_dict
-from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
-    Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, Layer3
-from libmich.formats.L3Mobile_IE import QoS, PDPAddr, ProtConfig
+
+from .L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, Type4_LV, \
+     Type4_TLV, PD_dict, Layer3
+#
+# these are the libraries for IE interpretation
+from .L3Mobile_IE import QoS, PDPAddr, ProtConfig
+from .L3Mobile_IEdict import *
 
 # TS 24.008 defines L3 signalling for mobile networks
 #
@@ -84,18 +87,6 @@ PS_SM_dict = {
     93:"GPRS - Notification",
     }
 
-# 24008, 10.5.6.9
-LLCSAPI_dict = {
-    0 : 'LLC SAPI not assigned',
-    }
-
-# 24008, 10.5.6.17
-RequestType_dict = {
-    1 : 'Initial request',
-    2 : 'Handover',
-    3 : 'Unused. Interpreted as initial request',
-    4 : 'Emergency',
-    }
 #
 # 24008, 10.5.6.6
 SMCause_dict = {

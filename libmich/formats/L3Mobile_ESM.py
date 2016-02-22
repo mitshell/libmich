@@ -24,8 +24,7 @@
 # * Created : 2013-10-02
 # * Authors : Benoit Michau 
 # *--------------------------------------------------------
-#*/ 
-#!/usr/bin/env python
+#*/
 
 # exporting
 __all__ = ['ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST',
@@ -45,20 +44,19 @@ __all__ = ['ACTIVATE_DEFAULT_EPS_BEARER_CTX_REQUEST',
            'BEARER_RESOURCE_MODIF_REQUEST', 'BEARER_RESOURCE_MODIF_REJECT',
            'ESM_INFORMATION_REQUEST', 'ESM_INFORMATION_RESPONSE',
            'ESM_NOTIFICATION', 'ESM_STATUS',
-           'ESM_dict', 'ESMCause_dict', 'PDNType_dict', 'ESMTransFlag_dict'
+           'ESM_dict', 'ESMCause_dict',
             ]
 
-from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
-     Block, show, log, ERR, WNG, DBG
+from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer
 
 # these are the libraries for the handling of L3 NAS msg
-from L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, \
-     Type4_LV, Type4_TLV, Type6_LVE, Type6_TLVE, PD_dict, Layer3
-from L3Mobile_NAS import Layer3NAS
+from .L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, Type4_LV, \
+     Type4_TLV, Type6_LVE, Type6_TLVE, PD_dict, Layer3
+from .L3Mobile_NAS import Layer3NAS
 #
-# these are the libraries for IE interpretation 
-from L3Mobile_SM import RequestType_dict
-from L3Mobile_IE import QoS, PDPAddr, ProtConfig
+# these are the libraries for IE interpretation
+from .L3Mobile_IE import QoS, PDPAddr, ProtConfig
+from .L3Mobile_IEdict import RequestType_dict, PDNType_dict, ESMTransFlag_dict
 
 ###
 # TS 24.301, 11.5.0 specification
@@ -154,16 +152,6 @@ ESMCause_dict = {
     112 : "APN restriction value incompatible with active EPS bearer context",
     }
 
-PDNType_dict = {
-    1 : 'IPv4',
-    2 : 'IPv6',
-    3 : 'IPv4v6',
-    }
-
-ESMTransFlag_dict = {
-    0 : 'Security protected ESM information transfer not required',
-    1 : 'Security protected ESM information transfer required',
-    }
 
 ###
 # NAS protocol headers

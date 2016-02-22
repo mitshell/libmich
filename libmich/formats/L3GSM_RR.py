@@ -44,12 +44,12 @@ __all__ = ['ASSIGNMENT_COMMAND', 'ASSIGNMENT_COMPLETE', 'ASSIGNMENT_FAILURE',
 from libmich.core.element import Bit, Int, Str, Layer, show, showattr, log, \
     ERR, WNG, DBG
 from libmich.core.IANA_dict import IANA_dict
-from L3Mobile_24007 import *
-from L2GSM import LengthRR
-from L3Mobile_MM import CKSN_dict
-from L3Mobile_IE import ID, LAI, MSCm2, MSCm3
-from L3GSM_IE import *
-from L3GSM_rest import *
+from .L3Mobile_24007 import *
+from .L2GSM import LengthRR
+from .L3Mobile_MM import CKSN_dict
+from .L3Mobile_IE import ID, LAI, MSCm2, MSCm3
+from .L3GSM_IE import *
+from .L3GSM_rest import *
 
 
 ######

@@ -34,18 +34,19 @@ __all__ = ['Type1_V', 'Type1_TV', 'Type2', 'Type3_V', 'Type3_TV', \
            'PD_dict', 'IE_lookup', \
            'RR_in_CCCH', 'StrRR', 'Layer3']
 
-from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
-     Block, show, log, ERR, WNG, DBG
-from libmich.core.IANA_dict import IANA_dict
 from binascii import hexlify
 from re import search
-
+#
+from libmich.core.element import Element, Str, Int, Bit, Layer, RawLayer, \
+     log, DBG, WNG, ERR
+from libmich.core.IANA_dict import IANA_dict
+#
 # these are the libraries for IE interpretation 
-from libmich.formats.L3Mobile_IE import *
-from libmich.formats.L3GSM_IE import *
-from libmich.formats.L3GSM_rest import *
-#
-#
+from .L3Mobile_IE import *
+from .L3GSM_IE import *
+from .L3GSM_rest import *
+
+
 ######
 # TS 24.007, section 11.2.3.1.1
 # Protocol Discriminator dict
@@ -84,6 +85,9 @@ IE_lookup = {
     'MSCm1' : MSCm1,
     'MSCm2' : MSCm2,
     'MSCm3' : MSCm3,
+    'DRX': DRX,
+    'VoicePref': VoicePref,
+    'SuppCodecs': SuppCodecs,
     'PLMN' : PLMN,
     'PLMNList' : PLMNList,
     'AuxState' : AuxState,
@@ -95,6 +99,8 @@ IE_lookup = {
     'PFlowID' : PacketFlowID,
     'MSNetCap' : MSNetCap,
     'MSRACap' : MSRACap,
+    'NetFullName' : NetName,
+    'NetShortName' : NetName,
     # L3Mobile_IE.py: LTE / EPC IE
     'GUTI' : GUTI, 
     'EPSFeatSup' : EPSFeatSup,
@@ -105,7 +111,7 @@ IE_lookup = {
     'CLI' : BCDNumber,
     'APN_AMBR' : APN_AMBR,
     # L3Mobile_IE.py: supplementary services
-    'Facility' : Facility,
+    #'Facility' : Facility,
     #'SSscreen' : SSscreen,
     'SSversion' : SSversion,
     # L3GSM_IE.py

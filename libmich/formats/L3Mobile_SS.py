@@ -28,12 +28,11 @@
 
 #!/usr/bin/env python
 
-from libmich.core.element import Bit, Int, Str, Layer, \
-    show, debug
+from libmich.core.element import Bit, Int, Str, Layer
 from libmich.core.IANA_dict import IANA_dict
-from libmich.formats.L3Mobile_24007 import Type1_TV, Type2, \
-    Type3_V, Type3_TV, Type4_LV, Type4_TLV, PD_dict, \
-    Layer3
+
+from .L3Mobile_24007 import Type1_TV, Type2, Type3_V, Type3_TV, Type4_LV, \
+     Type4_TLV, PD_dict, Layer3
 
 # TS 24.080 defines L3 signalling for Supplementary Services over 
 # mobile networks
