@@ -3,7 +3,7 @@
 # * Software Name : libmich
 # * Version : 0.3.0
 # *
-# * Copyright © 2015. Benoit Michau. ANSSI.
+# * Copyright Â© 2015. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -605,7 +605,8 @@ class MMEd(object):
             if enb_gid in self.ENBConfig:
                 self._create_enb_handler(enb_gid, sk)
                 return True
-        elif plmn_id == self.MME_PLMN:
+        # enb_gid = (plmn_id, enb_id)
+        elif enb_gid[0] == self.MME_PLMN:
             self._create_enb_handler(enb_gid, sk)
             return True
         return False
