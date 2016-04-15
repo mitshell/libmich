@@ -993,6 +993,7 @@ class PER(ASN1.ASN1Codec):
                     for n in name:
                         comp._cont[n] = obj._cont[n]
                         comp._val[n] = obj._val[n]
+                    comp._build_constructed_rootext()
                     self._wrap_open_type(obj, comp)
                     # clean up content objects
                     for n in name:
@@ -1746,12 +1747,12 @@ class PER(ASN1.ASN1Codec):
         w_bl = wrapped._msg.bit_len()
         if w_bl < size*8:
             # realign it with padding
-            buf = wrapped._codec._get_P(wrapped, buf, size*8 - w_bl)
+            buf = wrapped._codec._get_P(wrapped, buf, (8*size)-w_bl)
         elif w_bl > size * 8 and self._SAFE:
             assert()
         #
         obj._msg.append( wrapped._msg )
-        self._off += size*8
+        self._off += w_bl
         return buf
     
     #--------------------------------------------------------------------------#
@@ -1785,6 +1786,8 @@ class PER(ASN1.ASN1Codec):
             opt_names = filter(lambda x:x!=None, 
                                map(lambda x,y:x if y=='1' else None,
                                    obj._root_opt, obj._msg[-1].__bin__()))
+        else:
+            opt_names = []
         #
         # 4) decode each component in the root
         # including those optional / default indicated in the bitmap
@@ -1908,11 +1911,12 @@ class PER(ASN1.ASN1Codec):
                             if obj._cont[name]._type in (TYPE_OPEN, TYPE_ANY):
                                 # TODO: decode further OPEN TYPE with CONST_SET_REF
                                 pass
+                        comp_obj._build_constructed_rootext()
                         buf = self._unwrap_open_type(obj, buf, comp_obj)
                         # assign values and clean up content objects
                         for name in comp:
-                            obj._val[name] = obj._cont[name]._val
-                            obj._cont[name]._val = None
+                            obj._val[name] = comp_obj._val[name]
+                        comp_obj._val = None
                 else:
                     # 5) unknown extended field
                     buf = self._unwrap_open_type(obj, buf, None)
