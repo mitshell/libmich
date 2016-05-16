@@ -16,7 +16,7 @@ Installation
 Operating systems and Python version
 ------------------------------------
 
-The library is made to work with Python 2 (starting with 2.6).
+The library is made to work with Python 2.7.
 Python 3 is not supported, mainly because all binary buffers are handled with 
 the Python *str* object.
 It works on Windows and Linux, and should work on any other operating system
