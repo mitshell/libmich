@@ -801,7 +801,7 @@ class BER(ASN1.ASN1Codec):
             pad_len = ord(v_str[0])
             bit_len = 8*(len(v_str)-1)-pad_len
             V = Layer('V')
-            V.append(Int('pad_len'), Type='uint8')
+            V.append(Int('pad_len', Type='uint8'))
             V.append(Bit('val', BitLen=bit_len, Repr=self._REPR_BIT_STR))
             if pad_len > 0:
                 V.append(Bit('pad', BitLen=pad_len, Repr=self._REPR_BIT_STR))
@@ -842,7 +842,7 @@ class BER(ASN1.ASN1Codec):
                 raise(ASN1_BER_DECODER('%s: invalid CHOICE tag provided %s ' \
                       'compared to expected one %s' \
                       % (obj.get_fullname(), repr(obj._msg[0]), tag)))
-            tlv = obj._msg.get()
+            tlv = obj._msg.get()[0]
         else:
             # otherwise, tag is directly corresponding to the chosen object
             tlv = obj._msg
@@ -928,6 +928,9 @@ class BER(ASN1.ASN1Codec):
     def decode_seq_val(self, obj):
         tlv = self.handle_tag_dec(obj)
         compts = tlv.get()
+        # Empty sequence
+        if len(compts) == 0:
+            return
         # compts must be Layer containing BER_TLV layers
         if self._SAFE \
         and not all([isinstance(comp, BER_TLV) for comp in compts]):
@@ -1066,7 +1069,7 @@ class BER(ASN1.ASN1Codec):
                 raise(ASN1_BER_DECODER('%s: invalid OPEN TYPE tag provided %s ' \
                       'compared to expected one %s' \
                       % (obj.get_fullname(), repr(obj._msg[0]), tag)))
-            tlv = obj._msg.get()
+            tlv = obj._msg.get()[0]
         else:
             # otherwise, tag is directly corresponding to the chosen object
             tlv = obj._msg
