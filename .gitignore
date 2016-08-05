@@ -6,4 +6,5 @@ testing/*
 build/*
 *.pyc
 *.bak
+*.pck
 TODO
