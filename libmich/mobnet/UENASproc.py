@@ -26,6 +26,8 @@
 # *--------------------------------------------------------
 #*/
 
+from time import sleep
+
 #############
 # TS 24.301 #
 #############
@@ -132,7 +134,7 @@ class UENASSigProc(UESigProc):
     
     def timeout(self):
         self._log('WNG', 'timeout')
-        # TODO: _end() the procedure
+        self._end()
     
     def _end(self, state=None):
         # remove the EMM / ESM procedure (after verifying it's on the procedure stack)
@@ -164,6 +166,9 @@ class GUTIReallocation(UENASSigProc):
         'TAIList': None, # TAIList()
         }
     
+    # delay before sending the request (in sec.)
+    _tempo = 0
+    
     def output(self):
         #
         # change MME EMM state
@@ -182,6 +187,9 @@ class GUTIReallocation(UENASSigProc):
         if self.Kwargs['TAIList'] is not None:
             naspdu[4].Trans = False
             naspdu[4].V.Pt = self.Kwargs['TAIList']
+        #
+        if self._tempo:
+            sleep(self._tempo)
         #
         self._trace('DL', naspdu)
         # start timer and send pdu
@@ -224,6 +232,9 @@ class Authentication(UENASSigProc):
         #'AUTN': None, # obtained from self.MME.AUCd
         }
     
+    # delay before sending the request (in sec.)
+    _tempo = 0
+    
     def output(self):
         #
         # change MME EMM state
@@ -257,6 +268,9 @@ class Authentication(UENASSigProc):
         naspdu = EPS_AUTHENTICATION_REQUEST(NASKSI=self.Kwargs['NASKSI'],
                                             RAND=self._vec[0],
                                             AUTN=self._vec[2])
+        #
+        if self._tempo:
+            sleep(self._tempo)
         #
         # start timer and send pdu
         self._trace('DL', naspdu)
@@ -364,6 +378,9 @@ class SecurityModeControl(UENASSigProc):
         'NonceMME': None, # 4-bytes
         }
     
+    # delay before sending the request (in sec.)
+    _tempo = 0
+    
     def output(self):
         #
         # change MME EMM state
@@ -419,6 +436,9 @@ class SecurityModeControl(UENASSigProc):
             naspdu[9].Trans = False
             naspdu[9].V.Pt = self.Kwargs['NonceMME'][:4]
         #
+        if self._tempo:
+            sleep(self._tempo)
+        #
         self._trace('DL', naspdu)
         self.init_timer()
         return naspdu
@@ -470,6 +490,9 @@ class Identification(UENASSigProc):
         'IDType': None # 1: IMSI, 2: IMEI, 3: IMEISV, 4: TMSI, private/ffu else
         }
     
+    # delay before sending the request (in sec.)
+    _tempo = 0
+    
     def output(self):
         #
         # change MME EMM state
@@ -482,6 +505,9 @@ class Identification(UENASSigProc):
             naspdu = EPS_IDENTITY_REQUEST(IDType=1)
         else:
             naspdu = EPS_IDENTITY_REQUEST(IDType=self.Kwargs['IDType'])
+        #
+        if self._tempo:
+            sleep(self._tempo)
         #
         # start timer and send NAS PDU
         self._trace('DL', naspdu)
@@ -557,6 +583,9 @@ class EMMInformation(UENASSigProc):
         'DTime': None, # bytes, daylight saving time
         }
     
+    # delay before sending the request (in sec.)
+    _tempo = 0
+    
     def output(self):
         # prepare the NAS msg
         naspdu = EMM_INFORMATION()
@@ -581,6 +610,9 @@ class EMMInformation(UENASSigProc):
             naspdu[7].V > self.Kwargs['DTime']
             naspdu[7].Trans = False
         #
+        if self._tempo:
+            sleep(self._tempo)
+        #
         self._trace('DL', naspdu)
         self._end()
         return naspdu
@@ -600,6 +632,9 @@ class MMEDetach(UENASSigProc):
         'EMMCause': None # uint
         }
     
+    # delay before sending the request (in sec.)
+    _tempo = 0
+    
     def output(self):
         #
         # change MME EMM state
@@ -616,6 +651,9 @@ class MMEDetach(UENASSigProc):
         if self.Kwargs['EMMCause'] is not None:
             naspdu[5].Trans = False
             naspdu[5].V.Pt = chr(self.Kwargs['EMMCause'])
+        #
+        if self._tempo:
+            sleep(self._tempo)
         #
         self._trace('DL', naspdu)
         # start timer and send pdu
@@ -759,15 +797,15 @@ class Attach(UENASSigProc):
         'T3402': None, # uint < 255, to 1-byte bytes
         'T3423': None, # uint < 255, to 1-byte bytes
         'PLMNList': None, # PLMNList(), equivalent PLMN list
-        'ECNList': None, # bytes, list of BCD number (TBC)
-        'EPSFeatSup': None, # bytes
+        'ECNList': None, # # list of (emergency service category (uint8), emergency number (str of digit))
+        'EPSFeatSup': None, # uint < 255
         'AddUpdRes': None, # uint < 16
-        'T3412ext': None, # uint < 255, to 1-byte bytes
+        'T3412ext': None, # bytes
         # for REJECT
         'EMMCause': None, # uint < 255
         #'ESMContainer': None, # NAS ESM PDU
-        'T3346': None, # bytes
-        #'T3402': None, # bytes
+        'T3346': None, # uint < 255, to 1-byte bytes
+        #'T3402': None, # uint < 255, to 1-byte bytes
         }
     
     def process(self, naspdu):
@@ -811,7 +849,7 @@ class Attach(UENASSigProc):
             #
             self._end(state='EMM-DEREGISTERED')
             self._trace('DL', rej)
-            return naspdu
+            return rej
         #
         # check Last Visited TAI
         if not naspdu[10].is_transparent():
@@ -911,12 +949,19 @@ class Attach(UENASSigProc):
             # TMSI needed when combined IMEI / EPS attach is done
             # we take the MTMSI from the GUTI
             self.Kwargs['ID'] = ID(self._tmsi, type='TMSI')
-        # TODO: EMMCause
+        # TODO: handle EMMCause
         if self.Kwargs['T3402'] is None:
             self.Kwargs['T3402'] = self.UE.T3402
         if self.Kwargs['T3423'] is None:
             self.Kwargs['T3423'] = self.UE.T3423
-        # TODO: PLMNList, ECNList, EPSFeatSup, AddUpdRes
+        if self.Kwargs['PLMNList'] is None:
+            self.Kwargs['PLMNList'] = self.UE.ATT_EQU_PLMN
+        if self.Kwargs['ECNList'] is None:
+            self.Kwargs['ECNList'] = self.UE.ATT_ECN_LIST
+        if self.Kwargs['EPSFeatSup'] is None:
+            self.Kwargs['EPSFeatSup'] = self.UE.ATT_EPS_FEAT
+        if self.Kwargs['AddUpdRes'] is None:
+            self.Kwargs['AddUpdRes'] = self.UE.ATT_ADD_UPD
         if self.Kwargs['T3412ext'] is None:
             self.Kwargs['T3412ext'] = self.UE.T3412ext
         #
@@ -931,7 +976,42 @@ class Attach(UENASSigProc):
             attacc[9].V.Pt = self.Kwargs['LAI']
             attacc[10].Trans = False
             attacc[10].V.Pt = self.Kwargs['ID']
-        # TODO: EMMCause, T3402, T3423, PLMNList, ECNList, EPSFeatSup, AddUpdRes, T3412ext
+        # other attach accept options
+        if self.Kwargs['T3402'] is not None:
+            attacc[12].V.Pt = chr(self.Kwargs['T3402'])
+            attacc[12].Trans = False
+        if self.Kwargs['T3423'] is not None:
+            attacc[13].V.Pt = chr(self.Kwargs['T3423'])
+            attacc[13].Trans = False
+        if self.Kwargs['PLMNList'] is not None:
+            attacc[14].V.Pt = self.Kwargs['PLMNList']
+            attacc[14].Trans = False
+        if self.Kwargs['ECNList'] is not None:
+            # build the buffer corresponding to the list of emergency category / number (BCD encoded)
+            if isinstance(self.Kwargs['ECNList'], list):
+                ecnlist = []
+                for (cat, num) in self.Kwargs['ECNList']:
+                    num_enc = encode_bcd(num)
+                    ecnlist.extend( (chr(len(num_enc)+1), chr(cat), num_enc) )
+                attacc[15].V.Pt = ''.join(ecnlist)
+            attacc[15].Trans = False
+        if self.Kwargs['EPSFeatSup'] is not None:
+            attacc[16].V.Pt = chr(self.Kwargs['EPSFeatSup'])
+            attacc[16].Trans = False
+        if self.Kwargs['AddUpdRes'] is not None:
+            attacc[17].V.Pt = self.Kwargs['AddUpdRes']
+            attacc[17].Trans = False
+        if self.Kwargs['T3412ext'] is not None:
+            attacc[18].V.Pt = self.Kwargs['T3412ext']
+            attacc[18].Trans = False
+        #
+        #<EVIL>
+        for args in self.Kwargs:
+            if args[:4] == '_TLV':
+                T = int(args[4:7])
+                V = self.Kwargs[args]
+                attacc.append(Type4_TLV(T=T, V=V))
+        #</EVIL>
         #
         self._trace('DL', attacc)
         # we always reassign GUTI, so an Attach complete is always expected
@@ -1253,10 +1333,12 @@ class ServiceRequest(UENASSigProc):
         #
         # check if there are ERAB to activate (all should be activated)
         if self.UE.ESM_CTXT_ACT:
-            if self.UE.ESM['RAB']:
-                self.UE.s1_setup_initial_ctxt(self.UE.ESM['RAB'].keys())
-            else:
-                self._log('WNG', 'no ERAB to activate')
+            if self.UE.ESM['RAB'] == {}:
+                # this could happen in case corenet was restarted and lost RAB
+                # contexts for all UE
+                self._log('WNG', 'no existing ERAB to activate: creating a default one')
+                self.UE.nas_build_rab_default(5, self.UE.ESM_APN_DEF)
+            self.UE.s1_setup_initial_ctxt(self.UE.ESM['RAB'].keys())
         self._end()
         #
         # check if there are MME-initiated procedures to run
@@ -1340,7 +1422,6 @@ class DefaultEPSBearerCtxtAct(UENASSigProc):
         'ProtConfig': None, # bytes
         'ConType': None, # uint < 16
         }
-
     
     def output(self):
         #
@@ -1691,12 +1772,13 @@ class PDNConnectRequest(UENASSigProc):
         trans['ProcConfigResp'] = pc
         trans['ctxt'] = ctxt
         #
+        ebt = trans['EBT']
         apn = '{0}{1}'.format(chr(len(trans['APN'])), trans['APN'])
         pdn_addr = '{0}{1}'.format(chr(trans['PDNType']), ip)
         eqos = chr(ctxt['QCI'])
         #
         proc = self.UE.init_nas_proc(DefaultEPSBearerCtxtAct,
-                                     EBT=trans['EBT'],
+                                     EBT=ebt,
                                      TI=self._tid,
                                      EQoS=eqos,
                                      APN=apn,

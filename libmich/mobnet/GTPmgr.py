@@ -75,7 +75,7 @@ An example module TCPSYNACK is provided, it answers to TCP SYN packets sent by t
 3) That's all !
 '''
 # filtering exports
-__all__ = ['GTPUd', 'ARPd', 'DPI', 'DNSRESP', 'TCPSYNACK']
+__all__ = ['GTPUd', 'ARPd', 'DPI', 'MOD', 'DNSRESP', 'TCPSYNACK']
 
 import os
 #import signal
@@ -88,7 +88,7 @@ if os.name != 'nt':
         ntohs, htons, inet_aton, inet_ntoa, \
         AF_PACKET, SOCK_RAW, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
 else:
-    print('[ERR] GTPmgr : you\'re not on *nix system. It\'s not going to work:\n' \
+    print('[ERR] GTPmgr : you\'re not on *nix system. It\'s not going to work:\n'\
           'You need PF_PACKET socket')
 
 from libmich.formats.GTP import *
@@ -479,7 +479,7 @@ class GTPUd(object):
         self._GTP_out.len.PtFunc = None
         #
         # initialize the traffic statistics
-        self.init_stats()
+        self.stats = {}
         self.__prot_dict = {1:'ICMP', 6:'TCP', 17:'UDP'}
         # initialize the list of modules that can act on GTP-U payloads
         self.MOD = []
@@ -522,8 +522,8 @@ class GTPUd(object):
         if logtype in self.DEBUG:
             log('[{0}] [GTPUd] {1}'.format(logtype, msg))
     
-    def init_stats(self):
-        self.stats = {
+    def init_stats(self, ipsrc):
+        self.stats[ipsrc] = {
             'DNS':[], # for referencing IP of DNS servers requested
             'NTP':[], # for referencing IP of NTP servers requested
             'resolved':[], # for referencing domain name resolved
@@ -587,12 +587,16 @@ class GTPUd(object):
         # (damned ! Would it be possible ?!?)
         #
         self._GTP_in.map(buf)
+        #
         # in case GTP TEID is not correct, drop it 
         if self._GTP_in.teid() not in self._mobiles_teid:
+            self._log('WNG', 'unknown GTP TEID from RAN: {0}'.format(
+                      self._GTP_in.teid()))
             return
+        #
         # in case GTP does not contain UP data, drop it
         if self._GTP_in.msg() != 0xff:
-            self._log('WNG', 'GTP msg type unsupported: {0}'.format(
+            self._log('WNG', 'unsupported GTP type from RAN: {0}'.format(
                       repr(self._GTP_in.msg)))
             return
         #
@@ -602,16 +606,30 @@ class GTPUd(object):
             buflen -= 4
         ipbuf = buf[-buflen:]
         #
-        # drop dummy packets
+        # drop dummy IP packets
         if len(ipbuf) < 24:
             self._log('WNG', 'dummy packet from mobile dropped: {0}'.format(
                       hexlify(ipbuf)))
             return
+        #
+        # drop packet other than IPv4
+        ipver = ord(ipbuf[0]) >> 4
+        if ipver != 4:
+            self._log('WNG', 'unsupported IPv{0} packet from UE'.format(ipver))
+            return
+        #
+        # drop spoofed IP packet
+        if ipbuf[12:16] not in self._mobiles_ip:
+            self._log('WNG', 'spoofed IPv4 source address from UE: {0}'.format(
+                      inet_ntoa(ipbuf[12:16])))
+            return
+        #
+        ipsrc = inet_ntoa(ipbuf[12:16])
         ipdst = inet_ntoa(ipbuf[16:20])
         #
         # analyze the packet content for statistics
         if self.DPI:
-            self._analyze(ipbuf)
+            self._analyze(ipsrc, ipbuf)
         #
         # possibly process the UL GTP-U payload within modules
         try:
@@ -629,7 +647,7 @@ class GTPUd(object):
         #
         # possibly bypass blackholing rule for allowed ports
         # check if PROT / PORT is allowed in the whilelist
-        if self.WL_ACTIVE:
+        if self.BLACKHOLING is not False and self.WL_ACTIVE:
             dst, prot, pay = DPI.get_ip_dst_pay(ipbuf)
             # TCP:6, UDP:17
             if prot in (6, 17) and pay:
@@ -737,34 +755,38 @@ class GTPUd(object):
         self.GTP_TEID += 1
         return self.GTP_TEID
     
-    def _analyze(self, ipbuf):
+    def _analyze(self, ipsrc, ipbuf):
+        #
+        if ipsrc not in self.stats:
+            self.init_stats(ipsrc)
+        stats = self.stats[ipsrc]
         #
         dst, prot, pay = DPI.get_ip_dst_pay(ipbuf)
         # UDP
         if prot == 17 and pay:
             port = DPI.get_port(pay)
-            if (dst, port) not in self.stats['UDP']:
-                self.stats['UDP'].append((dst, port))
+            if (dst, port) not in stats['UDP']:
+                stats['UDP'].append((dst, port))
             # DNS
             if port == 53:
-                if dst not in self.stats['DNS']:
-                    self.stats['DNS'].append(dst)
+                if dst not in stats['DNS']:
+                    stats['DNS'].append(dst)
                 name = DPI.get_dn_req(pay[8:])
-                if name not in self.stats['resolved']:
-                    self.stats['resolved'].append(name)
-            elif port == 123 and dst not in self.stats['NTP']:
-                self.stats['NTP'].append(dst)
+                if name not in stats['resolved']:
+                    stats['resolved'].append(name)
+            elif port == 123 and dst not in stats['NTP']:
+                stats['NTP'].append(dst)
         # TCP
         elif prot == 6 and pay:
             port = DPI.get_port(pay)
-            if (dst, port) not in self.stats['TCP']:
-                self.stats['TCP'].append((dst, port))
+            if (dst, port) not in stats['TCP']:
+                stats['TCP'].append((dst, port))
         # ICMP
-        elif prot == 1 and pay and dst not in self.stats['ICMP']:
-            self.stats['ICMP'].append(dst)
+        elif prot == 1 and pay and dst not in stats['ICMP']:
+            stats['ICMP'].append(dst)
         # alien
         else:
-            self.stats['alien'].append(hexlify(ipbuf))
+            stats['alien'].append(hexlify(ipbuf))
         
 class DPI:
     
@@ -798,10 +820,13 @@ class DPI:
 
 class MOD(object):
     # This is a skeleton for GTP-U payloads specific handler.
-    # After It gets loaded by the GTPUd instance, it acts on each GTP-U payloads (UL and DL)
+    # After It gets loaded by the GTPUd instance,
+    # it acts on each GTP-U payloads (UL and DL)
     #
-    # In can work actively on GTP-U packets (possibly changing them) with TYPE = 0
-    # or passively (not able to change them), only getting copy of them, with TYPE = 1
+    # In can work actively on GTP-U packets (possibly changing them) 
+    # with TYPE = 0
+    # or passively (not able to change them), only getting copy of them,
+    # with TYPE = 1
     TYPE = 0
     
     # reference to the GTPUd instance
@@ -816,8 +841,10 @@ class MOD(object):
         pass
 
 class DNSRESP(MOD):
-    # this module answers to any DNS request incoming from UE (UL direction) with a single or random IP address
-    # to be used with GTPUd.BLACKHOLING capability to avoid UE getting DNS responses from real servers
+    # this module answers to any DNS request incoming from UE (UL direction) 
+    # with a single or random IP address
+    # to be used with GTPUd.BLACKHOLING capability to avoid UE getting 
+    # DNS responses from real servers
     TYPE = 1
     
     # put UDP checksum in DNS response
@@ -842,18 +869,21 @@ class DNSRESP(MOD):
         udp = UDP(src=udpdst, dst=udpsrc, with_cs=self.UDP_CS)
         # DNS request: transaction id, flags, questions, queries
         dnsreq = ipbuf[28:]
-        transac_id, questions, queries = dnsreq[0:2], unpack('!H', dnsreq[4:6])[0], dnsreq[12:]
+        transac_id, questions, queries = dnsreq[0:2], \
+                                         unpack('!H', dnsreq[4:6])[0], \
+                                         dnsreq[12:]
         if questions > 1:
             # not supported
             return
-        # DNS response: transaction id, flags, questions, answer RRs, author RRs, add RRs,
-        # queries, answers, autor nameservers, add records
+        # DNS response: transaction id, flags, questions, answer RRs, 
+        # author RRs, add RRs, queries, answers, autor nameservers, add records
         if self.RAND:
             ip_resp = _urandom(4)
         else:
             ip_resp = inet_aton(self.IP_RESP)
-        dnsresp = '{0}\x81\x80\0\x01\0\x01\0\0\0\0{1}\xc0\x0c\0\x01\0\x01\0\0\0\x20\0\x04{2}'\
-                  .format(transac_id, queries, ip_resp)
+        dnsresp = '{0}\x81\x80\0\x01\0\x01\0\0\0\0{1}\xc0\x0c'\
+                  '\0\x01\0\x01\0\0\0\x20\0\x04{2}'.format(
+                  transac_id, queries, ip_resp)
         
         # build the IPv4 header: invert src / dst addr
         ipsrc, ipdst = map(inet_ntoa, (ipbuf[12:16], ipbuf[16:20]))
@@ -871,7 +901,8 @@ class DNSRESP(MOD):
 
 class TCPSYNACK(MOD):
     # this module answers to TCP SYN request incoming from UE (UL direction)
-    # to be used with GTPUd.BLACKHOLING capability to avoid UE getting SYN-ACK from real servers
+    # to be used with GTPUd.BLACKHOLING capability to avoid UE getting SYN-ACK 
+    # from real servers
     TYPE = 1
     
     @classmethod
@@ -885,7 +916,8 @@ class TCPSYNACK(MOD):
             # not TCP SYN
             return
         
-        # build the TCP SYN-ACK: invert src / dst ports, seq num (random), ack num (SYN seq num + 1)
+        # build the TCP SYN-ACK: invert src / dst ports, seq num (random),
+        # ack num (SYN seq num + 1)
         tcpsrc, tcpdst, seq = unpack('!HHI', ip_pay[:8])
         tcp_synack = TCP(src=tcpdst, dst=tcpsrc, flags=['SYN', 'ACK'])
         tcp_synack[2] = randint(1, 4294967295) # seq num

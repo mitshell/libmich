@@ -98,6 +98,11 @@ class UEd(SigStack):
     # Attach reject codes
     ATT_REJ_LOC = 13 # reject due to bad location: 13: roaming not allowed in this TA
     ATT_REJ_ID = 22 # reject due to identity issue: 2: IMSI unknown in HLR, 11: PLMN not allowed, 12: TA not allowed, 22: congestion
+    # extended attach features
+    ATT_EQU_PLMN = None # equivalent PLMNs
+    ATT_ECN_LIST = [(0b1, '6669')] # list of (emergency service category, emergency number)
+    ATT_EPS_FEAT = 0b00101111 # EPS network feature support (uint8; bit0:IMS VoPS, bit1: EMC BS, bit2: EPC-LCS, bit34: CS-LCS, bit5: ESR PS)
+    ATT_ADD_UPD = 0b01 # additional update result (uint4; 0: no info, 1: CSFB not preferred, 2: SMS only, 3: reserved)
     #
     # Detach request codes, when initiated by the MME
     DET_TYPE = 1 # 1:Re-attach required, 2:Re-attach not required, 3:IMSI detach
@@ -106,7 +111,7 @@ class UEd(SigStack):
     # AUTH_POL: authentication rate policy: 1/X, if 0, never authenticates
     AUTH_POL_ATT = 1
     AUTH_POL_TAU = 1
-    AUTH_POL_SERV = 1
+    AUTH_POL_SERV = 10
     AUTH_AMF = b'\x80\x00' # Authentication Management Field
     # Authentication procedure specific behaviour
     AUTH_ACT = True # enable / disable authentication procedure (if disabled, SMC will fail)
@@ -676,12 +681,14 @@ class UEd(SigStack):
                     extgeabits = msnetcap.ExtGEABits # GEA 2 to 7
                     for i in range(0, 6):
                         ueseccap[34+i].Pt = extgeabits[i]()
+                    self.CAP['UESecCap'] = ueseccap
+                else:
+                    self.CAP['UESecCap'] = ueseccap[0:32]
             else:
                 # UENetCap has LTE alg only
                 for i in range(0, 16):
                     ueseccap[i].Pt = uenetcap[i]()
-            #
-            self.CAP['UESecCap'] = ueseccap
+                self.CAP['UESecCap'] = ueseccap
         else:
             self._log('ERR', 'unable to set UE security capabilities')
             self.CAP['UESecCap'] = None
@@ -725,7 +732,11 @@ class UEd(SigStack):
         for pid in req[3:]:
             pid_id = pid[0]()
             #
-            if pid_id == 5:
+            if pid_id == 3:
+                # request DNS IPv6@
+                pass
+            #
+            elif pid_id == 5:
                 # TODO
                 # support for network requested bearer control indicator
                 pass
@@ -739,7 +750,7 @@ class UEd(SigStack):
             #
             elif pid_id == 13:
                 # TODO
-                # request DNS@, this is actually sent within the IPCP payload
+                # request DNS IPv4@, this is actually sent within the IPCP payload
                 pass
             #
             elif pid_id == 16:
@@ -780,12 +791,49 @@ class UEd(SigStack):
             elif pid_id == 49187:
                 # PAP pwd auth
                 req_ncp = pid[2].getobj()
-                if req_ncp[0] != 1:
-                    # we only expect Configure-Request
+                if req_ncp[0]() == 1:
+                    # PAP Authenticate-Request
+                    pap_data = req_ncp[3]()
+                    # this id / pwd parsing is done the dirty way
+                    try:
+                        pap_id = pap_data[1:1+ord(pap_data[0])]
+                        pap_pwd = pap_data[2+ord(pap_data[0]):]
+                    except:
+                        pap_id, pap_pwd = '', '' 
+                    self._log('DBG', 'PDN config, PAP id / pwd: {0} / {1}'.format(pap_id, pap_pwd))
+                    resp_ncp = NCP(Code=2, Identifier=req_ncp[1](), Data='\0')
+                    resp.append( ProtID(ID=49187, content=resp_ncp) )
+                else:
                     self._log('WNG', 'PDN config for PAP, NCP code unsupported: {0}'.format(repr(req_ncp[0])))
-                    return None, None
-                resp_ncp = NCP(Code=2, Identifier=req_ncp[1](), Data='\0')
-                resp.append( ProtID(ID=49187, content=resp_ncp) )
+                    #return None, None
+            #
+            elif pid_id == 49699:
+                # CHAP pwd auth: there must be 2 NCP request (1 with CHAP chall, 1 with CHAP resp)
+                req_ncp = pid[2].getobj()
+                chap_val = [None, None, None] # id, chall, resp
+                if req_ncp[0]() == 1:
+                    # CHAP Challenge
+                    chap_data = req_ncp[3]()
+                    try:
+                        chap_val[1] = chap_data[1:1+ord(chap_data[0])]
+                        chap_val[0] = chap_data[2+ord(chap_data[0])]
+                    except:
+                        pass
+                elif req_ncp[0]() == 2:
+                    # CHAP Response
+                    chap_data = req_ncp[3]()
+                    try:
+                        chap_val[2] = chap_data[1:1+ord(chap_data[0])]
+                        if chap_val[0] is None:
+                            chap_val[0] = chap_data[2+ord(chap_data[0])]
+                    except:
+                        pass
+                    self._log('DBG', 'PDN config, CHAP id / chall / resp: {0} / {1} / {2}'.format(*chap_data))
+                    resp_ncp = NCP(Code=3, Identifier=req_ncp[1](), Data='')
+                    resp.append( ProtID(ID=49699, content=resp_ncp) )
+                else:
+                    self._log('WNG', 'PDN config for CHAP, NCP code unsupported: {0}'.format(repr(req_ncp[0])))
+                    #return None, None
             #
             else:
                 self._log('WNG', 'PDN config protocol ID unsupported: {0}'.format(repr(pid[0])))
@@ -1032,7 +1080,7 @@ class UEd(SigStack):
     def _nas_output_sec(self, naspdu):
         # apply the current security context to the NASPDU to output
         #
-        # 1) if NAS security not activated, just void SH
+        # 0) if NAS security not activated, just void SH
         if self.SEC['active'] is None:
             # ensure SH is null
             if hasattr(naspdu, 'SH'):
@@ -1121,16 +1169,19 @@ class UEd(SigStack):
         ret_naspdu = None
         #
         if sh == 0:
+            # clear text NAS PDU
             naspdu = parse_L3(naspdu_buf)
             ret_naspdu = self._process_naspdu(naspdu)
         #
         elif pd == 7 and sh in (1, 2, 3, 4):
+            # security-protected NAS PDU
             naspdu_sec = Layer3NAS()
             naspdu_sec.map(naspdu_buf)
             naspdu = self.nas_process_sec(naspdu_sec)
             ret_naspdu = self._process_naspdu(naspdu)
         #
         elif sh == 12:
+            # NAS service request
             naspdu = SERVICE_REQUEST()
             naspdu.map(naspdu_buf)
             ret_naspdu = self.nas_process_servreq(naspdu)
@@ -1399,10 +1450,11 @@ class UEd(SigStack):
             for tio in range(0, 8):
                 if tio not in self.Proc['SMS']:
                     kwargs['TIO'] = tio
+                    break
             if kwargs['TIO'] == -1:
                 self._log('ERR', '[init_sms_proc] no SMS-CP TIO available: unable to start procedure')
                 return None
-        proc = proc(self, **kwargs) 
+        proc = proc(self, **kwargs)
         self.Proc['SMS'][kwargs['TIO']] = proc
         if self.TRACE_SMS:
             self._proc.append(proc)
@@ -1414,5 +1466,5 @@ class UEd(SigStack):
     #----------------#
     
     def _run_smscpmt(self, **kwargs):
-        proc_cp = SmsCpMt(**kwargs)
+        proc_cp = self.init_sms_proc(SmsCpMt, **kwargs)
         proc_nas = self._run(NASDownlinkNASTransport, NASContainer=proc_cp.output())

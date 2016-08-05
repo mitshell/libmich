@@ -50,6 +50,7 @@ from libmich.formats.L3Mobile_IE import *
 from libmich.formats.L3Mobile_SMS import *
 #
 from .utils import *
+from .UEmgr import UEd
 
 # export filter
 __all__ = ['SMSRelay']
@@ -57,7 +58,7 @@ __all__ = ['SMSRelay']
 class SMSRelay(object):
     '''
     Very basic SMS relay
-    Receive, store, acknoledge (and does not forward...) SMS-RP messages
+    Receive, store, acknowledge (and does not forward...) SMS-RP messages
     '''
     #
     # verbosity level: list of log types to display when calling 
@@ -178,3 +179,27 @@ class SMSRelay(object):
         else:
             self._log('custom timestamping unhandled yet')
         return tp_msg
+    
+    def send_text(self, num, text='test', charset=0, fromnum='1337'):
+        # prepare a basic SMS_DELIVER message
+        sms = SMS_DELIVER()
+        sms.TP_MMS > 1 # no more message to be sent
+        sms.TP_Originating_Address.Num.encode(fromnum)
+        # TP_PID = 0x00, TP_DCS = 0x00
+        if charset in (1, 2, 3):
+            # not default charset (0: 7-bit SMS)
+            sms.TP_DCS.Charset > charset
+            sms.TP_UD > text
+        else:
+            charset = 0
+            sms.TP_UD.encode(text)
+        # send it over the UE SMS CP layer
+        #self._log('ready to send text message')
+        if isinstance(num, str):
+            self.send_tp(num, sms)
+        elif isinstance(num, (tuple, list)):
+            for n in num:
+                if isinstance(n, str):
+                    self.send_tp(n, sms)
+        self._log('INF', 'sending SMS text (charset {0}) from {1} to {2}: {3}'\
+                  .format(charset, fromnum, num, text))

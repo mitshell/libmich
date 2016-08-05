@@ -52,9 +52,9 @@ PER._ENUM_BUILD_DICT = False
 # S1AP ASN.1 db in GLOBAL, RRCLTE ASN.1 db in GLOBAL_RRCLTE, RRC3G ASN.1 db in GLOBAL_RRC3G
 try:
     load_module('S1AP')
-    GLOBAL_RRCLTE = _make_GLOBAL()
+    GLOBAL_RRCLTE = _make_GLOBAL('GLOBAL_RRCLTE')
     load_module('RRCLTE', GLOBAL_RRCLTE)
-    GLOBAL_RRC3G = _make_GLOBAL()
+    GLOBAL_RRC3G = _make_GLOBAL('GLOBAL_RRC3G')
     load_module('RRC3G', GLOBAL_RRC3G)
 except Exception as err:
     print('unable to load ASN.1 modules (S1AP, RRCLTE, RRC3G), exception: {0}'.format(err))
@@ -91,12 +91,13 @@ TRA_COLOR_START = '\x1b[94m'
 TRA_COLOR_END = '\x1b[0m'
 
 # logging facility
+_log_file = '/tmp/corenet.log'
 def log(msg='', withdate=True):
     #print('[%s] %s' % (datetime.now(), msg))
     if withdate:
-        open('/tmp/corenet.log', 'a').write('[{0}] {1}\n'.format(datetime.now(), msg))
+        open(_log_file, 'a').write('[{0}] {1}\n'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3], msg))
     else:
-        open('/tmp/corenet.log', 'a').write(msg)
+        open(_log_file, 'a').write(msg)
 
 # recursive copy routines (dict / list - friendly)
 def cpdict(d):

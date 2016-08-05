@@ -131,6 +131,8 @@ class MMEd(object):
     #UEConfig = {}
     # when an unknown UE gets connected, a default IP address is configured for it
     UE_UNKNOWN_IP = '192.168.100.250'
+    # when an unknown UE gets connected, an ID type (1: IMSI) has to be requested
+    UE_UNKNOWN_IDTYPE = [1]
     #
     # ENB references ENBd instances, indexed by eNB Global ID (tuple: PLMNIdentity (str), eNB-ID (hex-str))
     #ENB = {}
@@ -668,7 +670,8 @@ class MMEd(object):
                 # and delay the processing of the pdu
                 if imsi is None:
                     self._ue_delayed[mme_ue_id] = pdu
-                    self.send_enb(sk, self.ue_request_ident(enb_gid, mme_ue_id, enb_ue_id, ident_type=1))
+                    for req in self.ue_request_ident(enb_gid, mme_ue_id, enb_ue_id):
+                        self.send_enb(sk, req)
                 # otherwise, just setup the UE handler in the MME registries
                 # and pass it the S1AP PDU to process
                 else:
@@ -734,7 +737,8 @@ class MMEd(object):
             # send the buffer over the SCTP socket
             buf = bytes(self._S1AP_PDU)
             try:
-                sk.send(buf)
+                #sk.send(buf)
+                sk.sctp_send(buf, ppid = socket.htonl(18))
             except Exception as err:
                 self._log('ERR', '[eNB: {0}] unable to send SCTP message, exception: {1}'.format(enb_gid, err))
             else:
@@ -797,25 +801,27 @@ class MMEd(object):
                     return self.TMSI[tmsi]
         return None
     
-    def ue_request_ident(self, enb_gid, mme_ue_id, enb_ue_id, ident_type=1):
-        # send a NAS-PDU with IMSI request
-        naspdu = EPS_IDENTITY_REQUEST(IDType=ident_type)
-        pIEs = [{'value': ('MME-UE-S1AP-ID', mme_ue_id),
-                 'criticality': 'ignore',
-                 'id': 0},
-                {'value': ('ENB-UE-S1AP-ID', enb_ue_id),
-                 'criticality': 'reject',
-                 'id': 8},
-                {'value': ('NAS-PDU', bytes(naspdu)),
-                 'criticality': 'reject',
-                 'id': 26}]
+    def ue_request_ident(self, enb_gid, mme_ue_id, enb_ue_id):
+        reqs = []
+        for id_type in self.UE_UNKNOWN_IDTYPE:
+            naspdu = EPS_IDENTITY_REQUEST(IDType=id_type)
+            pIEs = [{'value': ('MME-UE-S1AP-ID', mme_ue_id),
+                     'criticality': 'ignore',
+                     'id': 0},
+                    {'value': ('ENB-UE-S1AP-ID', enb_ue_id),
+                     'criticality': 'reject',
+                     'id': 8},
+                    {'value': ('NAS-PDU', bytes(naspdu)),
+                     'criticality': 'reject',
+                     'id': 26}]
+            #
+            self._log('TRACE_NAS_DL', '[eNB: {0}] [UE: ]\n{1}'.format(enb_gid, naspdu.show()))
+            reqs.append( ('initiatingMessage',
+                         {'procedureCode': 11,
+                          'value': ('DownlinkNASTransport', {'protocolIEs':pIEs}),
+                          'criticality': 'ignore'}) )
         #
-        self._log('TRACE_NAS_DL', '[eNB: {0}] [UE: ]\n{1}'.format(enb_gid, naspdu.show()))
-        #
-        return ('initiatingMessage',
-                {'procedureCode': 11,
-                 'value': ('DownlinkNASTransport', {'protocolIEs':pIEs}),
-                 'criticality': 'ignore'})
+        return reqs
     
     def ue_retrieve_imsi(self, pdu, enb_gid):
         # retrieve the IMSI from the NAS-PDU response
