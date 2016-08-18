@@ -688,7 +688,7 @@ class UEd(SigStack):
                 # UENetCap has LTE alg only
                 for i in range(0, 16):
                     ueseccap[i].Pt = uenetcap[i]()
-                self.CAP['UESecCap'] = ueseccap
+                self.CAP['UESecCap'] = ueseccap[0:16]
         else:
             self._log('ERR', 'unable to set UE security capabilities')
             self.CAP['UESecCap'] = None
