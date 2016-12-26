@@ -178,7 +178,8 @@ class MMEd(object):
               or (tracetype[:3] == 'NAS' and self.TRACE_NAS) \
               or (tracetype[:3] == 'SMS' and self.TRACE_SMS) :
                 hdr, cont = msg.split('\n', 1)
-                log('[{0}] [MME: {1}] {2}\n{3}{4}{5}'.format(logtype, self.MME_GUMMEI, hdr, TRA_COLOR_START, cont, TRA_COLOR_END))
+                log('[{0}] [MME: {1}] {2}\n{3}{4}{5}'\
+                    .format(logtype, self.MME_GUMMEI, hdr, TRA_COLOR_START, cont, TRA_COLOR_END))
         elif logtype in self.DEBUG:
             log('[{0}] [MME: {1}] {2}'.format(logtype, self.MME_GUMMEI, msg))
     
@@ -261,7 +262,8 @@ class MMEd(object):
             self._ind_mmec = ind_mmec
             self._log('WNG', 'changing MME  index')
         #
-        # selecting the right identifier indexed and setting the right value for the MMEd instance
+        # selecting the right identifier indexed and setting the right value 
+        # for the MMEd instance
         if self._ind_gummei >= len(self.ConfigS1['ServedGUMMEIs']):
             gummei = self.ConfigS1['ServedGUMMEIs'][0]
             self._log('WNG', 'invalid MME GUMMEI index')
@@ -341,9 +343,11 @@ class MMEd(object):
         try:
             self._sk.bind(self.SERVER_ADDR)
         except:
-            raise(MMEErr('cannot bind SCTP socket on address {0}'.format(self.SERVER_ADDR)))
+            raise(MMEErr('cannot bind SCTP socket on address {0}'\
+                  .format(self.SERVER_ADDR)))
         #
-        self._log('DBG', 'SCTP server started on address {0}'.format(self.SERVER_ADDR))
+        self._log('DBG', 'SCTP server started on address {0}'\
+                  .format(self.SERVER_ADDR))
     
     def init_ue(self, imsi, **kwargs):
         # kwargs keys: 'IP'
@@ -411,7 +415,8 @@ class MMEd(object):
             self._sk.listen(self.SERVER_MAXCLI)
         #
         self._running = True
-        self._log('INF', 'SCTP server listening on address {0}'.format(self.SERVER_ADDR))
+        self._log('INF', 'SCTP server listening on address {0}'\
+                  .format(self.SERVER_ADDR))
         #
         # main MME infinite loop using the socket select() call:
         # the loop gets new SCTP stream,
@@ -525,7 +530,8 @@ class MMEd(object):
             self._S1AP_PDU.decode(buf)
         except:
             self.send_enb_err(sk, cause=('protocol', 'transfer-syntax-error'))
-            self._log('WNG', '[eNB: {0}] closing S1AP stream, S1AP PDU decoding error: {0}'.format(enb_gid, hexlify(buf)))
+            self._log('WNG', '[eNB: {0}] closing S1AP stream, S1AP PDU decoding error: {0}'\
+                      .format(enb_gid, hexlify(buf)))
             self.del_enb(enb_gid)
             return
         #
@@ -549,9 +555,10 @@ class MMEd(object):
             self.handle_s1setup(sk, pdu)
         #
         else:
-            self.send_enb_err(sk, cause=('protocol', 'message-not-compatible-with-receiver-state'))
-            self._log('WNG', 'new S1AP stream without S1Setup (type {0}, code {1}), closing S1AP stream'.format(
-                      pdu[0], pdu[1]['procedureCode']))
+            self.send_enb_err(sk, cause=('protocol',
+                                         'message-not-compatible-with-receiver-state'))
+            self._log('WNG', 'new S1AP stream without S1Setup (type {0}, code {1}), closing S1AP stream'\
+                      .format(pdu[0], pdu[1]['procedureCode']))
             sk.close()
     
     def handle_s1setup(self, sk, pdu):
@@ -583,7 +590,8 @@ class MMEd(object):
             if not ret:
                 # eNB not allowed
                 self.send_enb_err(sk, cause=('misc', 'unknown-PLMN'))
-                self._log('WNG', '[eNB: {0}] eNB not allowed, closing S1AP stream'.format(enb_gid))
+                self._log('WNG', '[eNB: {0}] eNB not allowed, closing S1AP stream'\
+                          .format(enb_gid))
                 sk.close()
                 return
             #
@@ -594,8 +602,10 @@ class MMEd(object):
                 ret_pdu = self.ENB[enb_gid].process_pdu(pdu)
             except Exception as err:
                 self._exc = sys.exc_info()
-                self._log('ERR', 'something went wrong in the ENBmgr code: {0}'.format(err))
-                print('ERROR: something went wrong in the ENBmgr code:\n{0}'.format(err))
+                self._log('ERR', 'something went wrong in the ENBmgr code: {0}'\
+                          .format(err))
+                print('ERROR: something went wrong in the ENBmgr code:\n{0}'\
+                      .format(err))
                 traceback.print_tb(self._exc[2])
             else:
                 self.add_enb(enb_gid)
@@ -648,8 +658,10 @@ class MMEd(object):
                 ret_pdu = enb.process_pdu(pdu)
             except Exception as err:
                 self._exc = sys.exc_info()
-                self._log('ERR', 'something went wrong in the ENBmgr code: {0}'.format(err))
-                print('ERROR: something went wrong in the ENBmgr code:\n{0}'.format(err))
+                self._log('ERR', 'something went wrong in the ENBmgr code: {0}'\
+                          .format(err))
+                print('ERROR: something went wrong in the ENBmgr code:\n{0}'\
+                      .format(err))
                 traceback.print_tb(self._exc[2])
             else:
                 if ret_pdu:
@@ -675,7 +687,9 @@ class MMEd(object):
                 # otherwise, just setup the UE handler in the MME registries
                 # and pass it the S1AP PDU to process
                 else:
-                    self.handle_ue_stream_msg(sk, enb_gid, imsi, pdu, initial=True, ue_id=(mme_ue_id, enb_ue_id))
+                    self.handle_ue_stream_msg(sk, enb_gid, imsi, pdu,
+                                              initial=True, 
+                                              ue_id=(mme_ue_id, enb_ue_id))
             #
             elif mme_ue_id in self._ue_delayed:
                 # we should get an EPS IDENTITY RESPONSE with IMSI here
@@ -683,7 +697,9 @@ class MMEd(object):
                 if imsi:
                     # setup the UE handler in the MME registries
                     # and pass it the delayed S1AP PDU to process
-                    self.handle_ue_stream_msg(sk, enb_gid, imsi, self._ue_delayed[mme_ue_id], initial=True, ue_id=(mme_ue_id, enb_ue_id))
+                    self.handle_ue_stream_msg(sk, enb_gid, imsi, self._ue_delayed[mme_ue_id],
+                                              initial=True,
+                                              ue_id=(mme_ue_id, enb_ue_id))
                 del self._ue_delayed[mme_ue_id]
             #
             elif mme_ue_id in self.UE_MME_ID:
@@ -693,13 +709,15 @@ class MMEd(object):
             else:
                 # unknown S1AP MME UE ID: error
                 self.send_enb_err(sk, cause=('radioNetwork', 'unknown-mme-ue-s1ap-id'))
-                self._log('WNG', '[eNB: {0}] unknown MME-UE-S1AP-ID {1}'.format(enb_gid, mme_ue_id))
+                self._log('WNG', '[eNB: {0}] unknown MME-UE-S1AP-ID {1}'\
+                          .format(enb_gid, mme_ue_id))
                 return
         #
         else:
             # invalid S1AP message
             self.send_enb_err(sk, cause=('protocol', 'semantic-error'))
-            self._log('WNG', '[eNB: {0}] unknown S1AP procedureCode {1}'.format(enb_gid, pdu[1]['procedureCode']))
+            self._log('WNG', '[eNB: {0}] unknown S1AP procedureCode {1}'\
+                      .format(enb_gid, pdu[1]['procedureCode']))
     
     def handle_ue_stream_msg(self, sk, enb_gid, imsi, pdu, initial=False,  ue_id=None):
         ue = self.ue_get_handler(imsi)
@@ -707,7 +725,7 @@ class MMEd(object):
             # InitialUEMessage
             self.UE_MME_ID[ue_id[0]] = imsi
             ue.s1_set(enb_gid, ue_id[0], ue_id[1])
-        #'''
+        #
         try:
             ret_pdu = ue.process_pdu(pdu)
         except Exception as err:
@@ -730,17 +748,20 @@ class MMEd(object):
         try:
             self._S1AP_PDU.encode(pdu)
         except Exception as err:
-            self._log('ERR', '[eNB: {0}] S1AP PDU encoding error: {1}'.format(enb_gid, err))
+            self._log('ERR', '[eNB: {0}] S1AP PDU encoding error: {1}'\
+                      .format(enb_gid, err))
             self._S1AP_ENC_ERR = pdu
         else:
-            self._log('TRACE_ASN1_DL', '[eNB: {0}]\n{1}'.format(enb_gid, self._S1AP_PDU._msg.show()))
+            self._log('TRACE_ASN1_DL', '[eNB: {0}]\n{1}'\
+                      .format(enb_gid, self._S1AP_PDU._msg.show()))
             # send the buffer over the SCTP socket
             buf = bytes(self._S1AP_PDU)
             try:
                 #sk.send(buf)
                 sk.sctp_send(buf, ppid = socket.htonl(18))
             except Exception as err:
-                self._log('ERR', '[eNB: {0}] unable to send SCTP message, exception: {1}'.format(enb_gid, err))
+                self._log('ERR', '[eNB: {0}] unable to send SCTP message, exception: {1}'\
+                          .format(enb_gid, err))
             else:
                 self._log('TRACE_SK_DL', buf)
     
@@ -815,7 +836,8 @@ class MMEd(object):
                      'criticality': 'reject',
                      'id': 26}]
             #
-            self._log('TRACE_NAS_DL', '[eNB: {0}] [UE: ]\n{1}'.format(enb_gid, naspdu.show()))
+            self._log('TRACE_NAS_DL', '[eNB: {0}] [UE: ]\n{1}'\
+                      .format(enb_gid, naspdu.show()))
             reqs.append( ('initiatingMessage',
                          {'procedureCode': 11,
                           'value': ('DownlinkNASTransport', {'protocolIEs':pIEs}),
@@ -830,7 +852,8 @@ class MMEd(object):
         nas_ie = pdu[1]['value'][1]['protocolIEs'][S1AP_NAS_OFFSET[pdu[1]['procedureCode']]]
         if nas_ie['value'][0] == 'NAS-PDU':
             naspdu = parse_L3(nas_ie['value'][1])
-            self._log('TRACE_NAS_UL', '[eNB {0}] [UE: ]\n{1}'.format(enb_gid, naspdu.show()))
+            self._log('TRACE_NAS_UL', '[eNB {0}] [UE: ]\n{1}'\
+                      .format(enb_gid, naspdu.show()))
             try:
                 ident = naspdu.ID.getobj()
             except:
