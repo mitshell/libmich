@@ -1205,7 +1205,7 @@ class UEd(SigStack):
         # check the Protocol Discriminator and Type
         pd, ty = naspdu.PD(), naspdu.Type()
         #
-        # 0) check for invalid messages
+        # 0) check for invalid or DetachRequest messages
         if pd not in (2, 7):
             self._log('TRACE_NAS_UL', naspdu.show())
             self._log('WNG', '[process_naspdu] invalid NAS message (PD {0}), sending STATUS 111'.format(pd, ty))
@@ -1213,7 +1213,7 @@ class UEd(SigStack):
             stat = EMM_STATUS(EMMCause=111)
             self._log('TRACE_NAS_DL', stat.show())
             return stat
-        if (pd == 7 and ty not in EMM_UEMsgType) or (pd == 2 and ty not in ESM_UEMsgType):
+        elif (pd == 7 and ty not in EMM_UEMsgType) or (pd == 2 and ty not in ESM_UEMsgType):
             self._log('TRACE_NAS_UL', naspdu.show())
             self._log('WNG', '[process_naspdu] invalid NAS message (PD {0}, Type {1}), sending STATUS 97'.format(pd, ty))
             # Cause 97: type non existent or not implemented
@@ -1223,6 +1223,13 @@ class UEd(SigStack):
                 stat = EMM_STATUS(EMMCause=97)
             self._log('TRACE_NAS_DL', stat.show())
             return stat
+        elif (pd, ty) == (7, 69):
+            # Detach requested by the UE, always prioritized over any other procedures
+            proc = UEDetach(self)
+            if self.TRACE_NAS:
+                self._proc.append(proc)
+            # the UEDetach procedure will clean up GTP tunnels, ESM contexts and all ongoing NAS procedures
+            return proc.process(naspdu)
         #
         # 1) check against any possible ongoing EMM procedure
         if self.Proc['EMM']:

@@ -833,6 +833,8 @@ class Attach(UENASSigProc):
         # ATTACH REQUEST:
         # if UE is attaching, it means it considers itself as DEREGISTERED
         self.UE.EMM['state'] = 'EMM-DEREGISTERED'
+        # reinit all ESM bearer contexts
+        self.UE.init_esm()
         #
         # check if the IMSI is allowed
         if self.UE.IMSI not in self.MME.UEConfig:
@@ -1063,8 +1065,12 @@ class UEDetach(UENASSigProc):
         #
         self._log('INF', 'type: {0}'.format(repr(dt)))
         self._end(state='EMM-DEREGISTERED')
+        # disable any GTP-U tunnels
         self.UE.gtp_disable()
+        # clear any ESM contexts
         self.UE.init_esm()
+        # clear all potential ongoing NAS procedures
+        self.UE.nas_reset_proc()
         #
         # release the S1 UE con
         self.UE.s1_release_ctxt(('nas', 'detach'))
