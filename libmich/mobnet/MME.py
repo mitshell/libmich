@@ -519,6 +519,10 @@ class MMEd(object):
         # read the STCP message content
         buf = bytes()
         buf = sk.recv(self.SERVER_BUFLEN)
+        # sk.sctp_recv() requires patching sctp_recv_msg() in pysctp/_sctp.c
+        # moreover, it looks like the sinfo struct with SCTP stream id 
+        # and other metadata is empty in any way...
+        #addr, flags, buf, notif = sk.sctp_recv(self.SERVER_BUFLEN)
         if not buf and enb_gid:
             # this is actually an eNB closing its STCP stream
             self.del_enb(enb_gid)
@@ -648,7 +652,7 @@ class MMEd(object):
             ret_pdu = ue.process(pdu)
             if ret_pdu:
                 for pdu in ret_pdu:
-                    self.send_enb(sk, pdu)
+                    self.send_enb(sk, pdu, uerel=True)
         #
         # check if it is an eNB-related PDU
         elif pdu[1]['procedureCode'] in S1APENBProcCodes:
@@ -683,7 +687,7 @@ class MMEd(object):
                 if imsi is None:
                     self._ue_delayed[mme_ue_id] = pdu
                     for req in self.ue_request_ident(enb_gid, mme_ue_id, enb_ue_id):
-                        self.send_enb(sk, req)
+                        self.send_enb(sk, req, uerel=True)
                 # otherwise, just setup the UE handler in the MME registries
                 # and pass it the S1AP PDU to process
                 else:
@@ -736,9 +740,9 @@ class MMEd(object):
         else:
             if ret_pdu:
                 for pdu in ret_pdu:
-                    self.send_enb(sk, pdu)
+                    self.send_enb(sk, pdu, uerel=True)
     
-    def send_enb(self, sk, pdu):
+    def send_enb(self, sk, pdu, uerel=False):
         # remind the eNB behind the socket
         if sk in self.ENBSk:
             enb_gid = self.ENBSk[sk]
@@ -756,9 +760,12 @@ class MMEd(object):
                       .format(enb_gid, self._S1AP_PDU._msg.show()))
             # send the buffer over the SCTP socket
             buf = bytes(self._S1AP_PDU)
+            if uerel:
+                stream_id = 1
+            else:
+                stream_id = 0
             try:
-                #sk.send(buf)
-                sk.sctp_send(buf, ppid = socket.htonl(18))
+                sk.sctp_send(buf, ppid=socket.htonl(18), stream=stream_id)
             except Exception as err:
                 self._log('ERR', '[eNB: {0}] unable to send SCTP message, exception: {1}'\
                           .format(enb_gid, err))

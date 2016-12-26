@@ -1318,7 +1318,7 @@ class UEd(SigStack):
             self._log('INF', '[release] UE not connected')
         proc_s1 = self.init_s1_proc(UEContextRelease, Cause=cause)
         for pdu in proc_s1.output():
-            self.MME.send_enb(self.ENB.SK, pdu)        
+            self.MME.send_enb(self.ENB.SK, pdu, uerel=True)        
     
     def page(self):
         # ensures the UE is not already connected
@@ -1374,7 +1374,7 @@ class UEd(SigStack):
         proc_nas = self.init_nas_proc(proc, **kwargs)
         proc_s1 = self.init_s1_proc(DownlinkNASTransport, NAS_PDU=self.nas_output_sec(proc_nas.output()))
         for pdu in proc_s1.output():
-            self.MME.send_enb(self.ENB.SK, pdu)
+            self.MME.send_enb(self.ENB.SK, pdu, uerel=True)
     
     
     #------------#
