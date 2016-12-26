@@ -165,6 +165,7 @@ class UEd(SigStack):
     #
     # ESM procedures standard behaviour
     ESM_APN_DEF = 'corenet' # default APN, when no APN is explicitely requested by the UE (must be defined in ESM_PDN too)
+    ESM_APN_IP = True # assign the IP address for the given APN, even if an IP@ is not requested
     ESM_BR_AGGR_BITRATE_DL = 10000000 # S1 parameter when setting up the DRB (bit/s)
     ESM_BR_AGGR_BITRATE_UL =  5000000 # S1 parameter when setting up the DRB (bit/s)
     ESM_BR_DEF_REJ = 26 # default ESM cause when rejecting default bearer: 26:insufficient resources
@@ -708,7 +709,7 @@ class UEd(SigStack):
                     MTMSI=self.MME.get_new_tmsi())
     
     def nas_build_pdn_default_ctxt(self, apn=None):
-        if apn is None:
+        if apn in (None, ''):
             # return default APN
             return self.ESM_PDN[self.ESM_APN_DEF]
         elif apn in self.ESM_PDN:
@@ -838,6 +839,13 @@ class UEd(SigStack):
             else:
                 self._log('WNG', 'PDN config protocol ID unsupported: {0}'.format(repr(pid[0])))
                 return None, None
+        #
+        if ip is None and self.ESM_APN_IP:
+            # request IP@ signalled within ESM PDU
+            try:
+                ip = inet_aton(ctxt['IP'][1])
+            except:
+                self._log('ERR', '[nas_build_pdn_protconfig] invalid UE IP format')
         #
         return ip, resp
     

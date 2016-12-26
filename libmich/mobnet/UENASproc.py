@@ -1724,6 +1724,7 @@ class PDNConnectRequest(UENASSigProc):
             trans['APN'] = esmpdu[7].getobj()[1:]
         else:
             trans['APN'] = self.UE.ESM_APN_DEF
+            #trans['APN'] = None
         # get protocol config (TLV, optional)
         if not esmpdu[8].is_transparent():
             trans['ProtConfigReq'] = esmpdu[8].getobj()
@@ -1754,11 +1755,15 @@ class PDNConnectRequest(UENASSigProc):
         ctxt = self.UE.nas_build_pdn_default_ctxt(trans['APN'])
         if ctxt is None:
             cause = 27 # unknown APN
-        elif trans['PDNType'] != ctxt['IP'][0]:
+        elif trans['PDNType'] not in (ctxt['IP'][0], 3):
             cause = 28 # unknown PDN type
         elif 'ProtConfigReq' not in trans:
             cause = 31 # reject, unspecified (no ProtConfig request)
         else:
+            if trans['PDNType'] == 3:
+                # PDNType 1: IPv4, 2: IPv6, 3: IPv4v6
+                # IPv4v6 requested, hence use the one from the network 
+                trans['PDNType'] = ctxt['IP'][0]
             ip, pc = self.UE.nas_build_pdn_protconfig(ctxt, trans['ProtConfigReq'])
             if ip is None or pc is None:
                 cause = 30 # reject by PDN-GW
@@ -1773,7 +1778,10 @@ class PDNConnectRequest(UENASSigProc):
         trans['ctxt'] = ctxt
         #
         ebt = trans['EBT']
-        apn = '{0}{1}'.format(chr(len(trans['APN'])), trans['APN'])
+        if trans['APN'] is not None:
+            apn = '{0}{1}'.format(chr(len(trans['APN'])), trans['APN'])
+        else:
+            apn = ''
         pdn_addr = '{0}{1}'.format(chr(trans['PDNType']), ip)
         eqos = chr(ctxt['QCI'])
         #
