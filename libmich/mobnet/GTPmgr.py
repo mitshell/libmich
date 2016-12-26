@@ -80,6 +80,7 @@ __all__ = ['GTPUd', 'ARPd', 'DPI', 'MOD', 'DNSRESP', 'TCPSYNACK']
 import os
 #import signal
 from select import select
+from struct import pack, unpack
 from random import randint, _urandom
 #
 if os.name != 'nt':
@@ -91,7 +92,7 @@ else:
     print('[ERR] GTPmgr : you\'re not on *nix system. It\'s not going to work:\n'\
           'You need PF_PACKET socket')
 
-from libmich.formats.GTP import *
+#from libmich.formats.GTP import *
 from libmich.formats.IP import *
 from libmich.core.element import Block
 from .utils import *
@@ -471,13 +472,6 @@ class GTPUd(object):
         if not self.GTP_TEID_EXT:
             self.GTP_TEID = randint(0, 20000)
         #
-        # create a single GTP format decoder for input from RNC
-        self._GTP_in = GTPv1()
-        # and for output to RNC (un-automatize GTP length calculation)
-        self._GTP_out = GTPv1()
-        self._GTP_out.msg.Pt = 0xff
-        self._GTP_out.len.PtFunc = None
-        #
         # initialize the traffic statistics
         self.stats = {}
         self.__prot_dict = {1:'ICMP', 6:'TCP', 17:'UDP'}
@@ -586,25 +580,28 @@ class GTPUd(object):
         # except to avoid IP spoofing from malicious mobile 
         # (damned ! Would it be possible ?!?)
         #
-        self._GTP_in.map(buf)
+        # extract the GTP header
+        try:
+            flags, msgtype, msglen, teid = unpack('>BBHI', buf[:8])
+        except:
+            self._log('WNG', 'invalid GTP packet from RAN')
+            return
         #
         # in case GTP TEID is not correct, drop it 
-        if self._GTP_in.teid() not in self._mobiles_teid:
-            self._log('WNG', 'unknown GTP TEID from RAN: {0}'.format(
-                      self._GTP_in.teid()))
+        if teid not in self._mobiles_teid:
+            self._log('WNG', 'unknown GTP TEID from RAN: {0}'.format(teid))
             return
         #
         # in case GTP does not contain UP data, drop it
-        if self._GTP_in.msg() != 0xff:
-            self._log('WNG', 'unsupported GTP type from RAN: {0}'.format(
-                      repr(self._GTP_in.msg)))
+        if msgtype != 0xff:
+            self._log('WNG', 'unsupported GTP type from RAN: {0}'.format(msgtype))
             return
         #
         # get the IP packet: use the length in GTPv1 header to cut the buffer
-        buflen = self._GTP_in.len()
-        if self._GTP_in.ext() or self._GTP_in.seq() or self._GTP_in.pn():
-            buflen -= 4
-        ipbuf = buf[-buflen:]
+        if flags & 0x04:
+            # GTP header extended
+            msglen -= 4
+        ipbuf = buf[-msglen:]
         #
         # drop dummy IP packets
         if len(ipbuf) < 24:
@@ -695,12 +692,11 @@ class GTPUd(object):
             # check dest IP
             ipdst = buf[16:20]
             if ipdst in self._mobiles_ip:
-                # get the TEID to the RNC
-                self._GTP_out.teid > self._mobiles_ip[ipdst][1]
-                # GTP header type for GTPU packet: G-PDU
-                self._GTP_out.msg > 0xFF
-                self._GTP_out.len > len(buf)
-                self._transfer_to_int(ipdst, str(self._GTP_out)+buf)
+                # GTP header
+                gtphdr = pack('>BBHI', 0x30, 0xff, len(buf),
+                                       self._mobiles_ip[ipdst][1])
+                self._transfer_to_int(ipdst, gtphdr + buf)
+                #threadit(self._transfer_to_int, ipdst, gtphdr + buf)
     
     def _transfer_to_int(self, ipdst=bytes(), gtpbuf=bytes()):
         try:
