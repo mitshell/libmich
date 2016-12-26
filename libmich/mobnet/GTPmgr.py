@@ -484,7 +484,8 @@ class GTPUd(object):
         # so we use SOCK_RAW and build our own ethernet header:
         self.ext_sk = socket(AF_PACKET, SOCK_RAW, ntohs(self.EXT_PROT))
         # configure timeouting and interface binding
-        self.ext_sk.settimeout(0.1)
+        self.ext_sk.settimeout(0.003)
+        #self.ext_sk.setblocking(0)
         self.ext_sk.bind((self.EXT_IF, self.EXT_PROT))
         # put the interface in promiscuous mode
         set_promisc(self.ext_sk)
@@ -492,7 +493,8 @@ class GTPUd(object):
         # create an UDP socket on the RNC / eNobeB side, on port 2152
         self.int_sk = socket(AF_INET, SOCK_DGRAM)
         # configure timeout, binding and rebinding on same address
-        self.int_sk.settimeout(0.1)
+        self.int_sk.settimeout(0.003)
+        #self.int_sk.setblocking(0)
         self.int_sk.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self.int_sk.bind((self.INT_IP, self.INT_PORT))
         #
@@ -504,6 +506,7 @@ class GTPUd(object):
         #signal.signal(signal.SIGINT, sigint_handler)
         #
         # and start listening and transferring packets in background
+        self._sk = [self.ext_sk, self.int_sk]
         self._listening = True
         self._listener_t = threadit(self.listen)
         self._log('INF', 'GTPU handler started')
@@ -546,31 +549,48 @@ class GTPUd(object):
     def listen(self):
         # select() until we receive something on 1 side
         while self._listening:
-            r = []
-            r = select([self.int_sk, self.ext_sk], [], [], self.SELECT_TO)[0]
-            for sk in r:
-                buf = bytes()
-                if sk is self.int_sk:
-                    try:
-                        buf = sk.recv(self.BUFLEN)
-                    except Exception as err:
-                        self._log('ERR', 'internal network IF error (recv)'\
-                                  ': {0}'.format(err))
-                    if buf:
-                        self.transfer_to_ext(buf)  
-                elif sk is self.ext_sk:
-                    # WNG: seems some pseudo-RNC IP stack crashes when we send
-                    # fragmented IP packets on Iu side...
-                    try:
-                        buf = sk.recvfrom(self.BUFLEN-128)[0]
-                    except Exception as err:
-                        self._log('ERR', 'external network IF error (recvfrom)'\
-                                  ': {0}'.format(err))
-                    else:
-                        if len(buf) >= 34 and buf[12:14] == '\x08\0' \
-                        and buf[:6] == self.GGSN_MAC_BUF:
-                            # transferring over GTPU after removing Ethernet hdr
-                            self.transfer_to_int(buf[14:])
+            if not self._sk:
+                 self._log('ERR', 'no more socket to listen to')
+                 self._listening = False
+            else:
+                r = select(self._sk, [], [], self.SELECT_TO)[0]
+                while r:
+                    # read ext and int sockets until they are empty
+                    for sk in r:
+                        if sk is self.ext_sk:
+                            try:
+                                bufext = sk.recvfrom(self.BUFLEN)[0]
+                            except timeout:
+                                # nothing to read enymore
+                                r.remove(sk)
+                            except error as err:
+                                self._log('ERR', 'external network IF error '\
+                                          '(recvfrom): {0}'\
+                                          .format(err))
+                                r.remove(sk)
+                                self._sk.remove(sk)
+                            else:
+                                if len(bufext) >= 34 and \
+                                bufext[:6] == self.GGSN_MAC_BUF and \
+                                bufext[12:14] == '\x08\0':
+                                    # transferring over GTPU after removing 
+                                    # the Ethernet header
+                                    self.transfer_to_int(bufext[14:])
+                        else:
+                            # sk is self.int_sk
+                            try:
+                                bufint = sk.recv(self.BUFLEN)
+                            except timeout:
+                                # nothing to read anymore
+                                r.remove(sk)
+                            except error as err:
+                                self._log('ERR', 'internal network IF error '\
+                                          '(recv): {0}'\
+                                          .format(err))
+                                r.remove(sk)
+                                self._sk.remove(sk)
+                            else:
+                                self.transfer_to_ext(bufint)
         #
         self._log('INF', 'GTPU handler stopped')
     
