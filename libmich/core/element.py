@@ -1584,8 +1584,31 @@ class Layer(object):
         for a in self.getattr():
             print('%s : %s' % ( a, repr(self.__getattr__(a))) )
     
-    def clone(self):
+    def clone2(self):
+        # TODO: deepcopy is not adapted here, can create errors...
         return deepcopy(self)
+    
+    def clone(self):
+        #
+        # build a new constructorList made of clones
+        constructorList_new = []
+        for e in self:
+            constructorList_new.append(e.clone())
+        #
+        # substitute the current constructorList with the one made of clones
+        constructorList_ori = self.__class__.constructorList
+        self.__class__.constructorList = constructorList_new
+        # instantiate the clone
+        c = self.__class__()
+        c.CallName = self.CallName
+        if hasattr(self, 'ReprName'):
+            c.ReprName = self.ReprName
+        if hasattr(self, 'Trans'):
+            c.Trans = self.Trans
+        # restore the original constructorList
+        self.__class__.constructorList = constructorList_ori
+        #
+        return c
     
     def is_transparent(self):
         if self.Trans:
