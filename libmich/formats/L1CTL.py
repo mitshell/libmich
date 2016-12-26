@@ -191,6 +191,13 @@ Neigh_dict = {
 
 class L1CTL(Block):
     
+    # handle LAPDm fragment and try to reassemble them
+    LAPDM_FRAG = []
+    LAPDM_DEFRAG = None
+    
+    # add extra bits decoded after LAPDm / L3
+    WITH_LAPDM_PAD = True
+    
     def __init__(self, msg_type=L1CTL_RESET_IND):
         Block.__init__(self, Name="L1CTL")
         self.append( l1ctl_hdr() )
@@ -248,16 +255,26 @@ class L1CTL(Block):
         # check what kind of signalling we have
         # RR 6, MM 5, CC 3
         l3_len = self[-1].len()
-        # in case L3 is fragmented
-        if self[-1].M():
+        if l3_len == 0:
+            # in case there is no data
+            self << RawLayer('')
+        elif self[-1].M():
+            # in case L3 is fragmented
+            self.__class__.LAPDM_FRAG.append(string[:l3_len])
             self << RawLayer(string[:l3_len])
         else:
-            # this can lead to dummy L3 msg as there is no way
-            # to distinguish between a self-contained LAPDm frame
-            # and the last fragment of a fragmented LAPDm frame
-            self << parse_L3(string[:l3_len])
+            if self.__class__.LAPDM_FRAG:
+                self.__class__.LAPDM_FRAG.append(string[:l3_len])
+                self.__class__.LAPDM_DEFRAG = parse_L3(''.join(self.__class__.LAPDM_FRAG))
+                self.__class__.LAPDM_FRAG = []
+                self << RawLayer(string[:l3_len])
+            else:
+                # this can lead to dummy L3 msg as there is no way
+                # to distinguish between a self-contained LAPDm frame
+                # and the last fragment of a fragmented LAPDm frame
+                self << parse_L3(string[:l3_len])
         # in case we have GSM padding
-        if l3_len < len(string):
+        if self.__class__.WITH_LAPDM_PAD and l3_len < len(string):
             self | RestOctets()
             self[-1].map(string[l3_len:])
     
