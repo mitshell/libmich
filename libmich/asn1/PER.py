@@ -1914,8 +1914,9 @@ class PER(ASN1.ASN1Codec):
                         comp_obj._build_constructed_rootext()
                         buf = self._unwrap_open_type(obj, buf, comp_obj)
                         # assign values and clean up content objects
-                        for name in comp:
-                            obj._val[name] = comp_obj._val[name]
+                        if comp_obj._val:
+                            for name in comp_obj._val:
+                                obj._val[name] = comp_obj._val[name]
                         comp_obj._val = None
                 else:
                     # 5) unknown extended field
