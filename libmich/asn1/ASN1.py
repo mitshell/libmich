@@ -149,14 +149,17 @@ class ASN1Obj(object):
             provides default value
         - UNIQUE: None; when present, means unique
     
+    - ref: list of ASNRef, references used in the object definition, and that 
+        needs to be resolved to get a fully defined object
+    
+    CHOICE, SEQUENCE, SET and CLASS objects have specific attributes,
+    in addition:
+    
     - group: int, or None; indicates the grouping of extended ASN1 objects
         within constructed types extension only.
     
     - syntax: OrderedDict {str (name): (str (syntax), list (optional group)},
         or None; used only for classes that have WITH SYNTAX directive.
-    
-    CHOICE, SEQUENCE, SET and CLASS objects have specific attributes,
-    in addition:
     
     - root_comp: list of str, lists all root components by name
     
