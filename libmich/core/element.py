@@ -1272,9 +1272,15 @@ class Layer(object):
         if self.dbg >= DBG:
             log(DBG, '(Layer - %s) init kwargs: %s' % (self.__class__, args))
         for e in self:
-            if hasattr(e, 'CallName') and hasattr(e, 'Pt') \
-            and e.CallName in args:
-                e.Pt = kwargs[e.CallName]
+            if hasattr(e, 'CallName') and e.CallName in args:
+                if hasattr(e, 'Pt'):
+                    e.Pt = kwargs[e.CallName]
+                else:
+                    kwe = kwargs[e.CallName]
+                    if isinstance(kwe, (tuple, list)):
+                        e.__init__(*kwe)
+                    elif isinstance(kwe, dict):
+                        e.__init__(**kwe)
     
     # define some basic list facilities for managing elements into the Layer, 
     # through the "elementList" attribute:
