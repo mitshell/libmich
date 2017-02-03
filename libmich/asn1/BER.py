@@ -699,7 +699,7 @@ class BER(ASN1.ASN1Codec):
                   % obj.get_fullname()))
     
     def handle_tag_dec(self, obj):
-        # this get the tag (IMPLICIT case) or chain of tags until the
+        # this gets the tag (IMPLICIT case) or chain of tags until the
         # UNIVERSAL one (EXPLICIT case),
         # and returns:
         #   the length of the outermost BER_TLV
@@ -722,7 +722,7 @@ class BER(ASN1.ASN1Codec):
         if mode == TAG_EXPLICIT:
             # retrieve UNIVERSAL tag from the nested TLV structures
             while tlv[0].PC() and tlv[0].Class() != 0:
-                tlv = tlv.get()
+                tlv = tlv.get()[0]
                 if not isinstance(tlv[0], T):
                     raise(ASN1_BER_DECODER('%s: unable to retrieve UNIVERSAL '\
                       'tag' % obj.get_fullname()))
