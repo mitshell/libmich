@@ -1,0 +1,4 @@
+# Custom TCAP module (no parameterization)
+# to be loaded sequentially
+Remote-Operations-Information-Objects.asn
+TCAP.asn

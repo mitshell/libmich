@@ -54,7 +54,8 @@ MODULES = { \
     'SS': 'SS_24080-c00',
     'LPP': 'LPP_36355-ac0',
     'PCAP': 'PCAP_25453-c20',
-    'TAP3': 'TAP3_12'
+    'TAP3': 'TAP3_12',
+    'TCAP': 'TCAP'
     }
 
 def compile(texts):
