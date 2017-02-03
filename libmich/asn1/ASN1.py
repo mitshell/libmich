@@ -475,20 +475,14 @@ class ASN1Obj(object):
             #
             comp = self._cont[name]
             #
-            if comp._type == TYPE_NULL:
-                self._val[name] = None
-            #
-            elif val is not None:
+            if val is not None:
                 if name in val:
-                    v = val[name]
-                else:
-                    if comp._flags is not None and FLAG_DEF in comp._flags:
-                        v = comp._flags[FLAG_DEF]
-                    else:
-                        v = None
-                if v is not None:
                     # filter value through the component's set_val() method
-                    comp.set_val(v)
+                    comp.set_val(val[name])
+                    self._val[name] = comp._val
+                    comp._val = None
+                elif comp._flags is not None and FLAG_DEF in comp._flags:
+                    comp.set_val(comp._flags[FLAG_DEF])
                     self._val[name] = comp._val
                     comp._val = None
         #
