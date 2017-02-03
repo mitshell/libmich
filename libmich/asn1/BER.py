@@ -375,6 +375,8 @@ class BER(ASN1.ASN1Codec):
             self.encode_set_of(obj)
         elif obj._type in (TYPE_ANY, TYPE_OPEN):
             self.encode_open_type(obj)
+        elif obj._type == TYPE_EXT:
+            self.encode_oct_str(obj)
         else:
             raise(ASN1_BER_ENCODER('%s: unsupported ASN.1 type: %s'\
                   % (obj.get_fullname(), obj._type)))
@@ -386,8 +388,10 @@ class BER(ASN1.ASN1Codec):
             raise(ASN1_BER_ENCODER('%s: no tag retrieved' % obj.get_fullname()))
         mode = tag[1]
         cla, val = obj.get_tag_val()
-        if obj._type in TYPE_CONSTRUCTED:
+        if obj._type in TYPE_CONSTRUCTED or obj._type == TYPE_EXT:
             pc = 1
+        elif hasattr(obj, '_tag_pc'):
+            pc = obj._tag_pc
         else:
             pc = 0
         #
@@ -688,6 +692,8 @@ class BER(ASN1.ASN1Codec):
             return self.decode_set_of_val(obj)
         elif obj._type in (TYPE_ANY, TYPE_OPEN):
             return self.decode_open_type_val(obj)
+        elif obj._type == TYPE_EXT:
+            return self.decode_oct_str_val(obj)
         else:
             raise(ASN1_BER_DECODER('%s: unsupported ASN.1 type'\
                   % obj.get_fullname()))
