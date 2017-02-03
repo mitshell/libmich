@@ -180,6 +180,7 @@ def test_per_integer(print_info=True):
     PER._REPR_ENUM = 'bin'
     #
     PER.VARIANT = 'A'
+    PER._SAFE = True
     
     if print_info: print('testing unconstrained INTEGER encoding / decoding (PER)')
     i1 = inline('I1 ::= INTEGER')
@@ -402,6 +403,7 @@ def test_per_choice(print_info=True):
     #
     PER._REPR_INT = 'bin'
     PER._REPR_ENUM = 'bin'
+    PER._SAFE = True
     #
     PER.VARIANT = 'A'
     
@@ -501,6 +503,7 @@ def test_per_sequence(print_info=True):
     #
     PER._REPR_INT = 'bin'
     PER._REPR_ENUM = 'bin'
+    PER._SAFE = True
     #
     PER.VARIANT = 'A'
     
