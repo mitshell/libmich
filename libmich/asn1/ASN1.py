@@ -498,11 +498,15 @@ class ASN1Obj(object):
             for name in val_ext:
                 if self._cont[name]._group >= 0:
                     group = self._ext_group[self._cont[name]._group]
-                    if not all([name in val_ext for name in group]):
-                        raise(ASN1_OBJ('%s: missing grouped extension'\
-                              % self.get_fullname()))
-                    for g in group:
-                        val_ext.remove(g)
+                    for name_g in group:
+                        comp = self._cont[name_g]
+                        if name_g not in val_ext and \
+                        not (FLAG_OPT in comp._flags or FLAG_DEF in comp._flags):
+                            # WNG: some component in the GROUP can be OPTIONAL
+                            raise(ASN1_OBJ('%s: missing grouped extension'\
+                                  % self.get_fullname()))
+                        elif name_g in val_ext:
+                            val_ext.remove(name_g)
         for name in self._ext_flat:
             if name not in val:
                 # WNG: this is incorrect according to the specification
