@@ -1161,10 +1161,11 @@ def parse_value_seq(Obj, text=''):
     if text_val is None:
         return text
     # sequence of values
-    coma_offsets = [-1] + search_top_lvl_sep(text, ',') + [len(text)]
-    values = map(stripper, [text[coma_offsets[i]+1:coma_offsets[i+1]] \
+    coma_offsets = [-1] + search_top_lvl_sep(text_val, ',') + [len(text_val)]
+    values = map(stripper, [text_val[coma_offsets[i]+1:coma_offsets[i+1]] \
                                 for i in range(len(coma_offsets)-1)])
     #
+    Obj['val'] = dict()
     for val in values:
         #
         m = SYNT_RE_IDENT.match(val)
@@ -1172,7 +1173,10 @@ def parse_value_seq(Obj, text=''):
             # single identified component
             name = m.group(1)
             val = val[m.end():].strip()
+            # pass val to component value parser
             val = Obj['cont'][name].parse_value(val)
+            # add the component's parsed value to the current layer
+            Obj['val'][name] = Obj['cont'][name]['val']
         #
         if val:
             raise(ASN1_PROC_TEXT('%s: invalid SEQUENCE value: %s'\
