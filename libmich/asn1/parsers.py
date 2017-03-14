@@ -1156,7 +1156,29 @@ def parse_value_choice(Obj, text=''):
     return text
 
 def parse_value_seq(Obj, text=''):
-    raise(ASN1_PROC_NOSUPP)
+    # { procedureCode id-cellSetup, ddMode fdd }
+    text, text_val = extract_curlybrack(text)
+    if text_val is None:
+        return text
+    # sequence of values
+    coma_offsets = [-1] + search_top_lvl_sep(text, ',') + [len(text)]
+    values = map(stripper, [text[coma_offsets[i]+1:coma_offsets[i+1]] \
+                                for i in range(len(coma_offsets)-1)])
+    #
+    for val in values:
+        #
+        m = SYNT_RE_IDENT.match(val)
+        if m:
+            # single identified component
+            name = m.group(1)
+            val = val[m.end():].strip()
+            val = Obj['cont'][name].parse_value(val)
+        #
+        if val:
+            raise(ASN1_PROC_TEXT('%s: invalid SEQUENCE value: %s'\
+                  % (Obj.get_fullname(), val)))
+    #
+    return text
 
 def parse_value_set(Obj, text=''):
     raise(ASN1_PROC_NOSUPP)
