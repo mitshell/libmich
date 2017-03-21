@@ -1162,8 +1162,10 @@ def parse_value_seq(Obj, text=''):
         return text
     # sequence of values
     coma_offsets = [-1] + search_top_lvl_sep(text_val, ',') + [len(text_val)]
-    values = map(stripper, [text_val[coma_offsets[i]+1:coma_offsets[i+1]] \
-                                for i in range(len(coma_offsets)-1)])
+    values = map(stripper, [text_val[coma_offsets[i]+1:coma_offsets[i+1]]
+                            for i in range(len(coma_offsets)-1)])
+    # gather list of mandatory components
+    mand_comp = [name for name in Obj._root_comp if Obj._cont[name]._flags is None]
     #
     Obj['val'] = dict()
     for val in values:
@@ -1172,16 +1174,24 @@ def parse_value_seq(Obj, text=''):
         if m:
             # single identified component
             name = m.group(1)
+            if name not in Obj['cont']:
+                raise(ASN1_PROC_TEXT('%s: invalid SEQUENCE component: %s'
+                                     % (Obj.get_fullname(), name)))
             val = val[m.end():].strip()
             # pass val to component value parser
             val = Obj['cont'][name].parse_value(val)
             # add the component's parsed value to the current layer
             Obj['val'][name] = Obj['cont'][name]['val']
+            if name in mand_comp:
+                mand_comp.remove(name)
         #
         if val:
-            raise(ASN1_PROC_TEXT('%s: invalid SEQUENCE value: %s'\
-                  % (Obj.get_fullname(), val)))
+            raise(ASN1_PROC_TEXT('%s: invalid SEQUENCE value: %s'
+                                 % (Obj.get_fullname(), val)))
     #
+    if mand_comp:
+        raise(ASN1_PROC_TEXT('%s: missing mandatory SEQUENCE value: %s'
+                             % (Obj.get_fullname(), mand_comp)))
     return text
 
 def parse_value_set(Obj, text=''):
