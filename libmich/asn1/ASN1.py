@@ -3,7 +3,7 @@
 # * Software Name : libmich 
 # * Version : 0.2.3
 # *
-# * Copyright © 2014. Benoit Michau. ANSSI.
+# * Copyright Â© 2014. Benoit Michau. ANSSI.
 # *
 # * This program is free software: you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License version 2 as published
@@ -1063,6 +1063,8 @@ class ASN1Obj(object):
                 return self._parse_value_class(text)
             elif self._type == TYPE_CHOICE:
                 return self._parse_value_choice(text)
+            elif self._type == TYPE_SEQ:
+                return self._parse_value_seq(text)
             else:
                 # TODO: support constructed type value parsing
                 if self._SAFE_COMP:
@@ -1110,6 +1112,9 @@ class ASN1Obj(object):
     
     def _parse_value_choice(self, text=''):
         return parsers.parse_value_choice(self, text)
+    
+    def _parse_value_seq(self, text=''):
+        return parsers.parse_value_seq(self, text)
     
     def parse_set(self, text=''):
         return parsers.parse_set(self, text)
