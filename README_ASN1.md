@@ -10,7 +10,7 @@ BER (Basic Encoding Rules), PER (Packed Encoding Rules), DER (Distinguished
 Encoding Rules), XER (XML Encoding Rules), ...
 
 
-Where can I find online ressources about ASN.1
+Where can I find online resources about ASN.1
 ==============================================
 
 ASN.1 language and most of the associated encoding rules are standardized by the 
