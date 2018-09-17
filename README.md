@@ -1,7 +1,7 @@
 Update (july 2017)
 ==================
 
-[pycrate](https://github.com/anssi-fr/pycrate) has just been released, 
+[pycrate](https://github.com/p1sec/pycrate) has just been released, 
 intending to replace libmich. Hence, the development of libmich is stopped, 
 and all efforts will be put on pycrate yet.
 
